@@ -52,7 +52,7 @@
                     </li>
 
                     {% if has_permission('view_journals') %}
-                    <li class="nav-item dropdown-lg-only">
+                    <li class="nav-item dropdown dropdown-lg-only">
                         <a class="nav-link dropdown-toggle {% if request.endpoint in ['main.group_subjects', 'main.teacher_hours_stats', 'main.journal'] %}active{% endif %}"
                            href="#"
                            role="button"
@@ -126,7 +126,7 @@
                     </li>
                     {% endif %}
 
-                    <li class="nav-item dropdown-lg-only">
+                    <li class="nav-item dropdown dropdown-lg-only">
                         <a class="nav-link dropdown-toggle {% if request.endpoint in ['main.groups', 'main.subjects'] %}active{% endif %}"
                            href="#"
                            role="button"
@@ -275,7 +275,6 @@
 
     <div class="container-fluid container-xl mt-3 mt-lg-4">
 
-        {# ============ ХЛЕБНЫЕ КРОШКИ ============ #}
         {% block breadcrumbs %}{% endblock %}
 
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -317,18 +316,21 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Запрет эмодзи
         document.querySelectorAll('.no-emoji').forEach(function(input) {
             input.addEventListener('input', function() {
                 this.value = this.value.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}]/gu, '');
             });
         });
 
+        // Только цифры в телефоне
         document.querySelectorAll('.phone-input').forEach(function(input) {
             input.addEventListener('input', function() {
                 this.value = this.value.replace(/[^\d]/g, '').slice(0, 11);
             });
         });
 
+        // Закрытие бургера при клике на обычную ссылку
         document.querySelectorAll('#navbarNav .nav-link:not(.dropdown-toggle):not([data-bs-toggle])').forEach(function(link) {
             link.addEventListener('click', function() {
                 var navbarCollapse = document.getElementById('navbarNav');
@@ -339,6 +341,7 @@
             });
         });
 
+        // Закрытие бургера при клике на подпункт мобильного меню
         document.querySelectorAll('.mobile-submenu-item').forEach(function(link) {
             link.addEventListener('click', function() {
                 var navbarCollapse = document.getElementById('navbarNav');
@@ -349,6 +352,7 @@
             });
         });
 
+        // Поворот стрелки аккордеона
         document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(toggle) {
             var target = document.querySelector(toggle.getAttribute('href'));
             if (target) {
@@ -363,6 +367,7 @@
             }
         });
 
+        // Автораскрытие активного мобильного подменю
         var activeSubmenuItem = document.querySelector('.mobile-submenu-item.active');
         if (activeSubmenuItem) {
             var parentCollapse = activeSubmenuItem.closest('.collapse');
@@ -397,7 +402,7 @@
             gap: 6px;
         }
         .breadcrumbs li + li::before {
-            content: "\F285"; /* bi-chevron-right */
+            content: "\F285";
             font-family: "bootstrap-icons";
             font-size: 0.7rem;
             color: #adb5bd;
@@ -416,19 +421,8 @@
             font-weight: 600;
         }
 
-        @media (max-width: 575.98px) {
-            .breadcrumbs {
-                font-size: 0.82rem;
-                gap: 4px;
-                margin-bottom: 12px;
-            }
-            .breadcrumbs li + li::before {
-                font-size: 0.65rem;
-            }
-        }
-
         /* ============================================================
-           ОСТАЛЬНОЕ (без изменений)
+           ПРОФИЛЬ В НАВИГАЦИИ
            ============================================================ */
         .user-avatar-circle {
             width: 36px;
@@ -462,6 +456,9 @@
             background-color: rgba(255, 255, 255, 0.2);
         }
 
+        /* ============================================================
+           АКТИВНЫЙ ПУНКТ МЕНЮ
+           ============================================================ */
         .navbar-nav .nav-link.active {
             background-color: rgba(255, 255, 255, 0.15);
             border-radius: 6px;
@@ -473,6 +470,9 @@
             color: #fff;
         }
 
+        /* ============================================================
+           МОБИЛЬНОЕ МЕНЮ
+           ============================================================ */
         .mobile-only {
             display: none;
         }
@@ -483,12 +483,6 @@
             }
             .dropdown-lg-only {
                 display: none !important;
-            }
-        }
-
-        @media (max-width: 991.98px) {
-            .dropdown-lg-only {
-                display: none;
             }
         }
 
@@ -627,6 +621,9 @@
             }
         }
 
+        /* ============================================================
+           ДЕСКТОПНЫЕ УЛУЧШЕНИЯ
+           ============================================================ */
         @media (min-width: 992px) {
             .navbar .dropdown-menu {
                 border-radius: 8px;
@@ -661,6 +658,9 @@
             }
         }
 
+        /* ============================================================
+           ОБЩИЕ УЛУЧШЕНИЯ
+           ============================================================ */
         .navbar.sticky-top {
             transition: box-shadow 0.2s;
         }
@@ -684,6 +684,129 @@
             max-width: 1320px;
         }
 
+        /* ============================================================
+           МОБИЛЬНАЯ ОПТИМИЗАЦИЯ (iPhone 12 mini = 375px)
+           ============================================================ */
+        @media (max-width: 575.98px) {
+            /* Уменьшаем отступы контейнера */
+            .container-xl {
+                padding-left: 8px;
+                padding-right: 8px;
+            }
+
+            /* Уменьшаем заголовки */
+            h2 {
+                font-size: 1.35rem;
+                margin-bottom: 0.9rem !important;
+            }
+            h5 {
+                font-size: 1.05rem;
+            }
+            h6 {
+                font-size: 0.95rem;
+            }
+
+            /* Уменьшаем карточки */
+            .card-body {
+                padding: 0.75rem;
+            }
+            .card-header {
+                padding: 0.6rem 0.75rem;
+            }
+
+            /* Уменьшаем display-классы */
+            .fs-3 {
+                font-size: 1.35rem !important;
+            }
+            .fs-4 {
+                font-size: 1.15rem !important;
+            }
+
+            /* Иконки в карточках дашборда */
+            .card-body > i[style*="font-size:2.2rem"],
+            .card-body > i[style*="font-size:2rem"] {
+                font-size: 1.6rem !important;
+            }
+
+            /* Кнопки внутри карточек — на всю ширину */
+            .card-body .btn-light.btn-sm {
+                width: 100%;
+                padding: 0.35rem 0.5rem;
+                font-size: 0.85rem;
+            }
+
+            /* Alert-ы компактнее */
+            .alert {
+                padding: 0.65rem 0.85rem;
+                font-size: 0.9rem;
+            }
+
+            /* Крошки компактнее */
+            .breadcrumbs {
+                font-size: 0.82rem;
+                gap: 4px;
+                margin-bottom: 12px;
+            }
+            .breadcrumbs li + li::before {
+                font-size: 0.65rem;
+            }
+
+            /* Кнопки в шапках карточек — на всю ширину */
+            .card-header .btn {
+                padding: 0.3rem 0.65rem;
+                font-size: 0.85rem;
+            }
+
+            /* Таблицы: скролл по горизонтали */
+            .table-responsive {
+                -webkit-overflow-scrolling: touch;
+            }
+            .table-responsive table {
+                min-width: 100%;
+            }
+
+            /* Улучшаем touch-target для иконок-кнопок в таблицах */
+            .table .btn-sm {
+                min-width: 36px;
+                min-height: 36px;
+                padding: 0.3rem 0.5rem;
+            }
+
+            /* Модалки почти на всю ширину */
+            .modal-dialog {
+                margin: 0.5rem;
+            }
+
+            /* Убираем rounded-иконки в дашборде размером 56px */
+            .rounded-circle[style*="width:56px"] {
+                width: 44px !important;
+                height: 44px !important;
+                font-size: 1.15rem !important;
+            }
+
+            /* Прогресс-бары */
+            .progress {
+                min-width: 60px;
+            }
+        }
+
+        @media (max-width: 400px) {
+            h2 {
+                font-size: 1.2rem;
+            }
+
+            .card-body {
+                padding: 0.65rem;
+            }
+
+            .mobile-submenu-item {
+                font-size: 0.88rem;
+            }
+        }
+
+        /* ============================================================
+           ПЕЧАТЬ
+           ============================================================ */
         @media print {
             .navbar,
             .btn,

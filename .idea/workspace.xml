@@ -5,32 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="01f09167-8b8b-4467-828a-35e12c36b3da" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/activity.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/migrations/migration_v4.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/migrations/migration_v5.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/stats.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/templates/_breadcrumbs.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/templates/activity.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/templates/profile.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/auth.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/journal.db" beforeDir="false" afterPath="$PROJECT_DIR$/journal.db" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/routes.py" beforeDir="false" afterPath="$PROJECT_DIR$/routes.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/charts/student_1_chart.png" beforeDir="false" afterPath="$PROJECT_DIR$/static/charts/student_1_chart.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/add_lesson.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/add_lesson.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/assign_journals.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/assign_journals.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/charts/report_4.png" beforeDir="false" afterPath="$PROJECT_DIR$/static/charts/report_4.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/templates/base.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/base.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/dashboard.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/dashboard.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/groups.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/groups.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/profiles.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/report_detail.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/report_detail.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/reports.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/reports.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/roles.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/roles.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/student_card.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/student_card.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/students.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/students.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/subjects.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/subjects.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/teacher_hours.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/teacher_hours.html" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
