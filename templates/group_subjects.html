@@ -1,0 +1,768 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2 class="mb-3">
+    <i class="bi bi-journal-text"></i>
+    Журналы
+</h2>
+
+<!-- ============ ФИЛЬТРЫ И ПОИСК ============ -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2">
+            <div class="col-12 col-md-6">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text"
+                           id="journalSearch"
+                           class="form-control"
+                           placeholder="Поиск по группе или предмету...">
+                    <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()" id="clearSearchBtn" style="display:none;">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <select id="filterGroup" class="form-select form-select-sm" onchange="filterJournals()">
+                    <option value="">Все группы</option>
+                    {% for group in groups %}
+                    <option value="{{ group.name }}">{{ group.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ СПИСОК ЖУРНАЛОВ ============ -->
+<div class="card shadow-sm">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="mb-0">
+            <i class="bi bi-folder2-open"></i>
+            <span class="d-none d-sm-inline">Все журналы</span>
+            <span class="d-sm-none">Журналы</span>
+            <span class="badge bg-primary ms-2" id="totalBadge">{{ pairs|length }}</span>
+        </h5>
+        {% if pairs %}
+        <small class="text-muted d-none d-md-inline">
+            <i class="bi bi-info-circle"></i>
+            Отсортировано по алфавиту
+        </small>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        {% if pairs %}
+        <div class="list-group list-group-flush" id="journalsList">
+            {% for pair in pairs %}
+            <div class="list-group-item journal-item"
+                 data-search="{{ pair.group_name }} {{ pair.subject_name }}"
+                 data-group="{{ pair.group_name }}">
+
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <!-- Информация о журнале -->
+                    <div class="flex-grow-1" style="min-width: 0;">
+                        <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
+                            <span class="badge bg-secondary">{{ pair.group_name }}</span>
+                            <span class="d-none d-sm-inline text-muted">•</span>
+                            <span class="badge bg-info">{{ pair.subject_name }}</span>
+                        </div>
+
+                        <!-- Часы по семестрам (компактно) -->
+                        <div class="small">
+                            {% set pair_semesters = get_semesters(pair.id) %}
+                            {% if pair_semesters %}
+                                {% for sem in pair_semesters %}
+                                    {% set h = get_hours(pair.id, sem) %}
+                                    {% set total = h.lecture_hours + h.practice_hours + h.independent_hours + h.exam_hours %}
+                                    <span class="text-muted">
+                                        <strong>{{ sem }}с:</strong> {{ total }}ч
+                                    </span>
+                                    {% if not loop.last %}
+                                    <span class="text-muted">•</span>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">Часы не настроены</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Кнопки действий -->
+                    <div class="d-flex gap-1">
+                        <a href="{{ url_for('main.journal', gsid=pair.id) }}"
+                           class="btn btn-sm btn-primary">
+                            <i class="bi bi-journal-bookmark-fill"></i>
+                            Открыть
+                        </a>
+
+                        <!-- Меню "..." -->
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    type="button"
+                                    data-bs-toggle="dropdown"
+                                    data-bs-strategy="fixed"
+                                    aria-expanded="false"
+                                    style="padding: 0.25rem 0.5rem;">
+                                <i class="bi bi-three-dots-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('main.view_report', gsid=pair.id) }}">
+                                        <i class="bi bi-graph-up"></i> Отчёт
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="#"
+                                       onclick="openEditHoursModal({{ pair.id }}, '{{ pair.group_name }}', '{{ pair.subject_name }}'); return false;">
+                                        <i class="bi bi-clock"></i> Редактировать часы
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger"
+                                       href="{{ url_for('main.delete_group_subject', gsid=pair.id) }}"
+                                       onclick="return confirm('Удалить журнал {{ pair.group_name }} - {{ pair.subject_name }}?\n\nВНИМАНИЕ: Все данные журнала будут безвозвратно потеряны!')">
+                                        <i class="bi bi-trash"></i> Удалить журнал
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-journal-x" style="font-size: 4rem; color: #ccc;"></i>
+            <h5 class="text-muted mt-3">Журналы еще не созданы</h5>
+            <p class="text-muted small">Нажмите кнопку ниже, чтобы создать первый журнал</p>
+        </div>
+        {% endif %}
+    </div>
+    {% if pairs %}
+    <div class="card-footer text-muted small d-flex justify-content-between align-items-center">
+        <span>
+            <span id="visibleCount">{{ pairs|length }}</span> из {{ pairs|length }} журналов
+        </span>
+        <span class="d-none d-md-inline">
+            <i class="bi bi-lightbulb"></i> Используйте меню "⋮" для дополнительных действий
+        </span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ============ FLOATING ACTION BUTTON ============ -->
+{% if has_permission('add_journal') %}
+<button type="button"
+        class="fab-create-journal"
+        data-bs-toggle="modal"
+        data-bs-target="#createJournalModal"
+        title="Создать новый журнал">
+    <i class="bi bi-plus-lg"></i>
+</button>
+{% endif %}
+
+<!-- ============ МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ЖУРНАЛА ============ -->
+<div class="modal fade" id="createJournalModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('main.add_group_subject') }}" id="createJournalForm">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-plus-circle"></i>
+                        Создать новый журнал
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <!-- Группа -->
+                    <div class="mb-3">
+                        <label for="group_id" class="form-label fw-bold">
+                            Группа <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="group_id" name="group_id" required>
+                            <option value="">— Выберите группу —</option>
+                            {% for group in groups %}
+                            <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Предмет -->
+                    <div class="mb-3">
+                        <label for="subject_id" class="form-label fw-bold">
+                            Предмет <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="subject_id" name="subject_id" required>
+                            <option value="">— Выберите предмет —</option>
+                            {% for subject in subjects %}
+                            <option value="{{ subject.id }}">{{ subject.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <hr>
+
+                    <!-- Выбор семестров -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-calendar3"></i>
+                            В каких семестрах идет предмет?
+                        </label>
+                        <div class="border rounded p-2">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input semester-checkbox" type="checkbox"
+                                       id="semester_1_check" checked onchange="updateSemesterVisibility()">
+                                <label class="form-check-label" for="semester_1_check">
+                                    <strong>1 семестр</strong>
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input semester-checkbox" type="checkbox"
+                                       id="semester_2_check" checked onchange="updateSemesterVisibility()">
+                                <label class="form-check-label" for="semester_2_check">
+                                    <strong>2 семестр</strong>
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input semester-checkbox" type="checkbox"
+                                       id="semester_3_check" onchange="updateSemesterVisibility()">
+                                <label class="form-check-label" for="semester_3_check">
+                                    <strong>3 семестр</strong>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Часы по семестрам -->
+                    <div id="semestersContainer">
+                        <!-- Семестр 1 -->
+                        <div class="card mb-2 border-primary semester-card" id="semester_1_card">
+                            <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
+                                <strong>Семестр 1</strong>
+                                <span class="badge bg-light text-primary" id="semester_1_total_badge">0 ч.</span>
+                            </div>
+                            <div class="card-body py-2">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Лекции</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="1"
+                                               name="semester_1_lecture" value="0" min="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Практические</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="1"
+                                               name="semester_1_practice" value="0" min="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Самостоятельные</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="1"
+                                               name="semester_1_independent" value="0" min="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Экзамен</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="1"
+                                               name="semester_1_exam" value="0" min="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Семестр 2 -->
+                        <div class="card mb-2 border-success semester-card" id="semester_2_card">
+                            <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
+                                <strong>Семестр 2</strong>
+                                <span class="badge bg-light text-success" id="semester_2_total_badge">0 ч.</span>
+                            </div>
+                            <div class="card-body py-2">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Лекции</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="2"
+                                               name="semester_2_lecture" value="0" min="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Практические</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="2"
+                                               name="semester_2_practice" value="0" min="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Самостоятельные</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="2"
+                                               name="semester_2_independent" value="0" min="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Экзамен</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="2"
+                                               name="semester_2_exam" value="0" min="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Семестр 3 -->
+                        <div class="card mb-2 border-warning semester-card" id="semester_3_card" style="display:none;">
+                            <div class="card-header bg-warning text-dark py-2 d-flex justify-content-between align-items-center">
+                                <strong>Семестр 3</strong>
+                                <span class="badge bg-dark text-warning" id="semester_3_total_badge">0 ч.</span>
+                            </div>
+                            <div class="card-body py-2">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Лекции</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="3"
+                                               name="semester_3_lecture" value="0" min="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Практические</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="3"
+                                               name="semester_3_practice" value="0" min="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Самостоятельные</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="3"
+                                               name="semester_3_independent" value="0" min="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Экзамен</label>
+                                        <input type="number" class="form-control form-control-sm semester-hour"
+                                               data-semester="3"
+                                               name="semester_3_exam" value="0" min="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info small mb-0 mt-3">
+                        <i class="bi bi-info-circle"></i>
+                        Укажите часы хотя бы для одного семестра.
+                        Экзамен указывается общей суммой (например, 12 часов).
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i class="bi bi-check-circle"></i> Создать журнал
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ============ МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ЧАСОВ ============ -->
+<div class="modal fade" id="editHoursModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" id="editHoursForm" action="{{ url_for('main.edit_group_subject_hours') }}">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">
+                        <i class="bi bi-clock"></i>
+                        Редактировать часы
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-light border">
+                        <strong id="editHoursTitle">—</strong>
+                    </div>
+
+                    <input type="hidden" name="gsid" id="editHoursGsid">
+                    <div id="editHoursSemesters">
+                        <!-- Заполняется JS -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Сохранить часы
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* ============ КАРТОЧКИ ЖУРНАЛОВ ============ */
+    #journalsList {
+        overflow: visible !important;
+    }
+
+    .journal-item {
+        transition: all 0.15s ease;
+        padding: 12px 16px;
+        position: relative;
+        overflow: visible !important;
+    }
+
+    .journal-item:hover {
+        background-color: #f8f9fa;
+    }
+
+    .journal-item.hidden {
+        display: none;
+    }
+
+    /* Bootstrap-контейнеры не должны обрезать dropdown */
+    .list-group,
+    .list-group-item,
+    .card,
+    .card-body {
+        overflow: visible !important;
+    }
+
+    /* ============ FLOATING ACTION BUTTON ============ */
+    .fab-create-journal {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background-color: #198754;
+        color: #fff;
+        border: none;
+        box-shadow: 0 4px 12px rgba(25, 135, 84, 0.4);
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1030;
+        transition: all 0.2s ease;
+    }
+
+    .fab-create-journal:hover {
+        background-color: #146c43;
+        transform: scale(1.05);
+        box-shadow: 0 6px 16px rgba(25, 135, 84, 0.5);
+    }
+
+    .fab-create-journal:active {
+        transform: scale(0.95);
+    }
+
+    @media (min-width: 768px) {
+        .fab-create-journal {
+            bottom: 32px;
+            right: 32px;
+            width: 60px;
+            height: 60px;
+        }
+    }
+
+    /* ============ МОБИЛЬНЫЕ СТИЛИ ============ */
+    @media (max-width: 767px) {
+        .journal-item {
+            padding: 10px 12px;
+        }
+
+        body {
+            padding-bottom: 90px;
+        }
+
+        .fab-create-journal {
+            bottom: 16px;
+            right: 16px;
+            width: 52px;
+            height: 52px;
+        }
+    }
+
+    /* ============ МОДАЛЬНОЕ ОКНО ============ */
+    @media (max-width: 576px) {
+        .modal-dialog {
+            margin: 0.5rem;
+            max-width: calc(100% - 1rem);
+        }
+
+        .modal-body {
+            padding: 12px;
+        }
+
+        .modal-header,
+        .modal-footer {
+            padding: 10px 12px;
+        }
+    }
+
+    /* ============ ПЕЧАТЬ ============ */
+    @media print {
+        .fab-create-journal,
+        .dropdown,
+        .card-header .btn,
+        .btn,
+        .modal {
+            display: none !important;
+        }
+    }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ==================== ИСПРАВЛЕНИЕ DROPDOWN ====================
+// Bootstrap автоматически использует Popper.js с strategy="fixed",
+// если указан data-bs-strategy="fixed".
+// Но для надёжности добавим дополнительную логику через JS.
+document.querySelectorAll('.journal-item .dropdown').forEach(function(dropdown) {
+    dropdown.addEventListener('show.bs.dropdown', function() {
+        var item = this.closest('.journal-item');
+        if (item) {
+            item.style.zIndex = '200';
+        }
+    });
+
+    dropdown.addEventListener('hidden.bs.dropdown', function() {
+        var item = this.closest('.journal-item');
+        if (item) {
+            item.style.zIndex = '';
+        }
+    });
+});
+
+// ==================== ПОИСК И ФИЛЬТР ====================
+function filterJournals() {
+    var searchText = document.getElementById('journalSearch').value.toLowerCase().trim();
+    var filterGroup = document.getElementById('filterGroup').value;
+    var items = document.querySelectorAll('.journal-item');
+    var visibleCount = 0;
+
+    items.forEach(function(item) {
+        var searchData = item.dataset.search.toLowerCase();
+        var group = item.dataset.group;
+
+        var matchesSearch = !searchText || searchData.includes(searchText);
+        var matchesGroup = !filterGroup || group === filterGroup;
+
+        if (matchesSearch && matchesGroup) {
+            item.classList.remove('hidden');
+            visibleCount++;
+        } else {
+            item.classList.add('hidden');
+        }
+    });
+
+    // Обновляем счётчики
+    document.getElementById('visibleCount').textContent = visibleCount;
+    var badge = document.getElementById('totalBadge');
+
+    if (visibleCount < items.length) {
+        badge.className = 'badge bg-warning ms-2';
+        badge.textContent = visibleCount + ' / ' + items.length;
+    } else {
+        badge.className = 'badge bg-primary ms-2';
+        badge.textContent = items.length;
+    }
+
+    // Показываем/скрываем кнопку очистки
+    var clearBtn = document.getElementById('clearSearchBtn');
+    clearBtn.style.display = searchText ? 'block' : 'none';
+}
+
+function clearSearch() {
+    document.getElementById('journalSearch').value = '';
+    filterJournals();
+}
+
+// Обработчик поиска
+document.getElementById('journalSearch').addEventListener('input', filterJournals);
+
+// ==================== ФОРМА СОЗДАНИЯ ЖУРНАЛА ====================
+
+// Обновление видимости семестров
+function updateSemesterVisibility() {
+    var check1 = document.getElementById('semester_1_check').checked;
+    var check2 = document.getElementById('semester_2_check').checked;
+    var check3 = document.getElementById('semester_3_check').checked;
+
+    document.getElementById('semester_1_card').style.display = check1 ? 'block' : 'none';
+    document.getElementById('semester_2_card').style.display = check2 ? 'block' : 'none';
+    document.getElementById('semester_3_card').style.display = check3 ? 'block' : 'none';
+
+    if (!check1) {
+        document.querySelectorAll('[data-semester="1"]').forEach(function(inp) { inp.value = 0; });
+    }
+    if (!check2) {
+        document.querySelectorAll('[data-semester="2"]').forEach(function(inp) { inp.value = 0; });
+    }
+    if (!check3) {
+        document.querySelectorAll('[data-semester="3"]').forEach(function(inp) { inp.value = 0; });
+    }
+
+    updateAllTotals();
+    validateForm();
+}
+
+// Подсчёт часов по семестру
+function updateSemesterTotal(semesterNum) {
+    var inputs = document.querySelectorAll('[data-semester="' + semesterNum + '"]');
+    var total = 0;
+    inputs.forEach(function(inp) {
+        total += parseInt(inp.value) || 0;
+    });
+    var badge = document.getElementById('semester_' + semesterNum + '_total_badge');
+    if (badge) {
+        badge.textContent = total + ' ч.';
+    }
+}
+
+function updateAllTotals() {
+    updateSemesterTotal(1);
+    updateSemesterTotal(2);
+    updateSemesterTotal(3);
+}
+
+// Валидация формы
+function validateForm() {
+    var submitBtn = document.getElementById('submitBtn');
+    if (!submitBtn) return;
+
+    var hasHours = false;
+    document.querySelectorAll('.semester-hour').forEach(function(inp) {
+        if (parseInt(inp.value) > 0) hasHours = true;
+    });
+
+    submitBtn.disabled = !hasHours;
+    return hasHours;
+}
+
+// Обработчики изменения часов
+document.querySelectorAll('.semester-hour').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+        updateAllTotals();
+        validateForm();
+    });
+});
+
+// Валидация перед отправкой
+var createForm = document.getElementById('createJournalForm');
+if (createForm) {
+    createForm.addEventListener('submit', function(e) {
+        if (!validateForm()) {
+            e.preventDefault();
+            alert('Пожалуйста, укажите часы хотя бы для одного семестра!');
+        }
+    });
+}
+
+// ==================== РЕДАКТИРОВАНИЕ ЧАСОВ ====================
+function openEditHoursModal(gsid, groupName, subjectName) {
+    document.getElementById('editHoursGsid').value = gsid;
+    document.getElementById('editHoursTitle').textContent = groupName + ' — ' + subjectName;
+
+    // Загружаем часы через AJAX
+    fetch('/group-subjects/get-hours/' + gsid)
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            var container = document.getElementById('editHoursSemesters');
+            var html = '';
+
+            if (!data.semesters || data.semesters.length === 0) {
+                container.innerHTML = '<div class="alert alert-info">Нет настроенных семестров</div>';
+                return;
+            }
+
+            data.semesters.forEach(function(sem) {
+                var h = data.hours[sem] || {
+                    lecture_hours: 0,
+                    practice_hours: 0,
+                    independent_hours: 0,
+                    exam_hours: 0
+                };
+
+                html += '<div class="card mb-2 border-primary">';
+                html += '<div class="card-header bg-primary text-white py-2">';
+                html += '<strong>Семестр ' + sem + '</strong>';
+                html += '</div>';
+                html += '<div class="card-body py-2">';
+                html += '<div class="row g-2">';
+
+                html += '<div class="col-6 col-md-3">';
+                html += '<label class="form-label small mb-1">Лекции</label>';
+                html += '<input type="number" class="form-control form-control-sm" name="hours_' + sem + '_lecture" value="' + h.lecture_hours + '" min="0">';
+                html += '</div>';
+
+                html += '<div class="col-6 col-md-3">';
+                html += '<label class="form-label small mb-1">Практические</label>';
+                html += '<input type="number" class="form-control form-control-sm" name="hours_' + sem + '_practice" value="' + h.practice_hours + '" min="0">';
+                html += '</div>';
+
+                html += '<div class="col-6 col-md-3">';
+                html += '<label class="form-label small mb-1">Самостоятельные</label>';
+                html += '<input type="number" class="form-control form-control-sm" name="hours_' + sem + '_independent" value="' + h.independent_hours + '" min="0">';
+                html += '</div>';
+
+                html += '<div class="col-6 col-md-3">';
+                html += '<label class="form-label small mb-1">Экзамен</label>';
+                html += '<input type="number" class="form-control form-control-sm" name="hours_' + sem + '_exam" value="' + h.exam_hours + '" min="0">';
+                html += '</div>';
+
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            });
+
+            container.innerHTML = html;
+
+            // Открываем модальное окно
+            var modal = new bootstrap.Modal(document.getElementById('editHoursModal'));
+            modal.show();
+        })
+        .catch(function(error) {
+            console.error('Ошибка:', error);
+            alert('Не удалось загрузить часы');
+        });
+}
+
+// ==================== СБРОС ФОРМЫ ПРИ ЗАКРЫТИИ ====================
+document.getElementById('createJournalModal').addEventListener('hidden.bs.modal', function() {
+    var form = document.getElementById('createJournalForm');
+    form.reset();
+
+    // Возвращаем чекбоксы в исходное состояние
+    document.getElementById('semester_1_check').checked = true;
+    document.getElementById('semester_2_check').checked = true;
+    document.getElementById('semester_3_check').checked = false;
+
+    // Показываем/скрываем семестры
+    document.getElementById('semester_1_card').style.display = 'block';
+    document.getElementById('semester_2_card').style.display = 'block';
+    document.getElementById('semester_3_card').style.display = 'none';
+
+    // Сбрасываем часы
+    document.querySelectorAll('.semester-hour').forEach(function(inp) {
+        inp.value = 0;
+    });
+
+    updateAllTotals();
+    validateForm();
+});
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+document.addEventListener('DOMContentLoaded', function() {
+    updateAllTotals();
+    validateForm();
+});
+</script>
+{% endblock %}

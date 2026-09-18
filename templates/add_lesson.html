@@ -1,0 +1,571 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2 class="mb-3">
+    <i class="bi bi-plus-circle"></i>
+    Добавить занятие: {{ pair.group_name }} — {{ pair.subject_name }}
+</h2>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <form method="POST" onsubmit="return validateForm()">
+
+            <div class="row mb-4">
+                <!-- Дата -->
+                <div class="col-md-3 mb-3">
+                    <label for="lesson_date" class="form-label fw-bold">
+                        <i class="bi bi-calendar-date"></i> Дата занятия
+                    </label>
+                    <input type="date" class="form-control" id="lesson_date" name="date"
+                           required onchange="updateDaySchedule()">
+                    <small class="text-muted" id="dayName"></small>
+                </div>
+
+                <!-- Время -->
+                <div class="col-md-3 mb-3">
+                    <label for="time_interval" class="form-label fw-bold">
+                        <i class="bi bi-clock"></i> Время занятия
+                    </label>
+                    <div class="input-group">
+                        <input type="text"
+                               class="form-control"
+                               id="time_interval"
+                               name="time_interval"
+                               placeholder="0830-0930"
+                               required
+                               autocomplete="off"
+                               oninput="formatTime(this)"
+                               onblur="validateTime(this)">
+                        <span class="input-group-text" id="timeStatus">🕐</span>
+                    </div>
+                    <div id="timePreview" class="mt-1" style="display:none;">
+                        <span class="badge bg-info" id="timePreviewText"></span>
+                    </div>
+                    <div id="timeError" class="text-danger small mt-1"></div>
+
+                    <!-- Быстрый выбор пары -->
+                    <div class="mt-2">
+                        <small class="text-muted fw-bold">Быстрый выбор пары:</small>
+                        <div class="d-flex flex-wrap gap-1 mt-1" id="quickButtons">
+                            <!-- Кнопки будут заполняться JavaScript в зависимости от дня недели -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Семестр -->
+                <div class="col-md-2 mb-3">
+                    <label for="semester" class="form-label fw-bold">
+                        <i class="bi bi-calendar3"></i> Семестр
+                    </label>
+                    <select class="form-select" id="semester" name="semester" required>
+                        {% for sem in semesters %}
+                        <option value="{{ sem }}" {% if sem == current_semester %}selected{% endif %}>
+                            {{ sem }} семестр
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Тип занятия -->
+                <div class="col-md-2 mb-3">
+                    <label for="lesson_type" class="form-label fw-bold">
+                        <i class="bi bi-tag"></i> Тип занятия
+                    </label>
+                    <select class="form-select" id="lesson_type" name="type" required onchange="checkExamType()">
+                        {% for tv, tl in lesson_types %}
+                        <option value="{{ tv }}">{{ tl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Тема -->
+                <div class="col-md-2 mb-3">
+                    <label for="lesson_topic" class="form-label fw-bold">
+                        <i class="bi bi-chat-left-text"></i> Тема
+                    </label>
+                    <input type="text" class="form-control no-emoji"
+                           id="lesson_topic" name="topic"
+                           placeholder="Тема занятия"
+                           maxlength="50"
+                           oninput="validateTopic()">
+                    <small class="text-muted">
+                        <span id="charCount">0</span>/50
+                    </small>
+                </div>
+            </div>
+
+            <!-- Предупреждения -->
+            <div class="alert alert-danger" id="exam-warning" style="display:none;">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>Внимание!</strong> Экзамен — итоговое занятие. После его добавления нельзя будет добавить другие занятия в этом семестре.
+            </div>
+
+            <div class="alert alert-info" id="sr-alert" style="display:none;">
+                <i class="bi bi-info-circle"></i>
+                Самостоятельная работа может ставиться в удобный день, не по порядку занятий.
+            </div>
+
+            <hr>
+
+            <!-- Студенты -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-people"></i> Студенты группы ({{ students|length }})
+                </h5>
+                <div>
+                    <button type="button" class="btn btn-sm btn-success me-2" onclick="setAllPresent()">
+                        <i class="bi bi-check-all"></i> Все присутствуют
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllGrades()">
+                        <i class="bi bi-x"></i> Убрать оценки
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 5%;">#</th>
+                            <th style="width: 45%;">Студент</th>
+                            <th style="width: 25%;">Посещение</th>
+                            <th style="width: 25%;">Оценка</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                        <tr>
+                            <td class="text-muted">{{ loop.index }}</td>
+                            <td>
+                                <strong>{{ student.full_name }}</strong>
+                            </td>
+                            <td>
+                                <div class="btn-group attendance-toggle" role="group">
+                                    <input type="radio" class="btn-check"
+                                           name="attendance_{{ student.id }}"
+                                           id="present_{{ student.id }}"
+                                           value="present" checked>
+                                    <label class="btn btn-sm btn-outline-success"
+                                           for="present_{{ student.id }}"
+                                           title="Присутствовал">
+                                        <i class="bi bi-check-lg"></i> +
+                                    </label>
+
+                                    <input type="radio" class="btn-check"
+                                           name="attendance_{{ student.id }}"
+                                           id="absent_{{ student.id }}"
+                                           value="absent">
+                                    <label class="btn btn-sm btn-outline-danger"
+                                           for="absent_{{ student.id }}"
+                                           title="Отсутствовал">
+                                        <i class="bi bi-x-lg"></i> н
+                                    </label>
+                                </div>
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm grade-select"
+                                        name="grade_{{ student.id }}">
+                                    {% for grade_val, grade_label in grades %}
+                                    <option value="{{ grade_val }}">{{ grade_label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Кнопки -->
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                    <i class="bi bi-save"></i> Сохранить занятие
+                </button>
+                <a href="{{ url_for('main.journal', gsid=pair.id, semester=current_semester) }}" class="btn btn-secondary btn-lg">
+                    <i class="bi bi-x-circle"></i> Отмена
+                </a>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<style>
+    .attendance-toggle .btn {
+        padding: 8px 16px;
+        font-size: 1rem;
+        font-weight: bold;
+        transition: all 0.2s;
+    }
+
+    .attendance-toggle .btn-check:checked + .btn-outline-success {
+        background-color: #198754;
+        color: white;
+        box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.4);
+    }
+
+    .attendance-toggle .btn-check:checked + .btn-outline-danger {
+        background-color: #dc3545;
+        color: white;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.4);
+    }
+
+    .attendance-toggle .btn:hover {
+        transform: scale(1.05);
+    }
+
+    #quickButtons .btn {
+        font-size: 0.75rem;
+        padding: 3px 8px;
+        white-space: nowrap;
+    }
+
+    #quickButtons .btn.active {
+        background-color: #0d6efd;
+        color: white;
+    }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ==================== РАСПИСАНИЕ ПАР ====================
+
+// Расписание по дням недели
+// 0 = Воскресенье, 1 = Понедельник, ..., 6 = Суббота
+var SCHEDULE = {
+    1: { // Понедельник
+        name: 'Понедельник',
+        pairs: [
+            {num: 1, time: '0830-0930', label: '1 пара (8:30-9:30)'},
+            {num: 2, time: '1000-1100', label: '2 пара (10:00-11:00)'},
+            {num: 3, time: '1110-1210', label: '3 пара (11:10-12:10)'},
+            {num: 4, time: '1340-1440', label: '4 пара (13:40-14:40)'},
+            {num: 5, time: '1510-1610', label: '5 пара (15:10-16:10)'},
+            {num: 6, time: '1620-1720', label: '6 пара (16:20-17:20)'},
+            {num: 7, time: '1730-1830', label: '7 пара (17:30-18:30)'},
+            {num: 8, time: '1840-1940', label: '8 пара (18:40-19:40)'}
+        ]
+    },
+    2: { // Вторник
+        name: 'Вторник',
+        pairs: [
+            {num: 1, time: '0830-1000', label: '1 пара (8:30-10:00)'},
+            {num: 2, time: '1030-1200', label: '2 пара (10:30-12:00)'},
+            {num: 3, time: '1210-1340', label: '3 пара (12:10-13:40)'},
+            {num: 4, time: '1350-1520', label: '4 пара (13:50-15:20)'},
+            {num: 5, time: '1550-1720', label: '5 пара (15:50-17:20)'},
+            {num: 6, time: '1730-1900', label: '6 пара (17:30-19:00)'},
+            {num: 7, time: '1910-2040', label: '7 пара (19:10-20:40)'}
+        ]
+    },
+    3: { // Среда
+        name: 'Среда',
+        pairs: [
+            {num: 1, time: '0830-1000', label: '1 пара (8:30-10:00)'},
+            {num: 2, time: '1030-1200', label: '2 пара (10:30-12:00)'},
+            {num: 3, time: '1210-1340', label: '3 пара (12:10-13:40)'},
+            {num: 4, time: '1350-1520', label: '4 пара (13:50-15:20)'},
+            {num: 5, time: '1550-1720', label: '5 пара (15:50-17:20)'},
+            {num: 6, time: '1730-1900', label: '6 пара (17:30-19:00)'},
+            {num: 7, time: '1910-2040', label: '7 пара (19:10-20:40)'}
+        ]
+    },
+    4: { // Четверг
+        name: 'Четверг',
+        pairs: [
+            {num: 1, time: '0830-1000', label: '1 пара (8:30-10:00)'},
+            {num: 2, time: '1030-1200', label: '2 пара (10:30-12:00)'},
+            {num: 3, time: '1210-1340', label: '3 пара (12:10-13:40)'},
+            {num: 4, time: '1350-1520', label: '4 пара (13:50-15:20)'},
+            {num: 5, time: '1550-1720', label: '5 пара (15:50-17:20)'},
+            {num: 6, time: '1730-1900', label: '6 пара (17:30-19:00)'},
+            {num: 7, time: '1910-2040', label: '7 пара (19:10-20:40)'}
+        ]
+    },
+    5: { // Пятница
+        name: 'Пятница',
+        pairs: [
+            {num: 1, time: '0830-1000', label: '1 пара (8:30-10:00)'},
+            {num: 2, time: '1030-1200', label: '2 пара (10:30-12:00)'},
+            {num: 3, time: '1210-1340', label: '3 пара (12:10-13:40)'},
+            {num: 4, time: '1350-1520', label: '4 пара (13:50-15:20)'},
+            {num: 5, time: '1550-1720', label: '5 пара (15:50-17:20)'},
+            {num: 6, time: '1730-1900', label: '6 пара (17:30-19:00)'},
+            {num: 7, time: '1910-2040', label: '7 пара (19:10-20:40)'}
+        ]
+    },
+    6: { // Суббота
+        name: 'Суббота',
+        pairs: [
+            {num: 1, time: '0830-0930', label: '1 пара (8:30-9:30)'},
+            {num: 2, time: '0945-1045', label: '2 пара (9:45-10:45)'},
+            {num: 3, time: '1055-1155', label: '3 пара (10:55-11:55)'},
+            {num: 4, time: '1205-1305', label: '4 пара (12:05-13:05)'},
+            {num: 5, time: '1320-1420', label: '5 пара (13:20-14:20)'},
+            {num: 6, time: '1430-1530', label: '6 пара (14:30-15:30)'},
+            {num: 7, time: '1540-1640', label: '7 пара (15:40-16:40)'},
+            {num: 8, time: '1650-1750', label: '8 пара (16:50-17:50)'}
+        ]
+    },
+    0: { // Воскресенье
+        name: 'Воскресенье',
+        pairs: []
+    }
+};
+
+// ==================== ФУНКЦИИ ====================
+
+// Получение дня недели из даты
+function getDayOfWeek(dateString) {
+    var date = new Date(dateString);
+    return date.getDay(); // 0=Вс, 1=Пн, ..., 6=Сб
+}
+
+// Обновление кнопок быстрого выбора в зависимости от дня недели
+function updateDaySchedule() {
+    var dateInput = document.getElementById('lesson_date');
+    var dayName = document.getElementById('dayName');
+    var quickButtons = document.getElementById('quickButtons');
+
+    if (!dateInput.value) {
+        dayName.textContent = '';
+        quickButtons.innerHTML = '<small class="text-muted">Выберите дату для отображения расписания</small>';
+        return;
+    }
+
+    var day = getDayOfWeek(dateInput.value);
+    var schedule = SCHEDULE[day];
+
+    if (!schedule || schedule.pairs.length === 0) {
+        dayName.textContent = schedule ? schedule.name + ' — занятий нет' : '—';
+        quickButtons.innerHTML = '<small class="text-muted">В этот день занятий нет</small>';
+        return;
+    }
+
+    dayName.textContent = schedule.name;
+
+    // Заполняем кнопки
+    var html = '';
+    schedule.pairs.forEach(function(pair) {
+        html += '<button type="button" class="btn btn-outline-primary btn-sm quick-time-btn" ' +
+                'data-time="' + pair.time + '" ' +
+                'onclick="setTime(\'' + pair.time + '\', this)">' +
+                pair.num + ' пара</button>';
+    });
+    quickButtons.innerHTML = html;
+
+    // Автоматически устанавливаем первую пару
+    if (schedule.pairs.length > 0) {
+        setTime(schedule.pairs[0].time, null);
+    }
+}
+
+// Установка времени
+function setTime(timeStr, btn) {
+    var input = document.getElementById('time_interval');
+    input.value = timeStr;
+    validateTime(input);
+    updateTimePreview(timeStr);
+
+    // Подсвечиваем активную кнопку
+    if (btn) {
+        document.querySelectorAll('.quick-time-btn').forEach(function(b) {
+            b.classList.remove('active');
+        });
+        btn.classList.add('active');
+    }
+}
+
+// Форматирование ввода времени
+function formatTime(input) {
+    var value = input.value.replace(/[^0-9]/g, '');
+    if (value.length > 8) value = value.slice(0, 8);
+    if (value.length >= 4) {
+        value = value.slice(0, 4) + '-' + value.slice(4, 8);
+    }
+    input.value = value;
+
+    if (value.length >= 9) {
+        updateTimePreview(value);
+    } else {
+        document.getElementById('timePreview').style.display = 'none';
+    }
+
+    document.getElementById('timeError').textContent = '';
+    input.classList.remove('is-invalid', 'is-valid');
+    document.getElementById('timeStatus').textContent = '🕐';
+}
+
+// Валидация времени
+function validateTime(input) {
+    var value = input.value.trim();
+    var timeError = document.getElementById('timeError');
+    var timeStatus = document.getElementById('timeStatus');
+    var submitBtn = document.getElementById('submitBtn');
+
+    if (!value) {
+        timeError.textContent = 'Введите время занятия';
+        input.classList.add('is-invalid');
+        timeStatus.textContent = '❌';
+        submitBtn.disabled = true;
+        return false;
+    }
+
+    var timeRegex = /^(\d{2})(\d{2})-(\d{2})(\d{2})$/;
+    var match = value.match(timeRegex);
+
+    if (!match) {
+        timeError.textContent = 'Формат: 0830-0930';
+        input.classList.add('is-invalid');
+        timeStatus.textContent = '❌';
+        submitBtn.disabled = true;
+        return false;
+    }
+
+    var sh = parseInt(match[1]), sm = parseInt(match[2]);
+    var eh = parseInt(match[3]), em = parseInt(match[4]);
+
+    if (sh > 23 || eh > 23) {
+        timeError.textContent = 'Часы: 00-23';
+        input.classList.add('is-invalid');
+        timeStatus.textContent = '❌';
+        submitBtn.disabled = true;
+        return false;
+    }
+
+    if (sm > 59 || em > 59) {
+        timeError.textContent = 'Минуты: 00-59';
+        input.classList.add('is-invalid');
+        timeStatus.textContent = '❌';
+        submitBtn.disabled = true;
+        return false;
+    }
+
+    if (sh * 60 + sm >= eh * 60 + em) {
+        timeError.textContent = 'Начало раньше конца';
+        input.classList.add('is-invalid');
+        timeStatus.textContent = '❌';
+        submitBtn.disabled = true;
+        return false;
+    }
+
+    timeError.textContent = '';
+    input.classList.remove('is-invalid');
+    input.classList.add('is-valid');
+    timeStatus.textContent = '✅';
+    submitBtn.disabled = false;
+    updateTimePreview(value);
+    return true;
+}
+
+// Обновление превью времени
+function updateTimePreview(value) {
+    var preview = document.getElementById('timePreview');
+    var text = document.getElementById('timePreviewText');
+    var match = value.match(/^(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+    if (match) {
+        text.textContent = match[1] + ':' + match[2] + ' — ' + match[3] + ':' + match[4];
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+    }
+}
+
+// Блокировка букв в поле времени
+document.getElementById('time_interval').addEventListener('keydown', function(e) {
+    if (!/^[0-9]$/.test(e.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Enter'].includes(e.key)) {
+        e.preventDefault();
+    }
+});
+
+// ==================== ВАЛИДАЦИЯ ТЕМЫ ====================
+
+function validateTopic() {
+    var topic = document.getElementById('lesson_topic');
+    var charCount = document.getElementById('charCount');
+    var topicError = document.getElementById('topicError');
+
+    charCount.textContent = topic.value.length;
+
+    if (topic.value.length > 40) charCount.style.color = '#ffc107';
+    else if (topic.value.length >= 50) charCount.style.color = '#dc3545';
+    else charCount.style.color = '';
+
+    var emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}]/u;
+
+    if (topic.value && emojiRegex.test(topic.value)) {
+        topic.classList.add('is-invalid');
+        if (topicError) {
+            topicError.textContent = 'Эмодзи запрещены';
+            topicError.style.display = 'block';
+        }
+    } else {
+        topic.classList.remove('is-invalid');
+        if (topicError) {
+            topicError.style.display = 'none';
+        }
+    }
+}
+
+// ==================== ФУНКЦИИ ДЛЯ СТУДЕНТОВ ====================
+
+function setAllPresent() {
+    document.querySelectorAll('input[value="present"]').forEach(function(r) {
+        r.checked = true;
+    });
+}
+
+function clearAllGrades() {
+    document.querySelectorAll('.grade-select').forEach(function(s) {
+        s.value = '';
+    });
+}
+
+// ==================== ПРОВЕРКА ТИПА ЗАНЯТИЯ ====================
+
+function checkExamType() {
+    var type = document.getElementById('lesson_type').value;
+    document.getElementById('exam-warning').style.display = type === 'exam' ? 'block' : 'none';
+    document.getElementById('sr-alert').style.display = type === 'independent' ? 'block' : 'none';
+}
+
+// ==================== ОБЩАЯ ВАЛИДАЦИЯ ФОРМЫ ====================
+
+function validateForm() {
+    var timeInput = document.getElementById('time_interval');
+    if (!validateTime(timeInput)) {
+        alert('Пожалуйста, исправьте время занятия');
+        return false;
+    }
+
+    var type = document.getElementById('lesson_type').value;
+    if (type === 'exam') {
+        return confirm('Вы уверены, что хотите добавить ЭКЗАМЕН?\n\nПосле этого нельзя будет добавить другие занятия в этом семестре!');
+    }
+
+    return true;
+}
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Установка сегодняшней даты
+    var today = new Date();
+    var dateInput = document.getElementById('lesson_date');
+    dateInput.valueAsDate = today;
+
+    // Обновление расписания для текущего дня
+    updateDaySchedule();
+
+    // Если сегодня воскресенье, используем понедельник
+    if (today.getDay() === 0) {
+        var monday = new Date(today);
+        monday.setDate(today.getDate() + 1);
+        dateInput.valueAsDate = monday;
+        updateDaySchedule();
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,1069 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% set type_names = {
+    'lecture': 'Лекция',
+    'practice': 'Практическая',
+    'independent': 'С/Р',
+    'dictation': 'Под запись',
+    'exam': 'Экзамен',
+    'diff_credit': 'Дифф. зачет'
+} %}
+
+{# Проверяем, есть ли уже экзамен в этом семестре #}
+{% set has_exam = false %}
+{% if journal_data %}
+    {% for lesson in journal_data %}
+        {% if lesson.type == 'exam' %}
+            {% set has_exam = true %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+<!-- Заголовок и кнопка добавления -->
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0">
+        <i class="bi bi-journal-bookmark-fill"></i>
+        {{ pair.group_name }} — {{ pair.subject_name }}
+    </h2>
+
+    {% if not has_exam %}
+    <a href="{{ url_for('main.add_lesson', gsid=pair.id, semester=current_semester) }}"
+       class="btn btn-success btn-lg">
+        <i class="bi bi-plus-circle"></i>
+        <span class="d-none d-sm-inline">Добавить занятие</span>
+        <span class="d-sm-none">Добавить</span>
+    </a>
+    {% else %}
+    <div class="alert alert-warning mb-0 py-2 px-3 d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.5rem;"></i>
+        <div>
+            <strong>Экзамен проведен</strong><br>
+            <small>Добавление занятий заблокировано</small>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Переключатель семестров -->
+<div class="mb-3 d-flex flex-wrap align-items-center gap-2">
+    <div class="btn-group btn-group-sm">
+        {% for sem in semesters %}
+        <a href="{{ url_for('main.journal', gsid=pair.id, semester=sem) }}"
+           class="btn btn-outline-primary {% if sem == current_semester %}active{% endif %}">
+            {{ sem }} сем.
+        </a>
+        {% endfor %}
+    </div>
+    {% if has_exam %}
+    <span class="badge bg-danger">
+        <i class="bi bi-check-circle"></i> Экзамен
+    </span>
+    {% endif %}
+</div>
+
+{% if journal_data %}
+
+<!-- ============ ДЕСКТОПНАЯ ТАБЛИЦА ============ -->
+<div class="card shadow-sm d-none d-md-block">
+    <div class="card-header bg-light py-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i>
+                Всего занятий: <strong>{{ journal_data|length }}</strong>
+            </small>
+            <small class="text-muted">
+                <i class="bi bi-hand-index"></i>
+                Зажмите таблицу мышкой и потяните, чтобы прокрутить
+            </small>
+        </div>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="journal-scroll-container" id="journalScroll">
+            <table class="table table-bordered journal-table mb-0" id="journalTable">
+                <thead>
+                    <tr>
+                        <th class="fixed-left-col" style="min-width: 220px;">
+                            Студент
+                        </th>
+
+                        <th class="fixed-left-col-2" style="min-width: 110px;">
+                            За семестр
+                        </th>
+
+                        {% for lesson in journal_data %}
+                        <th class="lesson-column {% if lesson.type == 'exam' %}exam-column{% endif %}">
+
+                            <div class="date-header">
+                                <small>
+                                    <strong>{{ lesson.date_formatted }}</strong>
+                                    {% if lesson.day_of_week %}
+                                    <span class="badge bg-light text-dark ms-1" style="font-size: 0.65rem;">
+                                        {{ lesson.day_of_week }}
+                                    </span>
+                                    {% endif %}
+                                </small>
+                            </div>
+
+                            {% if lesson.time_interval %}
+                            <div class="mt-1">
+                                <span class="badge bg-info">{{ lesson.time_interval }}</span>
+                            </div>
+                            {% endif %}
+
+                            <div class="lesson-type mt-1">
+                                <select class="form-select form-select-sm lesson-type-select"
+                                        data-gsid="{{ pair.id }}"
+                                        data-date="{{ lesson.date }}"
+                                        data-time="{{ lesson.time_interval }}"
+                                        data-semester="{{ lesson.semester }}"
+                                        title="Изменить тип занятия">
+                                    {% for type_val, type_label in type_names.items() %}
+                                    <option value="{{ type_val }}" {% if lesson.type == type_val %}selected{% endif %}>
+                                        {{ type_label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            {% if lesson.topic %}
+                            <div class="topic mt-1" title="{{ lesson.topic }}">
+                                <small class="text-muted">{{ lesson.topic }}</small>
+                            </div>
+                            {% endif %}
+
+                            <a href="{{ url_for('main.delete_lesson', gsid=pair.id, date=lesson.date, ti=lesson.time_interval, semester=current_semester) }}"
+                               class="btn btn-sm btn-outline-danger mt-2"
+                               onclick="return confirm('Удалить занятие от {{ lesson.date_formatted }} {{ lesson.time_interval }}?')"
+                               title="Удалить занятие">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td class="student-name fixed-left-col">
+                            <a href="{{ url_for('main.student_card', sid=student.id) }}"
+                               class="text-decoration-none text-dark fw-bold">
+                                {{ student.full_name }}
+                            </a>
+                        </td>
+
+                        <td class="text-center align-middle fixed-left-col-2">
+                            <div class="semester-grade-cell"
+                                 data-student-id="{{ student.id }}"
+                                 data-gsid="{{ pair.id }}"
+                                 data-semester="{{ current_semester }}">
+
+                                {% if semester_grades.get(student.id) %}
+                                    {% set grade_val = semester_grades[student.id] %}
+                                    {% if grade_val == 'passed' %}
+                                    <span class="badge bg-success grade-display">Зачтено</span>
+                                    {% elif grade_val == '5' %}
+                                    <span class="badge bg-success grade-display">5</span>
+                                    {% elif grade_val == '4' %}
+                                    <span class="badge bg-primary grade-display">4</span>
+                                    {% elif grade_val == '3' %}
+                                    <span class="badge bg-warning text-dark grade-display">3</span>
+                                    {% elif grade_val == '2' %}
+                                    <span class="badge bg-danger grade-display">2</span>
+                                    {% else %}
+                                    <span class="badge bg-success grade-display">{{ grade_val }}</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="badge bg-secondary grade-display">—</span>
+                                {% endif %}
+
+                                {% if has_permission('set_semester_grade') %}
+                                <select class="form-select form-select-sm mt-1 semester-grade-select">
+                                    <option value="">—</option>
+                                    <option value="5" {% if semester_grades.get(student.id) == '5' %}selected{% endif %}>5</option>
+                                    <option value="4" {% if semester_grades.get(student.id) == '4' %}selected{% endif %}>4</option>
+                                    <option value="3" {% if semester_grades.get(student.id) == '3' %}selected{% endif %}>3</option>
+                                    <option value="2" {% if semester_grades.get(student.id) == '2' %}selected{% endif %}>2</option>
+                                    <option value="passed" {% if semester_grades.get(student.id) == 'passed' %}selected{% endif %}>Зач</option>
+                                </select>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        {% for lesson in journal_data %}
+                        <td class="text-center align-middle cell-hover
+                            {% if lesson.type == 'exam' %}exam-cell{% endif %}">
+                            {% set entry = lesson.entries.get(student.id) %}
+
+                            {% if entry %}
+                                {% if entry.attendance == 'absent' %}
+                                    <span class="badge bg-danger attendance-badge">н</span>
+                                {% elif entry.grade %}
+                                    {% if entry.grade == 'passed' %}
+                                        <span class="badge bg-success grade-badge">з</span>
+                                    {% else %}
+                                        <span class="badge bg-primary grade-badge">{{ entry.grade }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-success attendance-badge">+</span>
+                                {% endif %}
+
+                                <br>
+                                <small>
+                                    <button class="btn btn-sm btn-link edit-entry-btn"
+                                            data-entry-id="{{ entry.id }}"
+                                            data-attendance="{{ entry.attendance }}"
+                                            data-grade="{{ entry.grade or '' }}"
+                                            data-student-name="{{ student.full_name }}"
+                                            data-lesson-date="{{ lesson.date_formatted }}"
+                                            data-lesson-type="{{ type_names.get(lesson.type, lesson.type) }}"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editEntryModal">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </small>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ============ МОБИЛЬНАЯ ВЕРСИЯ ============ -->
+<div class="d-md-none">
+
+    <!-- Список занятий карточками -->
+    <div class="card shadow-sm mb-3">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="bi bi-list-check"></i>
+                Занятия
+            </h6>
+            <span class="badge bg-primary">{{ journal_data|length }}</span>
+        </div>
+        <div class="card-body p-2">
+            <!-- Фильтр по типу занятия -->
+            <div class="mb-2">
+                <select class="form-select form-select-sm" id="mobileTypeFilter" onchange="filterMobileLessons()">
+                    <option value="">Все типы занятий</option>
+                    <option value="lecture">Лекции</option>
+                    <option value="practice">Практические</option>
+                    <option value="independent">С/Р</option>
+                    <option value="dictation">Под запись</option>
+                    <option value="exam">Экзамены</option>
+                    <option value="diff_credit">Дифф. зачеты</option>
+                </select>
+            </div>
+
+            <!-- Поиск по дате/теме -->
+            <div class="mb-2">
+                <input type="text"
+                       class="form-control form-control-sm"
+                       id="mobileLessonSearch"
+                       placeholder="🔍 Поиск по дате или теме..."
+                       oninput="filterMobileLessons()">
+            </div>
+
+            <!-- Список занятий (новые сверху) -->
+            <div class="mobile-lessons-list" id="mobileLessonsList" style="max-height: 400px; overflow-y: auto;">
+                {% for lesson in journal_data|reverse|list %}
+                {% set original_index = journal_data|length - loop.index %}
+                <div class="mobile-lesson-card p-2 mb-2 border rounded cursor-pointer"
+                     data-index="{{ original_index }}"
+                     data-type="{{ lesson.type }}"
+                     data-search="{{ lesson.date_formatted }} {{ lesson.date_short }} {{ lesson.topic or '' }}"
+                     onclick="selectMobileLesson({{ original_index }}, this)">
+
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <div>
+                            <strong>{{ lesson.date_formatted }}</strong>
+                            {% if lesson.day_of_week %}
+                            <span class="badge bg-light text-dark ms-1" style="font-size: 0.65rem;">
+                                {{ lesson.day_of_week }}
+                            </span>
+                            {% endif %}
+                            {% if lesson.time_interval %}
+                            <span class="badge bg-info ms-1">{{ lesson.time_interval }}</span>
+                            {% endif %}
+                        </div>
+                        <span class="badge {% if lesson.type == 'exam' %}bg-danger{% else %}bg-secondary{% endif %}"
+                              style="font-size: 0.7rem;">
+                            {{ type_names.get(lesson.type, lesson.type) }}
+                        </span>
+                    </div>
+
+                    {% if lesson.topic %}
+                    <div class="small text-muted">
+                        <i class="bi bi-chat-left-text"></i> {{ lesson.topic }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Краткая статистика -->
+                    <div class="mt-1 small">
+                        {% set present_count = lesson.entries.values()|selectattr('attendance', 'equalto', 'present')|list|length %}
+                        {% set absent_count = lesson.entries.values()|selectattr('attendance', 'equalto', 'absent')|list|length %}
+                        <span class="text-success">+{{ present_count }}</span>
+                        <span class="text-danger ms-2">н{{ absent_count }}</span>
+                        <span class="text-muted ms-2">из {{ students|length }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Информация о выбранном занятии -->
+    <div class="card shadow-sm mb-3" id="selectedLessonCard" style="display:none;">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <div>
+                <i class="bi bi-check-circle"></i>
+                <span id="selectedLessonTitle">—</span>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-light" onclick="clearMobileSelection()">
+                <i class="bi bi-x"></i> Закрыть
+            </button>
+        </div>
+        <div class="card-body p-2">
+            <div class="alert alert-light border mb-2">
+                <small>
+                    <strong>Тип:</strong> <span id="selectedLessonType">—</span><br>
+                    <strong>Тема:</strong> <span id="selectedLessonTopic">—</span>
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Список студентов для выбранного занятия -->
+    <div id="mobileStudentsList" style="display:none;">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0">
+                    <i class="bi bi-people"></i>
+                    Отметки: {{ students|length }} студентов
+                </h6>
+            </div>
+            <div class="card-body p-2">
+                {% for student in students %}
+                <div class="student-mobile-row p-2 mb-2 border rounded"
+                     data-student-id="{{ student.id }}">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <a href="{{ url_for('main.student_card', sid=student.id) }}"
+                           class="text-decoration-none text-dark fw-bold small">
+                            <i class="bi bi-person-circle"></i> {{ student.full_name }}
+                        </a>
+                    </div>
+
+                    <div class="attendance-buttons d-flex gap-1 flex-wrap"
+                         data-student-id="{{ student.id }}">
+                        <!-- JS заполнит -->
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Легенда -->
+<div class="card mt-3 shadow-sm">
+    <div class="card-body py-2">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <small class="text-muted fw-bold">Обозначения:</small>
+            <span class="badge bg-success">+</span> <small>Присутствовал</small>
+            <span class="badge bg-danger">н</span> <small>Отсутствовал</small>
+            <span class="badge bg-primary">5</span> <small>Оценка</small>
+            <span class="badge bg-success">з</span> <small>Зачтено</small>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="card shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-calendar-x" style="font-size: 4rem; color: #ccc;"></i>
+        <h4 class="text-muted mt-3">Занятия еще не добавлены в этом семестре</h4>
+        <p class="text-muted">Начните вести журнал, добавив первое занятие</p>
+        <a href="{{ url_for('main.add_lesson', gsid=pair.id, semester=current_semester) }}"
+           class="btn btn-success btn-lg">
+            <i class="bi bi-plus-circle"></i> Добавить первое занятие
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Модальное окно редактирования (десктоп) -->
+<div class="modal fade" id="editEntryModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil-square"></i> Редактировать
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border mb-3">
+                    <small>
+                        <strong>Студент:</strong> <span id="editStudentName">—</span><br>
+                        <strong>Дата:</strong> <span id="editLessonDate">—</span><br>
+                        <strong>Тип:</strong> <span id="editLessonType">—</span>
+                    </small>
+                </div>
+
+                <form id="editEntryForm">
+                    <input type="hidden" id="edit_entry_id" name="entry_id">
+
+                    <div class="mb-3 text-center">
+                        <label class="form-label fw-bold">Посещение</label>
+                        <div class="btn-group w-100">
+                            <input type="radio" class="btn-check" name="attendance" id="modal_present" value="present">
+                            <label class="btn btn-outline-success" for="modal_present">
+                                <i class="bi bi-check-lg"></i> +
+                            </label>
+                            <input type="radio" class="btn-check" name="attendance" id="modal_absent" value="absent">
+                            <label class="btn btn-outline-danger" for="modal_absent">
+                                <i class="bi bi-x-lg"></i> н
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit_grade" class="form-label fw-bold">Оценка</label>
+                        <select class="form-select" id="edit_grade" name="grade">
+                            {% for grade_val, grade_label in grades %}
+                            <option value="{{ grade_val }}">{{ grade_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-check-lg"></i> Сохранить
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Данные для JS -->
+<script id="journalDataScript" type="application/json">
+{
+    "gsid": {{ pair.id }},
+    "semester": {{ current_semester }},
+    "studentsCount": {{ students|length }},
+    "lessons": [
+        {% for lesson in journal_data %}
+        {
+            "date": "{{ lesson.date }}",
+            "dateFormatted": "{{ lesson.date_formatted }}",
+            "dateShort": "{{ lesson.date_short }}",
+            "dayOfWeek": "{{ lesson.day_of_week }}",
+            "time": "{{ lesson.time_interval }}",
+            "topic": "{{ lesson.topic or '' }}",
+            "type": "{{ lesson.type }}",
+            "typeName": "{{ type_names.get(lesson.type, lesson.type) }}",
+            "entries": {
+                {% for student_id, entry in lesson.entries.items() %}
+                "{{ student_id }}": {
+                    "id": {{ entry.id }},
+                    "attendance": "{{ entry.attendance }}",
+                    "grade": "{{ entry.grade or '' }}"
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            }
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ]
+}
+</script>
+
+<style>
+    /* ============ DRAG-TO-SCROLL КОНТЕЙНЕР ============ */
+    .journal-scroll-container {
+        overflow-x: auto;
+        max-width: 100%;
+        position: relative;
+        cursor: grab;
+        user-select: none;
+        -webkit-user-select: none;
+        scrollbar-width: thin;
+        scrollbar-color: #c0c0c0 #f1f1f1;
+    }
+
+    .journal-scroll-container.dragging {
+        cursor: grabbing;
+    }
+
+    .journal-scroll-container.dragging * {
+        pointer-events: none;
+    }
+
+    .journal-scroll-container .lesson-type-select,
+    .journal-scroll-container .semester-grade-select,
+    .journal-scroll-container .edit-entry-btn,
+    .journal-scroll-container .btn,
+    .journal-scroll-container a {
+        pointer-events: auto;
+    }
+
+    .journal-scroll-container.dragging .lesson-type-select,
+    .journal-scroll-container.dragging .semester-grade-select,
+    .journal-scroll-container.dragging .edit-entry-btn,
+    .journal-scroll-container.dragging .btn,
+    .journal-scroll-container.dragging a {
+        pointer-events: none;
+    }
+
+    /* ============ ТАБЛИЦА ============ */
+    .journal-table {
+        font-size: 0.9rem;
+        border-collapse: separate;
+        border-spacing: 0;
+        min-width: max-content;
+    }
+
+    .journal-table th,
+    .journal-table td {
+        vertical-align: middle;
+        text-align: center;
+        padding: 8px;
+        border: 1px solid #dee2e6;
+    }
+
+    .journal-table thead th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .fixed-left-col {
+        position: sticky !important;
+        left: 0 !important;
+        background-color: #fff !important;
+        z-index: 3 !important;
+        box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+        text-align: left !important;
+        white-space: nowrap;
+    }
+
+    .fixed-left-col-2 {
+        position: sticky !important;
+        left: 220px !important;
+        background-color: #fff !important;
+        z-index: 3 !important;
+        box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+        min-width: 110px;
+    }
+
+    .journal-table thead .fixed-left-col,
+    .journal-table thead .fixed-left-col-2 {
+        z-index: 4 !important;
+        background-color: #f8f9fa !important;
+    }
+
+    .lesson-column {
+        min-width: 130px;
+        background-color: #fafbfc;
+    }
+
+    .date-header {
+        white-space: nowrap;
+    }
+
+    .topic {
+        max-width: 110px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.75rem;
+        margin: 0 auto;
+    }
+
+    .exam-column {
+        background-color: #fff5f5 !important;
+        border-left: 3px solid #dc3545 !important;
+    }
+
+    .exam-cell {
+        background-color: #fffafa;
+    }
+
+    .attendance-badge {
+        font-size: 1rem;
+        padding: 6px 12px;
+        min-width: 32px;
+        display: inline-block;
+    }
+
+    .grade-badge {
+        font-size: 1.1rem;
+        padding: 6px 12px;
+        min-width: 32px;
+        display: inline-block;
+    }
+
+    .edit-entry-btn {
+        text-decoration: none;
+        font-size: 0.75rem;
+        padding: 2px 4px;
+        opacity: 0.4;
+        transition: opacity 0.2s;
+    }
+
+    .cell-hover:hover .edit-entry-btn {
+        opacity: 1;
+    }
+
+    .semester-grade-select {
+        width: 90px;
+        display: inline-block;
+        font-size: 0.75rem;
+        cursor: pointer;
+    }
+
+    .lesson-type-select {
+        width: 115px;
+        display: inline-block;
+        font-size: 0.75rem;
+        cursor: pointer;
+    }
+
+    /* ============ МОБИЛЬНАЯ ВЕРСИЯ ============ */
+    .mobile-lessons-list {
+        scrollbar-width: thin;
+    }
+
+    .mobile-lesson-card {
+        background-color: #fafbfc;
+        transition: all 0.15s;
+        cursor: pointer;
+    }
+
+    .mobile-lesson-card:active {
+        background-color: #e7f1ff;
+        transform: scale(0.98);
+    }
+
+    .mobile-lesson-card.selected {
+        background-color: #cfe2ff;
+        border-color: #0d6efd !important;
+        border-width: 2px !important;
+    }
+
+    .mobile-lesson-card.filtered-out {
+        display: none;
+    }
+
+    .student-mobile-row {
+        background-color: #fafbfc;
+    }
+
+    .attendance-buttons .btn {
+        min-width: 42px;
+        padding: 8px 10px;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .attendance-buttons .btn:active {
+        transform: scale(0.95);
+    }
+
+    @media (max-width: 767px) {
+        .mobile-lessons-list {
+            max-height: 350px !important;
+        }
+    }
+
+    /* ============ ПЕЧАТЬ ============ */
+    @media print {
+        .navbar, .btn, .edit-entry-btn, .semester-grade-select,
+        .lesson-type-select, .alert, .d-md-none, footer {
+            display: none !important;
+        }
+
+        .journal-scroll-container {
+            overflow: visible !important;
+        }
+
+        .journal-table {
+            font-size: 9px;
+            min-width: auto;
+        }
+
+        .fixed-left-col,
+        .fixed-left-col-2 {
+            position: static !important;
+            box-shadow: none !important;
+        }
+
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+    }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ==================== ДАННЫЕ ЖУРНАЛА ====================
+var journalData = JSON.parse(document.getElementById('journalDataScript').textContent);
+
+// ==================== DRAG-TO-SCROLL (десктоп) ====================
+(function() {
+    var container = document.getElementById('journalScroll');
+    if (!container) return;
+
+    var isDown = false;
+    var startX;
+    var scrollLeft;
+
+    container.addEventListener('mousedown', function(e) {
+        if (e.target.closest('button, select, a, input')) return;
+
+        isDown = true;
+        container.classList.add('dragging');
+        startX = e.pageX - container.offsetLeft;
+        scrollLeft = container.scrollLeft;
+    });
+
+    container.addEventListener('mouseleave', function() {
+        isDown = false;
+        container.classList.remove('dragging');
+    });
+
+    container.addEventListener('mouseup', function() {
+        isDown = false;
+        container.classList.remove('dragging');
+    });
+
+    container.addEventListener('mousemove', function(e) {
+        if (!isDown) return;
+        e.preventDefault();
+
+        var x = e.pageX - container.offsetLeft;
+        var walk = (x - startX) * 1.5;
+
+        container.scrollLeft = scrollLeft - walk;
+    });
+
+    container.addEventListener('auxclick', function(e) {
+        if (e.button === 1) e.preventDefault();
+    });
+})();
+
+// ==================== МОБИЛЬНАЯ ВЕРСИЯ ====================
+var selectedMobileLessonIndex = null;
+
+function filterMobileLessons() {
+    var typeFilter = document.getElementById('mobileTypeFilter').value;
+    var searchText = document.getElementById('mobileLessonSearch').value.toLowerCase().trim();
+    var cards = document.querySelectorAll('.mobile-lesson-card');
+
+    cards.forEach(function(card) {
+        var type = card.dataset.type;
+        var searchData = card.dataset.search.toLowerCase();
+
+        var matchesType = !typeFilter || type === typeFilter;
+        var matchesSearch = !searchText || searchData.includes(searchText);
+
+        if (matchesType && matchesSearch) {
+            card.classList.remove('filtered-out');
+        } else {
+            card.classList.add('filtered-out');
+        }
+    });
+
+    if (selectedMobileLessonIndex !== null) {
+        var selectedCard = document.querySelector('.mobile-lesson-card[data-index="' + selectedMobileLessonIndex + '"]');
+        if (selectedCard && selectedCard.classList.contains('filtered-out')) {
+            clearMobileSelection();
+        }
+    }
+}
+
+function selectMobileLesson(index, card) {
+    document.querySelectorAll('.mobile-lesson-card').forEach(function(c) {
+        c.classList.remove('selected');
+    });
+
+    card.classList.add('selected');
+    selectedMobileLessonIndex = index;
+
+    var lesson = journalData.lessons[index];
+    if (!lesson) return;
+
+    document.getElementById('selectedLessonTitle').textContent =
+        lesson.dateFormatted + (lesson.dayOfWeek ? ' • ' + lesson.dayOfWeek : '') +
+        (lesson.time ? ' • ' + lesson.time : '');
+    document.getElementById('selectedLessonType').textContent = lesson.typeName;
+    document.getElementById('selectedLessonTopic').textContent = lesson.topic || '—';
+
+    document.getElementById('selectedLessonCard').style.display = 'block';
+
+    document.querySelectorAll('.attendance-buttons').forEach(function(container) {
+        var studentId = container.dataset.studentId;
+        var entry = lesson.entries[studentId];
+
+        if (!entry) {
+            container.innerHTML = '<span class="text-muted small">Нет записи</span>';
+            return;
+        }
+
+        var html = '';
+
+        html += '<button class="btn btn-sm ' +
+                (entry.attendance === 'present' && !entry.grade ? 'btn-success' : 'btn-outline-success') +
+                '" onclick="quickMark(' + entry.id + ', \'present\', \'\', this)">' +
+                '<i class="bi bi-check-lg"></i> +</button>';
+
+        html += '<button class="btn btn-sm ' +
+                (entry.attendance === 'absent' ? 'btn-danger' : 'btn-outline-danger') +
+                '" onclick="quickMark(' + entry.id + ', \'absent\', \'\', this)">' +
+                '<i class="bi bi-x-lg"></i> н</button>';
+
+        html += '<div class="vr mx-1"></div>';
+
+        ['2', '3', '4', '5'].forEach(function(grade) {
+            html += '<button class="btn btn-sm ' +
+                    (entry.grade === grade ? 'btn-primary' : 'btn-outline-primary') +
+                    '" onclick="quickMark(' + entry.id + ', \'present\', \'' + grade + '\', this)">' +
+                    grade + '</button>';
+        });
+
+        html += '<button class="btn btn-sm ' +
+                (entry.grade === 'passed' ? 'btn-success' : 'btn-outline-success') +
+                '" onclick="quickMark(' + entry.id + ', \'present\', \'passed\', this)">з</button>';
+
+        container.innerHTML = html;
+    });
+
+    document.getElementById('mobileStudentsList').style.display = 'block';
+
+    setTimeout(function() {
+        document.getElementById('mobileStudentsList').scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }, 100);
+}
+
+function clearMobileSelection() {
+    selectedMobileLessonIndex = null;
+    document.querySelectorAll('.mobile-lesson-card').forEach(function(c) {
+        c.classList.remove('selected');
+    });
+    document.getElementById('selectedLessonCard').style.display = 'none';
+    document.getElementById('mobileStudentsList').style.display = 'none';
+}
+
+function quickMark(entryId, attendance, grade, btn) {
+    var formData = new FormData();
+    formData.append('entry_id', entryId);
+    formData.append('attendance', attendance);
+    formData.append('grade', grade);
+
+    fetch('/journal/{{ pair.id }}/update-entry', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(result) {
+        if (result.success) {
+            var container = btn.closest('.attendance-buttons');
+            var buttons = container.querySelectorAll('.btn');
+            buttons.forEach(function(b) {
+                b.classList.remove('btn-success', 'btn-danger', 'btn-primary');
+                b.classList.remove('btn-outline-success', 'btn-outline-danger', 'btn-outline-primary');
+
+                var text = b.textContent.trim();
+                if (text === '+') b.classList.add('btn-outline-success');
+                else if (text === 'н') b.classList.add('btn-outline-danger');
+                else if (text === 'з') b.classList.add('btn-outline-success');
+                else if (['2','3','4','5'].includes(text)) b.classList.add('btn-outline-primary');
+            });
+
+            if (attendance === 'absent') {
+                btn.className = 'btn btn-sm btn-danger';
+            } else if (grade) {
+                if (grade === 'passed') {
+                    btn.className = 'btn btn-sm btn-success';
+                } else {
+                    btn.className = 'btn btn-sm btn-primary';
+                }
+            } else {
+                btn.className = 'btn btn-sm btn-success';
+            }
+
+            if (selectedMobileLessonIndex !== null) {
+                var lesson = journalData.lessons[selectedMobileLessonIndex];
+                Object.keys(lesson.entries).forEach(function(key) {
+                    if (lesson.entries[key].id === entryId) {
+                        lesson.entries[key].attendance = attendance;
+                        lesson.entries[key].grade = grade;
+                    }
+                });
+            }
+
+            showToast('Сохранено');
+        } else {
+            alert('Ошибка: ' + result.message);
+        }
+    })
+    .catch(function() {
+        alert('Ошибка соединения');
+    });
+}
+
+function showToast(message) {
+    var toast = document.createElement('div');
+    toast.className = 'position-fixed bottom-0 end-0 m-3 alert alert-success py-2 px-3 shadow';
+    toast.style.zIndex = '9999';
+    toast.innerHTML = '<i class="bi bi-check-circle-fill"></i> ' + message;
+    document.body.appendChild(toast);
+
+    setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 800);
+}
+
+// ==================== ДЕСКТОП: РЕДАКТИРОВАНИЕ ====================
+document.querySelectorAll('.edit-entry-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('edit_entry_id').value = this.dataset.entryId;
+        document.getElementById('editStudentName').textContent = this.dataset.studentName;
+        document.getElementById('editLessonDate').textContent = this.dataset.lessonDate;
+        document.getElementById('editLessonType').textContent = this.dataset.lessonType;
+
+        if (this.dataset.attendance === 'absent') {
+            document.getElementById('modal_absent').checked = true;
+        } else {
+            document.getElementById('modal_present').checked = true;
+        }
+
+        document.getElementById('edit_grade').value = this.dataset.grade;
+    });
+});
+
+document.getElementById('editEntryForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    var entryId = document.getElementById('edit_entry_id').value;
+    var attendance = document.querySelector('input[name="attendance"]:checked');
+    if (!attendance) { alert('Выберите посещение'); return; }
+
+    var grade = document.getElementById('edit_grade').value;
+    var formData = new FormData();
+    formData.append('entry_id', entryId);
+    formData.append('attendance', attendance.value);
+    formData.append('grade', grade);
+
+    try {
+        var response = await fetch('/journal/{{ pair.id }}/update-entry', { method: 'POST', body: formData });
+        var result = await response.json();
+
+        if (result.success) {
+            bootstrap.Modal.getInstance(document.getElementById('editEntryModal')).hide();
+            location.reload();
+        } else {
+            alert('Ошибка: ' + result.message);
+        }
+    } catch (error) {
+        alert('Ошибка соединения');
+    }
+});
+
+// ==================== ДЕСКТОП: ИЗМЕНЕНИЕ ТИПА ====================
+document.querySelectorAll('.lesson-type-select').forEach(function(select) {
+    select.addEventListener('change', async function() {
+        var gsid = this.dataset.gsid;
+        var date = this.dataset.date;
+        var timeInterval = this.dataset.time;
+        var semester = this.dataset.semester;
+        var newType = this.value;
+
+        if (newType === 'exam') {
+            if (!confirm('Изменить на Экзамен?\n\nПосле этого нельзя будет добавить другие занятия.')) {
+                location.reload();
+                return;
+            }
+        } else {
+            if (!confirm('Изменить тип занятия?')) {
+                location.reload();
+                return;
+            }
+        }
+
+        var formData = new FormData();
+        formData.append('gsid', gsid);
+        formData.append('date', date);
+        formData.append('time_interval', timeInterval);
+        formData.append('semester', semester);
+        formData.append('type', newType);
+
+        try {
+            var response = await fetch('/journal/update-lesson-type', { method: 'POST', body: formData });
+            var result = await response.json();
+            if (result.success) location.reload();
+            else { alert('Ошибка: ' + result.message); location.reload(); }
+        } catch (error) {
+            alert('Ошибка соединения');
+            location.reload();
+        }
+    });
+});
+
+// ==================== ОЦЕНКА ЗА СЕМЕСТР ====================
+document.querySelectorAll('.semester-grade-select').forEach(function(select) {
+    select.addEventListener('change', async function() {
+        var cell = this.closest('.semester-grade-cell');
+        var studentId = cell.dataset.studentId;
+        var semester = cell.dataset.semester;
+        var grade = this.value;
+
+        var formData = new FormData();
+        formData.append('student_id', studentId);
+        formData.append('semester', semester);
+        formData.append('grade', grade);
+
+        try {
+            var response = await fetch('/journal/{{ pair.id }}/set-semester-grade', { method: 'POST', body: formData });
+            var result = await response.json();
+
+            if (result.success) {
+                var display = cell.querySelector('.grade-display');
+                if (grade) {
+                    if (grade === 'passed') { display.textContent = 'Зачтено'; display.className = 'badge bg-success grade-display'; }
+                    else if (grade === '5') { display.textContent = '5'; display.className = 'badge bg-success grade-display'; }
+                    else if (grade === '4') { display.textContent = '4'; display.className = 'badge bg-primary grade-display'; }
+                    else if (grade === '3') { display.textContent = '3'; display.className = 'badge bg-warning text-dark grade-display'; }
+                    else if (grade === '2') { display.textContent = '2'; display.className = 'badge bg-danger grade-display'; }
+                } else {
+                    display.textContent = '—';
+                    display.className = 'badge bg-secondary grade-display';
+                }
+            } else {
+                alert('Ошибка: ' + result.message);
+                location.reload();
+            }
+        } catch (error) {
+            alert('Ошибка соединения');
+        }
+    });
+});
+</script>
+{% endblock %}

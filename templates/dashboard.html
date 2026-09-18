@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-speedometer2"></i> Панель управления</h2>
+<div class="row">
+    <div class="col-md-3 mb-3"><div class="card text-white bg-primary"><div class="card-body text-center"><i class="bi bi-people-fill" style="font-size:3rem;"></i><h5 class="mt-2">Группы</h5><p class="display-6">{{ groups_count }}</p><a href="{{ url_for('main.groups') }}" class="btn btn-light btn-sm">Управление</a></div></div></div>
+    <div class="col-md-3 mb-3"><div class="card text-white bg-success"><div class="card-body text-center"><i class="bi bi-book-fill" style="font-size:3rem;"></i><h5 class="mt-2">Предметы</h5><p class="display-6">{{ subjects_count }}</p><a href="{{ url_for('main.subjects') }}" class="btn btn-light btn-sm">Управление</a></div></div></div>
+    <div class="col-md-3 mb-3"><div class="card text-white bg-info"><div class="card-body text-center"><i class="bi bi-person-lines-fill" style="font-size:3rem;"></i><h5 class="mt-2">Студенты</h5><p class="display-6">{{ students_count }}</p><a href="{{ url_for('main.students') }}" class="btn btn-light btn-sm">Управление</a></div></div></div>
+    <div class="col-md-3 mb-3"><div class="card text-white bg-warning"><div class="card-body text-center"><i class="bi bi-journal-text" style="font-size:3rem;"></i><h5 class="mt-2">Журналы</h5><p class="display-6">{{ pairs_count }}</p><a href="{{ url_for('main.group_subjects') }}" class="btn btn-light btn-sm">Открыть</a></div></div></div>
+</div>
+{% endblock %}

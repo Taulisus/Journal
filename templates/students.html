@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2 class="mb-3">
+    <i class="bi bi-person-lines-fill"></i> Студенты
+</h2>
+
+<div class="row">
+    <!-- Форма добавления и импорта -->
+    <div class="col-md-5 mb-3">
+        <!-- Добавление студента -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Добавить студента</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('main.add_student') }}">
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label fw-bold">ФИО студента</label>
+                        <input type="text" class="form-control no-emoji"
+                               id="full_name" name="full_name"
+                               placeholder="Иванов Иван Иванович" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="student_group" class="form-label fw-bold">Группа</label>
+                        <select class="form-select" id="student_group" name="group_id" required>
+                            <option value="">— Выберите группу —</option>
+                            {% for group in groups %}
+                            <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-circle"></i> Добавить студента
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Импорт из Excel -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-excel"></i> Импорт из Excel</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('main.import_students') }}" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="import_group" class="form-label fw-bold">Группа для импорта</label>
+                        <select class="form-select" id="import_group" name="group_id" required>
+                            <option value="">— Выберите группу —</option>
+                            {% for group in groups %}
+                            <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="file" class="form-label fw-bold">Файл</label>
+                        <input type="file" class="form-control" id="file"
+                               name="file" accept=".xlsx,.csv" required>
+                        <small class="text-muted">
+                            Поддерживаются файлы .xlsx и .csv. В файле должна быть колонка с ФИО студентов.
+                        </small>
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-file-earmark-excel"></i> Импортировать студентов
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Список студентов -->
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap">
+                <h5 class="mb-0">
+                    <i class="bi bi-people"></i> Список студентов
+                    <span class="badge bg-primary ms-2">{{ students|length }}</span>
+                </h5>
+                <div class="mt-2 mt-md-0">
+                    <input type="text" id="studentSearch"
+                           class="form-control form-control-sm"
+                           style="min-width: 250px;"
+                           placeholder="🔍 Поиск по ФИО или группе...">
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if students %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0" id="studentsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 8%;">ID</th>
+                                <th style="width: 47%;">ФИО</th>
+                                <th style="width: 15%;">Группа</th>
+                                <th style="width: 30%;">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in students %}
+                            <tr data-search="{{ student.full_name }} {{ student.group_name }}">
+                                <td class="text-muted small">{{ student.id }}</td>
+                                <td>
+                                    <a href="{{ url_for('main.student_card', sid=student.id) }}"
+                                       class="text-decoration-none fw-bold">
+                                        {{ student.full_name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ student.group_name }}</span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <!-- Карточка студента -->
+                                        <a href="{{ url_for('main.student_card', sid=student.id) }}"
+                                           class="btn btn-outline-info"
+                                           title="Карточка студента">
+                                            <i class="bi bi-person-badge"></i>
+                                        </a>
+
+                                        <!-- Редактирование -->
+                                        <button class="btn btn-outline-primary edit-student-btn"
+                                                data-id="{{ student.id }}"
+                                                data-name="{{ student.full_name }}"
+                                                data-group="{{ student.group_id }}"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editStudentModal"
+                                                title="Редактировать студента">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <!-- Удаление -->
+                                        {% if has_permission('delete_student') %}
+                                        <a href="{{ url_for('main.delete_student', sid=student.id) }}"
+                                           class="btn btn-outline-danger"
+                                           onclick="return confirm('Удалить студента {{ student.full_name }}?\n\nЭто действие нельзя отменить!')"
+                                           title="Удалить студента">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-people" style="font-size: 4rem; color: #ccc;"></i>
+                    <h5 class="text-muted mt-3">Студенты еще не добавлены</h5>
+                    <p class="text-muted small">
+                        Добавьте студентов вручную или импортируйте из Excel-файла
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+            {% if students %}
+            <div class="card-footer text-muted small">
+                <i class="bi bi-info-circle"></i>
+                Всего студентов: {{ students|length }} |
+                Кликните по ФИО для просмотра карточки студента
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования студента -->
+<div class="modal fade" id="editStudentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="editStudentForm">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title">
+                        <i class="bi bi-pencil-square"></i> Редактировать студента
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_full_name" class="form-label fw-bold">ФИО</label>
+                        <input type="text" class="form-control no-emoji"
+                               id="edit_full_name" name="full_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_group_id" class="form-label fw-bold">Группа</label>
+                        <select class="form-select" id="edit_group_id" name="group_id" required>
+                            {% for group in groups %}
+                            <option value="{{ group.id }}">{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Поиск по таблице
+document.getElementById('studentSearch').addEventListener('input', function() {
+    const searchText = this.value.toLowerCase().trim();
+    const rows = document.querySelectorAll('#studentsTable tbody tr');
+
+    rows.forEach(function(row) {
+        const searchData = row.dataset.search.toLowerCase();
+        if (searchText === '' || searchData.includes(searchText)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
+// Редактирование студента
+document.querySelectorAll('.edit-student-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('edit_full_name').value = this.dataset.name;
+        document.getElementById('edit_group_id').value = this.dataset.group;
+        document.getElementById('editStudentForm').action = '/students/edit/' + this.dataset.id;
+    });
+});
+
+// Автофокус на поиске
+document.addEventListener('DOMContentLoaded', function() {
+    const rows = document.querySelectorAll('#studentsTable tbody tr');
+    if (rows.length > 10) {
+        document.getElementById('studentSearch').focus();
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="mb-3">
+    <a href="{{ url_for('main.users') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Назад к пользователям
+    </a>
+</div>
+
+<h2 class="mb-3">
+    <i class="bi bi-journal-bookmark"></i>
+    Назначение журналов и часов: <strong>{{ user.username }}</strong>
+</h2>
+
+<form method="POST" id="assignForm">
+
+    <!-- Секция: Журналы и часы -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="bi bi-journal-text"></i>
+                Доступ к журналам и учебные часы
+            </h5>
+            <small class="text-muted">
+                Отметьте журналы и укажите часы. Если часы не указаны, используются значения по умолчанию.
+            </small>
+        </div>
+        <div class="card-body p-0">
+            {% if pairs %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Группа</th>
+                            <th>Предмет</th>
+                            <th class="text-center">Доступ</th>
+                            <th class="text-center">Семестр</th>
+                            <th class="text-center">Лекции</th>
+                            <th class="text-center">Практика</th>
+                            <th class="text-center">Сам.раб.</th>
+                            <th class="text-center">Экзамен</th>
+                            <th class="text-center">Всего</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pair in pairs %}
+                            {% set pair_id = pair.id|string %}
+                            {% set pair_semesters = semesters_dict.get(pair_id, [1]) %}
+
+                            {% for sem in pair_semesters %}
+                                {% set sem_str = sem|string %}
+                                {% set h = hours_dict.get(pair_id, {}).get(sem_str, {}) %}
+                                <tr>
+                                    <td>
+                                        {% if loop.first %}
+                                        <span class="badge bg-secondary">{{ pair.group_name }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if loop.first %}
+                                        {{ pair.subject_name }}
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if loop.first %}
+                                        <input class="form-check-input" type="checkbox"
+                                               name="journals" value="{{ pair.id }}"
+                                               {% if pair.id in assigned_ids %}checked{% endif %}>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-info">{{ sem }} семестр</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="number" class="form-control form-control-sm hour-input"
+                                               name="hours_{{ pair.id }}_{{ sem }}_lecture"
+                                               value="{{ h.get('lecture_hours', 0) }}" min="0" style="width: 75px;">
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="number" class="form-control form-control-sm hour-input"
+                                               name="hours_{{ pair.id }}_{{ sem }}_practice"
+                                               value="{{ h.get('practice_hours', 0) }}" min="0" style="width: 75px;">
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="number" class="form-control form-control-sm hour-input"
+                                               name="hours_{{ pair.id }}_{{ sem }}_independent"
+                                               value="{{ h.get('independent_hours', 0) }}" min="0" style="width: 75px;">
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="number" class="form-control form-control-sm hour-input"
+                                               name="hours_{{ pair.id }}_{{ sem }}_exam"
+                                               value="{{ h.get('exam_hours', 0) }}" min="0" style="width: 75px;">
+                                    </td>
+                                    <td class="text-center">
+                                        <strong class="total-cell">0</strong>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-muted">
+                <i class="bi bi-journal-x" style="font-size: 2rem;"></i>
+                <p class="mt-2">Нет созданных журналов</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Секция: Кураторство -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="bi bi-person-check"></i>
+                Куратор групп
+            </h5>
+            <small class="text-muted">Отметьте группы, в которых преподаватель является куратором</small>
+        </div>
+        <div class="card-body">
+            {% if groups %}
+            <div class="row">
+                {% for g in groups %}
+                <div class="col-md-4 col-lg-3 mb-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               name="curator_groups" value="{{ g.id }}"
+                               id="curator_{{ g.id }}"
+                               {% if g.id in curator_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="curator_{{ g.id }}">
+                            {{ g.name }}
+                        </label>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted">Нет созданных групп</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Кнопки -->
+    <div class="d-flex gap-2 mb-5">
+        <button type="submit" class="btn btn-primary btn-lg">
+            <i class="bi bi-save"></i> Сохранить все назначения
+        </button>
+        <a href="{{ url_for('main.users') }}" class="btn btn-secondary btn-lg">
+            <i class="bi bi-x-circle"></i> Отмена
+        </a>
+    </div>
+
+</form>
+
+<style>
+    .hour-input:focus {
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    .total-cell {
+        color: #0d6efd;
+    }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Функция обновления сумм часов для каждой строки
+function updateTotals() {
+    document.querySelectorAll('tbody tr').forEach(function(row) {
+        var inputs = row.querySelectorAll('.hour-input');
+        var total = 0;
+        inputs.forEach(function(input) {
+            total += parseInt(input.value) || 0;
+        });
+        var totalCell = row.querySelector('.total-cell');
+        if (totalCell) {
+            totalCell.textContent = total;
+        }
+    });
+}
+
+// Обработчики изменения часов
+document.querySelectorAll('.hour-input').forEach(function(input) {
+    input.addEventListener('input', updateTotals);
+});
+
+// Инициализация при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    updateTotals();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2 class="mb-3">
+    <i class="bi bi-graph-up"></i> Отчеты
+</h2>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i class="bi bi-folder2-open"></i>
+                    Выберите журнал для просмотра отчета
+                    <span class="badge bg-primary ms-2">{{ pairs|length }}</span>
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                {% if pairs %}
+                <div class="list-group list-group-flush">
+                    {% for pair in pairs %}
+                    <a href="{{ url_for('main.view_report', gsid=pair.id) }}"
+                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge bg-secondary fs-6">{{ pair.group_name }}</span>
+                                <i class="bi bi-arrow-right text-muted"></i>
+                                <span class="badge bg-info fs-6">{{ pair.subject_name }}</span>
+                            </div>
+                            <small class="text-muted">
+                                <i class="bi bi-journal-text"></i> Журнал ID: {{ pair.id }}
+                            </small>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-primary rounded-pill">
+                                <i class="bi bi-arrow-right"></i> Открыть отчет
+                            </span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-file-earmark-bar-graph" style="font-size: 4rem; color: #ccc;"></i>
+                    <h5 class="text-muted mt-3">Нет доступных журналов</h5>
+                    <p class="text-muted small">
+                        {% if has_permission('add_journal') %}
+                        <a href="{{ url_for('main.group_subjects') }}" class="btn btn-primary btn-sm mt-2">
+                            <i class="bi bi-plus-circle"></i> Создать журнал
+                        </a>
+                        {% else %}
+                        Обратитесь к администратору для назначения журналов
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Боковая панель с информацией -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="bi bi-info-circle"></i> О возможностях отчетов</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        Общая статистика посещаемости
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        Средний балл по группе
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        Графики успеваемости
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        Детальная статистика по студентам
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        Процент пропусков каждого студента
+                    </li>
+                    <li>
+                        <i class="bi bi-check-circle text-success"></i>
+                        Возможность печати отчета
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="bi bi-lightbulb"></i> Совет</h6>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-0">
+                    Отчеты можно распечатать, нажав кнопку
+                    <span class="badge bg-secondary">Печать</span>
+                    на странице отчета. Для лучшего качества печати
+                    используйте браузер Google Chrome или Mozilla Firefox.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

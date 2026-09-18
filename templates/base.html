@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Журнал преподавателя</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% if session.user_id %}
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow-sm">
+        <div class="container-fluid">
+            <!-- Логотип -->
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('main.dashboard') }}">
+                <i class="bi bi-journal-bookmark-fill me-1"></i>
+                <span class="d-none d-sm-inline fw-bold">Журнал</span>
+            </a>
+
+            <!-- Кнопка бургера -->
+            <button class="navbar-toggler border-0" type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#navbarNav"
+                    aria-controls="navbarNav"
+                    aria-expanded="false"
+                    aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- Основное меню -->
+            <div class="collapse navbar-collapse" id="navbarNav">
+
+                <!-- Профиль (виден только на мобильных в шапке бургера) -->
+                <div class="d-lg-none mobile-profile-header">
+                    <div class="d-flex align-items-center p-3 border-bottom">
+                        <div class="user-avatar-circle me-3">
+                            {{ session.username[0]|upper }}
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold text-white">{{ session.username }}</div>
+                            <small class="text-white-50">Пользователь системы</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Основные ссылки -->
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+                    <!-- Главная -->
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"
+                           href="{{ url_for('main.dashboard') }}">
+                            <i class="bi bi-speedometer2"></i>
+                            <span>Главная</span>
+                        </a>
+                    </li>
+
+                    <!-- Журналы -->
+                    {% if has_permission('view_journals') %}
+                    <li class="nav-item dropdown-lg-only">
+                        <a class="nav-link dropdown-toggle {% if request.endpoint in ['main.group_subjects', 'main.teacher_hours_stats', 'main.journal'] %}active{% endif %}"
+                           href="#"
+                           role="button"
+                           data-bs-toggle="dropdown"
+                           aria-expanded="false">
+                            <i class="bi bi-journal-text"></i>
+                            <span>Журналы</span>
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item {% if request.endpoint == 'main.group_subjects' %}active{% endif %}"
+                                   href="{{ url_for('main.group_subjects') }}">
+                                    <i class="bi bi-folder2-open"></i>
+                                    Все журналы
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.endpoint == 'main.teacher_hours_stats' %}active{% endif %}"
+                                   href="{{ url_for('main.teacher_hours_stats') }}">
+                                    <i class="bi bi-clock-history"></i>
+                                    Мои часы
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <!-- Мобильная версия журналов - аккордеон -->
+                    <li class="nav-item mobile-only">
+                        <a class="nav-link d-flex justify-content-between align-items-center"
+                           data-bs-toggle="collapse"
+                           href="#mobileJournalsMenu"
+                           role="button"
+                           aria-expanded="false">
+                            <span>
+                                <i class="bi bi-journal-text"></i>
+                                Журналы
+                            </span>
+                            <i class="bi bi-chevron-down mobile-chevron"></i>
+                        </a>
+                        <div class="collapse mobile-submenu" id="mobileJournalsMenu">
+                            <a class="mobile-submenu-item {% if request.endpoint == 'main.group_subjects' %}active{% endif %}"
+                               href="{{ url_for('main.group_subjects') }}">
+                                <i class="bi bi-folder2-open"></i>
+                                Все журналы
+                            </a>
+                            <a class="mobile-submenu-item {% if request.endpoint == 'main.teacher_hours_stats' %}active{% endif %}"
+                               href="{{ url_for('main.teacher_hours_stats') }}">
+                                <i class="bi bi-clock-history"></i>
+                                Мои часы
+                            </a>
+                        </div>
+                    </li>
+                    {% endif %}
+
+                    <!-- Студенты -->
+                    {% if has_permission('view_student_card') %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint in ['main.students', 'main.student_card'] %}active{% endif %}"
+                           href="{{ url_for('main.students') }}">
+                            <i class="bi bi-person-lines-fill"></i>
+                            <span>Студенты</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    <!-- Отчёты -->
+                    {% if has_permission('create_report') %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint in ['main.reports', 'main.view_report'] %}active{% endif %}"
+                           href="{{ url_for('main.reports') }}">
+                            <i class="bi bi-graph-up"></i>
+                            <span>Отчёты</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    <!-- Справочники -->
+                    <li class="nav-item dropdown-lg-only">
+                        <a class="nav-link dropdown-toggle {% if request.endpoint in ['main.groups', 'main.subjects'] %}active{% endif %}"
+                           href="#"
+                           role="button"
+                           data-bs-toggle="dropdown"
+                           aria-expanded="false">
+                            <i class="bi bi-gear"></i>
+                            <span>Справочники</span>
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item {% if request.endpoint == 'main.groups' %}active{% endif %}"
+                                   href="{{ url_for('main.groups') }}">
+                                    <i class="bi bi-people"></i>
+                                    Группы
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.endpoint == 'main.subjects' %}active{% endif %}"
+                                   href="{{ url_for('main.subjects') }}">
+                                    <i class="bi bi-book"></i>
+                                    Предметы
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.endpoint == 'main.students' %}active{% endif %}"
+                                   href="{{ url_for('main.students') }}">
+                                    <i class="bi bi-person-plus"></i>
+                                    Студенты
+                                </a>
+                            </li>
+                            {% if has_permission('add_journal') %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('main.group_subjects') }}">
+                                    <i class="bi bi-plus-circle"></i>
+                                    Создать журнал
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </li>
+
+                    <!-- Мобильная версия справочников - аккордеон -->
+                    <li class="nav-item mobile-only">
+                        <a class="nav-link d-flex justify-content-between align-items-center"
+                           data-bs-toggle="collapse"
+                           href="#mobileDictionariesMenu"
+                           role="button"
+                           aria-expanded="false">
+                            <span>
+                                <i class="bi bi-gear"></i>
+                                Справочники
+                            </span>
+                            <i class="bi bi-chevron-down mobile-chevron"></i>
+                        </a>
+                        <div class="collapse mobile-submenu" id="mobileDictionariesMenu">
+                            <a class="mobile-submenu-item {% if request.endpoint == 'main.groups' %}active{% endif %}"
+                               href="{{ url_for('main.groups') }}">
+                                <i class="bi bi-people"></i>
+                                Группы
+                            </a>
+                            <a class="mobile-submenu-item {% if request.endpoint == 'main.subjects' %}active{% endif %}"
+                               href="{{ url_for('main.subjects') }}">
+                                <i class="bi bi-book"></i>
+                                Предметы
+                            </a>
+                            <a class="mobile-submenu-item {% if request.endpoint == 'main.students' %}active{% endif %}"
+                               href="{{ url_for('main.students') }}">
+                                <i class="bi bi-person-plus"></i>
+                                Студенты
+                            </a>
+                            {% if has_permission('add_journal') %}
+                            <a class="mobile-submenu-item" href="{{ url_for('main.group_subjects') }}">
+                                <i class="bi bi-plus-circle"></i>
+                                Создать журнал
+                            </a>
+                            {% endif %}
+                        </div>
+                    </li>
+
+                    <!-- Пользователи (только для админа) -->
+                    {% if has_permission('manage_users') %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint in ['main.users', 'main.assign_journals'] %}active{% endif %}"
+                           href="{{ url_for('main.users') }}">
+                            <i class="bi bi-shield-lock"></i>
+                            <span>Пользователи</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                </ul>
+
+                <!-- Правая часть: профиль и выход (только десктоп) -->
+                <div class="d-none d-lg-flex align-items-center gap-2">
+                    <div class="user-badge d-flex align-items-center">
+                        <div class="user-avatar-circle user-avatar-sm me-2">
+                            {{ session.username[0]|upper }}
+                        </div>
+                        <span class="text-white fw-bold">{{ session.username }}</span>
+                    </div>
+                    <a href="{{ url_for('auth.logout') }}"
+                       class="btn btn-outline-light btn-sm"
+                       title="Выйти из системы">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span class="d-none d-xl-inline">Выйти</span>
+                    </a>
+                </div>
+
+                <!-- Мобильная кнопка "Выйти" (внизу меню) -->
+                <div class="d-lg-none mobile-logout-section">
+                    <a href="{{ url_for('auth.logout') }}"
+                       class="mobile-logout-btn">
+                        <i class="bi bi-box-arrow-right"></i>
+                        Выйти из системы
+                    </a>
+                </div>
+
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <!-- Сообщения -->
+    <div class="container-fluid container-xl mt-3 mt-lg-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {% if category == 'success' %}
+                            <i class="bi bi-check-circle-fill"></i>
+                        {% elif category == 'danger' or category == 'error' %}
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                        {% elif category == 'warning' %}
+                            <i class="bi bi-exclamation-circle-fill"></i>
+                        {% elif category == 'info' %}
+                            <i class="bi bi-info-circle-fill"></i>
+                        {% endif %}
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Футер -->
+    <footer class="mt-5 py-3 bg-light text-center text-muted">
+        <div class="container-fluid container-xl">
+            <small>
+                <i class="bi bi-journal-bookmark"></i>
+                Электронный журнал v2.0
+                <span class="d-none d-sm-inline">
+                    | <i class="bi bi-shield-check"></i> Локальное приложение
+                </span>
+            </small>
+        </div>
+    </footer>
+
+    <!-- Скрипты -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Глобальные скрипты -->
+    <script>
+    // ==================== ЗАПРЕТ ЭМОДЗИ ====================
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.no-emoji').forEach(function(input) {
+            input.addEventListener('input', function() {
+                this.value = this.value.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}]/gu, '');
+            });
+        });
+
+        // ==================== ТОЛЬКО ЦИФРЫ В ТЕЛЕФОНЕ ====================
+        document.querySelectorAll('.phone-input').forEach(function(input) {
+            input.addEventListener('input', function() {
+                this.value = this.value.replace(/[^\d]/g, '').slice(0, 11);
+            });
+        });
+
+        // ==================== ЗАКРЫТИЕ БУРГЕРА ПРИ КЛИКЕ ====================
+        // На мобильных при клике на обычную ссылку закрываем меню
+        document.querySelectorAll('#navbarNav .nav-link:not(.dropdown-toggle):not([data-bs-toggle])').forEach(function(link) {
+            link.addEventListener('click', function() {
+                var navbarCollapse = document.getElementById('navbarNav');
+                if (navbarCollapse.classList.contains('show')) {
+                    var bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse);
+                    if (bsCollapse) {
+                        bsCollapse.hide();
+                    }
+                }
+            });
+        });
+
+        // Закрытие бургера при клике на подпункт мобильного меню
+        document.querySelectorAll('.mobile-submenu-item').forEach(function(link) {
+            link.addEventListener('click', function() {
+                var navbarCollapse = document.getElementById('navbarNav');
+                if (navbarCollapse.classList.contains('show')) {
+                    var bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse);
+                    if (bsCollapse) {
+                        bsCollapse.hide();
+                    }
+                }
+            });
+        });
+
+        // ==================== ПОВОРОТ СТРЕЛКИ АККОРДЕОНА ====================
+        document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(toggle) {
+            var target = document.querySelector(toggle.getAttribute('href'));
+            if (target) {
+                target.addEventListener('show.bs.collapse', function() {
+                    var chevron = toggle.querySelector('.mobile-chevron');
+                    if (chevron) chevron.style.transform = 'rotate(180deg)';
+                });
+                target.addEventListener('hide.bs.collapse', function() {
+                    var chevron = toggle.querySelector('.mobile-chevron');
+                    if (chevron) chevron.style.transform = 'rotate(0deg)';
+                });
+            }
+        });
+
+        // ==================== АКТИВНАЯ ССЫЛКА В ПОДМЕНЮ МОБИЛЬНОГО ====================
+        // Автоматически раскрываем подменю, если активна внутренняя ссылка
+        var activeSubmenuItem = document.querySelector('.mobile-submenu-item.active');
+        if (activeSubmenuItem) {
+            var parentCollapse = activeSubmenuItem.closest('.collapse');
+            if (parentCollapse) {
+                var bsCollapse = new bootstrap.Collapse(parentCollapse, { toggle: false });
+                bsCollapse.show();
+            }
+        }
+    });
+    </script>
+
+    {% block scripts %}{% endblock %}
+
+    <style>
+        /* ============================================================
+           ПРОФИЛЬ В НАВИГАЦИИ
+           ============================================================ */
+
+        /* Круглый аватар с первой буквой */
+        .user-avatar-circle {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            color: #fff;
+            font-weight: 700;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            flex-shrink: 0;
+        }
+
+        .user-avatar-sm {
+            width: 32px;
+            height: 32px;
+            font-size: 0.9rem;
+        }
+
+        /* Бейдж пользователя на десктопе */
+        .user-badge {
+            padding: 4px 12px 4px 4px;
+            border-radius: 24px;
+            background-color: rgba(255, 255, 255, 0.1);
+            transition: background-color 0.2s;
+        }
+
+        .user-badge:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+
+        /* ============================================================
+           АКТИВНЫЙ ПУНКТ МЕНЮ
+           ============================================================ */
+
+        .navbar-nav .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .dropdown-menu .dropdown-item.active {
+            background-color: #0d6efd;
+            color: #fff;
+        }
+
+        /* ============================================================
+           МОБИЛЬНОЕ МЕНЮ
+           ============================================================ */
+
+        /* По умолчанию мобильные элементы скрыты на десктопе */
+        .mobile-only {
+            display: none;
+        }
+
+        /* Показываем мобильные элементы только на мобильных */
+        @media (max-width: 991.98px) {
+            .mobile-only {
+                display: block;
+            }
+
+            .dropdown-lg-only {
+                display: none !important;
+            }
+        }
+
+        /* Десктопные dropdown скрыты на мобильных */
+        @media (max-width: 991.98px) {
+            .dropdown-lg-only {
+                display: none;
+            }
+        }
+
+        /* Профиль в шапке бургера */
+        .mobile-profile-header {
+            margin: -0.5rem -0.75rem 0.5rem;
+            background: linear-gradient(135deg, #357abd, #2c5aa0);
+        }
+
+        /* Подменю мобильное */
+        .mobile-submenu {
+            background-color: rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+            margin: 4px 8px;
+            overflow: hidden;
+        }
+
+        .mobile-submenu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px 12px 36px;
+            color: rgba(255, 255, 255, 0.85);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: all 0.15s;
+            border-left: 3px solid transparent;
+        }
+
+        .mobile-submenu-item:hover,
+        .mobile-submenu-item:active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .mobile-submenu-item.active {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            border-left-color: #ffc107;
+            font-weight: 600;
+        }
+
+        .mobile-submenu-item i {
+            margin-right: 10px;
+            width: 18px;
+            text-align: center;
+        }
+
+        /* Стрелка аккордеона */
+        .mobile-chevron {
+            transition: transform 0.3s ease;
+            font-size: 0.85rem;
+        }
+
+        /* Секция "Выйти" в мобильном меню */
+        .mobile-logout-section {
+            margin-top: 8px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .mobile-logout-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px 16px;
+            color: #fff;
+            text-decoration: none;
+            background-color: rgba(220, 53, 69, 0.8);
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background-color 0.15s;
+        }
+
+        .mobile-logout-btn:hover,
+        .mobile-logout-btn:active {
+            background-color: #dc3545;
+            color: #fff;
+        }
+
+        .mobile-logout-btn i {
+            margin-right: 10px;
+        }
+
+        /* ============================================================
+           УЛУЧШЕНИЕ ТАЧ-ЗОН
+           ============================================================ */
+
+        @media (max-width: 991.98px) {
+            /* Крупные тач-зоны для всех ссылок */
+            #navbarNav .nav-link {
+                padding: 14px 16px;
+                font-size: 1rem;
+                border-radius: 8px;
+                margin: 2px 8px;
+                transition: background-color 0.15s;
+            }
+
+            #navbarNav .nav-link:hover,
+            #navbarNav .nav-link:active {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+
+            #navbarNav .nav-link.active {
+                background-color: rgba(255, 255, 255, 0.2);
+            }
+
+            /* Отступ между иконкой и текстом */
+            #navbarNav .nav-link i {
+                width: 22px;
+                text-align: center;
+                margin-right: 8px;
+            }
+
+            /* Меню на всю высоту */
+            #navbarNav {
+                padding-bottom: 16px;
+                max-height: calc(100vh - 60px);
+                overflow-y: auto;
+            }
+
+            /* Кнопка бургера — крупнее */
+            .navbar-toggler {
+                padding: 8px 12px;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 6px;
+            }
+
+            .navbar-toggler:focus {
+                box-shadow: 0 0 0 0.15rem rgba(255, 255, 255, 0.25);
+            }
+        }
+
+        /* Очень маленькие экраны */
+        @media (max-width: 400px) {
+            .user-avatar-circle {
+                width: 32px;
+                height: 32px;
+                font-size: 0.9rem;
+            }
+
+            #navbarNav .nav-link {
+                padding: 12px 14px;
+                font-size: 0.95rem;
+            }
+
+            .mobile-submenu-item {
+                padding: 10px 18px 10px 32px;
+                font-size: 0.9rem;
+            }
+        }
+
+        /* ============================================================
+           ДЕСКТОПНЫЕ УЛУЧШЕНИЯ
+           ============================================================ */
+
+        @media (min-width: 992px) {
+            /* Более компактный dropdown */
+            .navbar .dropdown-menu {
+                border-radius: 8px;
+                border: none;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+                padding: 6px;
+                margin-top: 6px;
+            }
+
+            .navbar .dropdown-item {
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 0.95rem;
+                transition: background-color 0.15s;
+            }
+
+            .navbar .dropdown-item i {
+                width: 20px;
+                text-align: center;
+                margin-right: 8px;
+            }
+
+            /* Плавное поднятие при наведении */
+            .navbar-nav .nav-link {
+                border-radius: 6px;
+                padding: 8px 12px !important;
+                margin: 0 2px;
+                transition: background-color 0.15s;
+            }
+
+            .navbar-nav .nav-link:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+        }
+
+        /* ============================================================
+           ОБЩИЕ УЛУЧШЕНИЯ
+           ============================================================ */
+
+        /* Sticky navbar с тенью при скролле */
+        .navbar.sticky-top {
+            transition: box-shadow 0.2s;
+        }
+
+        /* Плавный скролл по странице */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Футер прижат к низу */
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body > .container-fluid,
+        body > .container {
+            flex: 1;
+        }
+
+        /* Контейнер с максимальной шириной для больших экранов */
+        .container-xl {
+            max-width: 1320px;
+        }
+
+        /* ============================================================
+           ПЕЧАТЬ
+           ============================================================ */
+
+        @media print {
+            .navbar,
+            .btn,
+            .alert,
+            footer {
+                display: none !important;
+            }
+
+            body {
+                background: #fff;
+            }
+        }
+    </style>
+</body>
+</html>

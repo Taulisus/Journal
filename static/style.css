@@ -1,0 +1,679 @@
+/* ============================================================
+   ОСНОВНЫЕ СТИЛИ
+   ============================================================ */
+
+body {
+    background-color: #f5f5f5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+footer {
+    margin-top: auto;
+}
+
+/* ============================================================
+   НАВИГАЦИЯ
+   ============================================================ */
+
+.navbar-brand {
+    font-weight: 600;
+}
+
+.navbar-text {
+    font-size: 0.9rem;
+}
+
+/* ============================================================
+   ТАБЛИЦЫ
+   ============================================================ */
+
+.table-hover tbody tr:hover {
+    background-color: #f0f8ff;
+    cursor: default;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Таблица журнала */
+.journal-table {
+    font-size: 0.9rem;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.journal-table th,
+.journal-table td {
+    vertical-align: middle;
+    text-align: center;
+    padding: 10px 8px;
+    border: 1px solid #dee2e6;
+}
+
+.journal-table thead th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.journal-table .student-name {
+    text-align: left !important;
+    white-space: nowrap;
+    font-weight: 500;
+    min-width: 200px;
+}
+
+.journal-table .student-name a {
+    color: #212529;
+    text-decoration: none;
+}
+
+.journal-table .student-name a:hover {
+    color: #0d6efd !important;
+    text-decoration: underline !important;
+}
+
+.journal-table .lesson-column {
+    min-width: 140px;
+    background-color: #fafbfc;
+}
+
+.journal-table .date-header {
+    white-space: nowrap;
+}
+
+.journal-table .topic {
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+}
+
+/* Колонка экзамена */
+.journal-table .exam-column {
+    background-color: #fff5f5 !important;
+    border-left: 3px solid #dc3545 !important;
+}
+
+.journal-table .exam-cell {
+    background-color: #fffafa;
+}
+
+/* ============================================================
+   БЕЙДЖИ
+   ============================================================ */
+
+.badge {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.attendance-badge {
+    font-size: 1.1rem;
+    padding: 8px 14px;
+    cursor: default;
+    min-width: 35px;
+    display: inline-block;
+}
+
+.grade-badge {
+    font-size: 1.2rem;
+    padding: 8px 14px;
+    cursor: default;
+    min-width: 35px;
+    display: inline-block;
+}
+
+/* ============================================================
+   КНОПКИ
+   ============================================================ */
+
+.btn {
+    transition: all 0.15s ease;
+}
+
+.btn-group .btn {
+    border-radius: 4px;
+}
+
+.btn:active {
+    transform: scale(0.97);
+}
+
+/* Кнопка редактирования записи */
+.edit-entry-btn {
+    text-decoration: none;
+    font-size: 0.8rem;
+    padding: 2px 4px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.cell-hover:hover .edit-entry-btn {
+    opacity: 1;
+}
+
+.edit-entry-btn:hover {
+    color: #0d6efd;
+}
+
+/* Кнопки быстрой отметки (мобильные) */
+.attendance-quick-btn {
+    min-width: 40px;
+    padding: 6px 10px;
+    font-weight: 600;
+    transition: all 0.1s;
+}
+
+.attendance-quick-btn:active {
+    transform: scale(0.95);
+}
+
+/* ============================================================
+   ВЫПАДАЮЩИЕ СПИСКИ
+   ============================================================ */
+
+.semester-grade-select {
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.semester-grade-select:hover {
+    border-color: #0d6efd;
+}
+
+.lesson-type-select {
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.lesson-type-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* ============================================================
+   ПРОГРЕСС-БАРЫ
+   ============================================================ */
+
+.progress {
+    height: 20px;
+    border-radius: 10px;
+    background-color: #e9ecef;
+}
+
+.progress-bar {
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+/* ============================================================
+   КАРТОЧКИ
+   ============================================================ */
+
+.card {
+    border-radius: 8px;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.card.shadow-sm {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+}
+
+/* Журналы (список пар) */
+.journal-item {
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.journal-item:hover {
+    background-color: #f8f9fa;
+    border-left-color: #0d6efd;
+    transform: translateX(2px);
+}
+
+.journal-item.hidden {
+    display: none;
+}
+
+/* Семестры */
+.semester-card {
+    transition: all 0.3s ease;
+}
+
+.semester-checkbox:checked + label {
+    font-weight: bold;
+}
+
+/* ============================================================
+   АНИМАЦИИ
+   ============================================================ */
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.alert {
+    animation: fadeIn 0.3s ease;
+}
+
+/* ============================================================
+   МОБИЛЬНАЯ АДАПТАЦИЯ
+   ============================================================ */
+
+/* Планшеты и большие телефоны (до 768px) */
+@media (max-width: 768px) {
+    /* Уменьшаем размер шрифта таблиц */
+    .table-responsive {
+        font-size: 0.85rem;
+    }
+
+    /* Компактные кнопки */
+    .btn-group-sm .btn {
+        padding: 4px 8px;
+        font-size: 0.75rem;
+    }
+
+    /* Отключаем sticky на мобильных */
+    .journal-table .student-name,
+    .journal-table thead th {
+        position: static !important;
+    }
+
+    /* Модальные окна на всю ширину */
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+}
+
+/* Маленькие телефоны (до 576px) */
+@media (max-width: 576px) {
+    /* Меньше отступы */
+    .container,
+    .container-fluid {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    /* Размер шрифта */
+    body {
+        font-size: 14px;
+    }
+
+    h2 {
+        font-size: 1.25rem;
+    }
+
+    h3 {
+        font-size: 1.15rem;
+    }
+
+    h4 {
+        font-size: 1.05rem;
+    }
+
+    h5 {
+        font-size: 1rem;
+    }
+
+    h6 {
+        font-size: 0.9rem;
+    }
+
+    /* Кнопки */
+    .btn-lg {
+        font-size: 0.9rem;
+        padding: 8px 12px;
+    }
+
+    .btn-sm {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+    }
+
+    /* Навигация */
+    .navbar-brand {
+        font-size: 1rem;
+    }
+
+    .nav-link {
+        padding: 0.5rem 0.75rem;
+    }
+
+    /* Карточки */
+    .card-body {
+        padding: 12px;
+    }
+
+    .card-header {
+        padding: 8px 12px;
+    }
+
+    /* Модальные окна на весь экран */
+    .modal-dialog {
+        margin: 0;
+        max-width: 100%;
+        min-height: 100vh;
+    }
+
+    .modal-content {
+        border-radius: 0;
+        min-height: 100vh;
+    }
+
+    .modal-dialog.modal-sm {
+        max-width: 100%;
+    }
+
+    /* Скрываем лишние элементы */
+    .hide-mobile {
+        display: none !important;
+    }
+
+    /* Прогресс-бары */
+    .progress {
+        height: 16px;
+    }
+
+    .progress-bar {
+        font-size: 0.7rem;
+        line-height: 16px;
+    }
+
+    /* Бейджи */
+    .badge {
+        font-size: 0.75rem;
+    }
+
+    /* Таблицы */
+    .table th,
+    .table td {
+        padding: 6px 4px;
+        font-size: 0.8rem;
+    }
+}
+
+/* iPhone 12 mini и подобные (до 400px) */
+@media (max-width: 400px) {
+    /* Кнопки быстрой отметки */
+    .attendance-quick-btn {
+        min-width: 35px;
+        padding: 5px 8px;
+        font-size: 0.8rem;
+    }
+
+    /* Строки занятий */
+    .lesson-row {
+        padding: 8px !important;
+    }
+
+    /* Карточки */
+    .card-header {
+        padding: 8px 10px;
+    }
+
+    .card-body {
+        padding: 8px !important;
+    }
+
+    /* Заголовки */
+    h2 {
+        font-size: 1.1rem;
+    }
+
+    /* Кнопки */
+    .btn-lg {
+        font-size: 0.85rem;
+        padding: 6px 10px;
+    }
+
+    /* Скрываем дополнительный текст */
+    .d-none.d-xs-inline {
+        display: none !important;
+    }
+}
+
+/* ============================================================
+   СТИЛИ ДЛЯ ПЕЧАТИ
+   ============================================================ */
+
+@media print {
+    /* Скрываем лишние элементы */
+    .navbar,
+    .btn,
+    .no-print,
+    .edit-entry-btn,
+    .btn-outline-danger,
+    .semester-grade-select,
+    .lesson-type-select,
+    .alert,
+    .d-md-none,
+    footer {
+        display: none !important;
+    }
+
+    /* Показываем таблицу при печати даже на мобильных */
+    .d-none.d-md-block {
+        display: block !important;
+    }
+
+    /* Убираем тени и рамки */
+    .card {
+        border: 1px solid #ddd !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+
+    /* Размер шрифта таблицы */
+    .journal-table {
+        font-size: 10px;
+    }
+
+    .journal-table th,
+    .journal-table td {
+        padding: 4px;
+    }
+
+    /* Фон */
+    body {
+        background: #fff;
+    }
+
+    .student-name {
+        background: #fff !important;
+    }
+
+    .exam-column {
+        background-color: #fff5f5 !important;
+    }
+
+    /* Отступы страницы */
+    @page {
+        margin: 1cm;
+    }
+
+    /* Прогресс-бары */
+    .progress {
+        border: 1px solid #ddd;
+    }
+}
+
+/* ============================================================
+   КАСТОМНЫЕ УТИЛИТЫ
+   ============================================================ */
+
+/* Скрыть на мобильном */
+@media (max-width: 767px) {
+    .d-md-only {
+        display: none !important;
+    }
+}
+
+/* Показать только на мобильном */
+@media (min-width: 768px) {
+    .d-mobile-only {
+        display: none !important;
+    }
+}
+
+/* ============================================================
+   ФОРМЫ
+   ============================================================ */
+
+.form-control:focus,
+.form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.form-label {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+/* ============================================================
+   МОДАЛЬНЫЕ ОКНА
+   ============================================================ */
+
+.modal-header {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.modal-footer {
+    border-top: 1px solid #dee2e6;
+}
+
+/* ============================================================
+   ПЛАВНОЕ ПОЯВЛЕНИЕ
+   ============================================================ */
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.loading {
+    animation: pulse 1.5s infinite;
+}
+
+/* ============================================================
+   СПЕЦИАЛЬНЫЕ СТИЛИ
+   ============================================================ */
+
+/* Стили для ячеек, где можно редактировать */
+.cell-hover {
+    position: relative;
+    transition: background-color 0.15s;
+}
+
+.cell-hover:hover {
+    background-color: #f0f8ff;
+}
+
+/* Стили для сводных карточек статистики */
+.stat-card {
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+}
+
+/* Стили для быстрых ссылок */
+.quick-link {
+    transition: all 0.15s;
+}
+
+.quick-link:hover {
+    transform: translateX(3px);
+}
+
+/* ============================================================
+   SCROLLBAR (для десктопа)
+   ============================================================ */
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
+}
+
+/* ============================================================
+   ЦВЕТОВЫЕ АКЦЕНТЫ
+   ============================================================ */
+
+/* Отличные оценки */
+.grade-excellent {
+    color: #198754;
+}
+
+/* Хорошие оценки */
+.grade-good {
+    color: #0d6efd;
+}
+
+/* Удовлетворительные */
+.grade-satisfactory {
+    color: #ffc107;
+}
+
+/* Неудовлетворительные */
+.grade-poor {
+    color: #dc3545;
+}
+
+/* ============================================================
+   УТИЛИТЫ
+   ============================================================ */
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.text-truncate-2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.min-width-200 {
+    min-width: 200px;
+}
+
+.min-width-130 {
+    min-width: 130px;
+}
