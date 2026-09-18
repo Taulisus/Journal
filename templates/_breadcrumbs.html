@@ -1,0 +1,29 @@
+{#
+    Универсальные хлебные крошки.
+
+    Использование в шаблоне:
+
+        {% from "_breadcrumbs.html" import breadcrumbs %}
+        {% block breadcrumbs %}
+            {{ breadcrumbs([
+                ('Главная', url_for('main.dashboard')),
+                ('Справочники', None),
+                ('Группы', None),
+            ]) }}
+        {% endblock %}
+
+    Где каждый элемент — кортеж (label, url).
+    Если url == None — это «текущая» страница (не ссылка, серый текст).
+#}
+
+{% macro breadcrumbs(items) %}
+    <ol class="breadcrumbs">
+        {% for label, url in items %}
+            {% if url %}
+                <li><a href="{{ url }}">{{ label }}</a></li>
+            {% else %}
+                <li><span class="current">{{ label }}</span></li>
+            {% endif %}
+        {% endfor %}
+    </ol>
+{% endmacro %}

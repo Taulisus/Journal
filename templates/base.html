@@ -12,13 +12,11 @@
     {% if session.user_id %}
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow-sm">
         <div class="container-fluid">
-            <!-- Логотип -->
             <a class="navbar-brand d-flex align-items-center" href="{{ url_for('main.dashboard') }}">
                 <i class="bi bi-journal-bookmark-fill me-1"></i>
                 <span class="d-none d-sm-inline fw-bold">Журнал</span>
             </a>
 
-            <!-- Кнопка бургера -->
             <button class="navbar-toggler border-0" type="button"
                     data-bs-toggle="collapse"
                     data-bs-target="#navbarNav"
@@ -28,26 +26,23 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
 
-            <!-- Основное меню -->
             <div class="collapse navbar-collapse" id="navbarNav">
 
-                <!-- Профиль (виден только на мобильных в шапке бургера) -->
                 <div class="d-lg-none mobile-profile-header">
-                    <div class="d-flex align-items-center p-3 border-bottom">
+                    <a href="{{ url_for('main.profile') }}" class="d-flex align-items-center p-3 border-bottom text-decoration-none">
                         <div class="user-avatar-circle me-3">
                             {{ session.username[0]|upper }}
                         </div>
                         <div class="flex-grow-1">
                             <div class="fw-bold text-white">{{ session.username }}</div>
-                            <small class="text-white-50">Пользователь системы</small>
+                            <small class="text-white-50">Открыть профиль</small>
                         </div>
-                    </div>
+                        <i class="bi bi-chevron-right text-white-50"></i>
+                    </a>
                 </div>
 
-                <!-- Основные ссылки -->
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
-                    <!-- Главная -->
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}"
                            href="{{ url_for('main.dashboard') }}">
@@ -56,7 +51,6 @@
                         </a>
                     </li>
 
-                    <!-- Журналы -->
                     {% if has_permission('view_journals') %}
                     <li class="nav-item dropdown-lg-only">
                         <a class="nav-link dropdown-toggle {% if request.endpoint in ['main.group_subjects', 'main.teacher_hours_stats', 'main.journal'] %}active{% endif %}"
@@ -85,7 +79,6 @@
                         </ul>
                     </li>
 
-                    <!-- Мобильная версия журналов - аккордеон -->
                     <li class="nav-item mobile-only">
                         <a class="nav-link d-flex justify-content-between align-items-center"
                            data-bs-toggle="collapse"
@@ -113,7 +106,6 @@
                     </li>
                     {% endif %}
 
-                    <!-- Студенты -->
                     {% if has_permission('view_student_card') %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint in ['main.students', 'main.student_card'] %}active{% endif %}"
@@ -124,7 +116,6 @@
                     </li>
                     {% endif %}
 
-                    <!-- Отчёты -->
                     {% if has_permission('create_report') %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint in ['main.reports', 'main.view_report'] %}active{% endif %}"
@@ -135,7 +126,6 @@
                     </li>
                     {% endif %}
 
-                    <!-- Справочники -->
                     <li class="nav-item dropdown-lg-only">
                         <a class="nav-link dropdown-toggle {% if request.endpoint in ['main.groups', 'main.subjects'] %}active{% endif %}"
                            href="#"
@@ -179,7 +169,6 @@
                         </ul>
                     </li>
 
-                    <!-- Мобильная версия справочников - аккордеон -->
                     <li class="nav-item mobile-only">
                         <a class="nav-link d-flex justify-content-between align-items-center"
                            data-bs-toggle="collapse"
@@ -217,7 +206,6 @@
                         </div>
                     </li>
 
-                    <!-- Пользователи (только для админа) -->
                     {% if has_permission('manage_users') %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint in ['main.users', 'main.assign_journals'] %}active{% endif %}"
@@ -226,18 +214,44 @@
                             <span>Пользователи</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'main.activity_log_page' %}active{% endif %}"
+                           href="{{ url_for('main.activity_log_page') }}">
+                            <i class="bi bi-activity"></i>
+                            <span>Действия</span>
+                        </a>
+                    </li>
                     {% endif %}
+
+                    {% if has_permission('manage_permissions') %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'main.roles' %}active{% endif %}"
+                           href="{{ url_for('main.roles') }}">
+                            <i class="bi bi-shield-check"></i>
+                            <span>Роли</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint in ['main.profile', 'main.profile_view'] %}active{% endif %}"
+                           href="{{ url_for('main.profile') }}">
+                            <i class="bi bi-person-circle"></i>
+                            <span>Профиль</span>
+                        </a>
+                    </li>
 
                 </ul>
 
-                <!-- Правая часть: профиль и выход (только десктоп) -->
                 <div class="d-none d-lg-flex align-items-center gap-2">
-                    <div class="user-badge d-flex align-items-center">
+                    <a href="{{ url_for('main.profile') }}"
+                       class="user-badge d-flex align-items-center text-decoration-none"
+                       title="Открыть профиль">
                         <div class="user-avatar-circle user-avatar-sm me-2">
                             {{ session.username[0]|upper }}
                         </div>
                         <span class="text-white fw-bold">{{ session.username }}</span>
-                    </div>
+                    </a>
                     <a href="{{ url_for('auth.logout') }}"
                        class="btn btn-outline-light btn-sm"
                        title="Выйти из системы">
@@ -246,7 +260,6 @@
                     </a>
                 </div>
 
-                <!-- Мобильная кнопка "Выйти" (внизу меню) -->
                 <div class="d-lg-none mobile-logout-section">
                     <a href="{{ url_for('auth.logout') }}"
                        class="mobile-logout-btn">
@@ -260,8 +273,11 @@
     </nav>
     {% endif %}
 
-    <!-- Сообщения -->
     <div class="container-fluid container-xl mt-3 mt-lg-4">
+
+        {# ============ ХЛЕБНЫЕ КРОШКИ ============ #}
+        {% block breadcrumbs %}{% endblock %}
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -285,7 +301,6 @@
         {% block content %}{% endblock %}
     </div>
 
-    <!-- Футер -->
     <footer class="mt-5 py-3 bg-light text-center text-muted">
         <div class="container-fluid container-xl">
             <small>
@@ -298,12 +313,9 @@
         </div>
     </footer>
 
-    <!-- Скрипты -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Глобальные скрипты -->
     <script>
-    // ==================== ЗАПРЕТ ЭМОДЗИ ====================
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.no-emoji').forEach(function(input) {
             input.addEventListener('input', function() {
@@ -311,41 +323,32 @@
             });
         });
 
-        // ==================== ТОЛЬКО ЦИФРЫ В ТЕЛЕФОНЕ ====================
         document.querySelectorAll('.phone-input').forEach(function(input) {
             input.addEventListener('input', function() {
                 this.value = this.value.replace(/[^\d]/g, '').slice(0, 11);
             });
         });
 
-        // ==================== ЗАКРЫТИЕ БУРГЕРА ПРИ КЛИКЕ ====================
-        // На мобильных при клике на обычную ссылку закрываем меню
         document.querySelectorAll('#navbarNav .nav-link:not(.dropdown-toggle):not([data-bs-toggle])').forEach(function(link) {
             link.addEventListener('click', function() {
                 var navbarCollapse = document.getElementById('navbarNav');
                 if (navbarCollapse.classList.contains('show')) {
                     var bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse);
-                    if (bsCollapse) {
-                        bsCollapse.hide();
-                    }
+                    if (bsCollapse) bsCollapse.hide();
                 }
             });
         });
 
-        // Закрытие бургера при клике на подпункт мобильного меню
         document.querySelectorAll('.mobile-submenu-item').forEach(function(link) {
             link.addEventListener('click', function() {
                 var navbarCollapse = document.getElementById('navbarNav');
                 if (navbarCollapse.classList.contains('show')) {
                     var bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse);
-                    if (bsCollapse) {
-                        bsCollapse.hide();
-                    }
+                    if (bsCollapse) bsCollapse.hide();
                 }
             });
         });
 
-        // ==================== ПОВОРОТ СТРЕЛКИ АККОРДЕОНА ====================
         document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(toggle) {
             var target = document.querySelector(toggle.getAttribute('href'));
             if (target) {
@@ -360,8 +363,6 @@
             }
         });
 
-        // ==================== АКТИВНАЯ ССЫЛКА В ПОДМЕНЮ МОБИЛЬНОГО ====================
-        // Автоматически раскрываем подменю, если активна внутренняя ссылка
         var activeSubmenuItem = document.querySelector('.mobile-submenu-item.active');
         if (activeSubmenuItem) {
             var parentCollapse = activeSubmenuItem.closest('.collapse');
@@ -377,10 +378,58 @@
 
     <style>
         /* ============================================================
-           ПРОФИЛЬ В НАВИГАЦИИ
+           ХЛЕБНЫЕ КРОШКИ
            ============================================================ */
+        .breadcrumbs {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            padding: 0;
+            margin: 0 0 16px 0;
+            list-style: none;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .breadcrumbs li {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .breadcrumbs li + li::before {
+            content: "\F285"; /* bi-chevron-right */
+            font-family: "bootstrap-icons";
+            font-size: 0.7rem;
+            color: #adb5bd;
+        }
+        .breadcrumbs a {
+            color: #0d6efd;
+            text-decoration: none;
+            transition: color 0.15s;
+        }
+        .breadcrumbs a:hover {
+            color: #0a58ca;
+            text-decoration: underline;
+        }
+        .breadcrumbs .current {
+            color: #212529;
+            font-weight: 600;
+        }
 
-        /* Круглый аватар с первой буквой */
+        @media (max-width: 575.98px) {
+            .breadcrumbs {
+                font-size: 0.82rem;
+                gap: 4px;
+                margin-bottom: 12px;
+            }
+            .breadcrumbs li + li::before {
+                font-size: 0.65rem;
+            }
+        }
+
+        /* ============================================================
+           ОСТАЛЬНОЕ (без изменений)
+           ============================================================ */
         .user-avatar-circle {
             width: 36px;
             height: 36px;
@@ -402,7 +451,6 @@
             font-size: 0.9rem;
         }
 
-        /* Бейдж пользователя на десктопе */
         .user-badge {
             padding: 4px 12px 4px 4px;
             border-radius: 24px;
@@ -411,12 +459,8 @@
         }
 
         .user-badge:hover {
-            background-color: rgba(255, 255, 255, 0.15);
+            background-color: rgba(255, 255, 255, 0.2);
         }
-
-        /* ============================================================
-           АКТИВНЫЙ ПУНКТ МЕНЮ
-           ============================================================ */
 
         .navbar-nav .nav-link.active {
             background-color: rgba(255, 255, 255, 0.15);
@@ -429,40 +473,30 @@
             color: #fff;
         }
 
-        /* ============================================================
-           МОБИЛЬНОЕ МЕНЮ
-           ============================================================ */
-
-        /* По умолчанию мобильные элементы скрыты на десктопе */
         .mobile-only {
             display: none;
         }
 
-        /* Показываем мобильные элементы только на мобильных */
         @media (max-width: 991.98px) {
             .mobile-only {
                 display: block;
             }
-
             .dropdown-lg-only {
                 display: none !important;
             }
         }
 
-        /* Десктопные dropdown скрыты на мобильных */
         @media (max-width: 991.98px) {
             .dropdown-lg-only {
                 display: none;
             }
         }
 
-        /* Профиль в шапке бургера */
         .mobile-profile-header {
             margin: -0.5rem -0.75rem 0.5rem;
             background: linear-gradient(135deg, #357abd, #2c5aa0);
         }
 
-        /* Подменю мобильное */
         .mobile-submenu {
             background-color: rgba(0, 0, 0, 0.15);
             border-radius: 8px;
@@ -500,13 +534,11 @@
             text-align: center;
         }
 
-        /* Стрелка аккордеона */
         .mobile-chevron {
             transition: transform 0.3s ease;
             font-size: 0.85rem;
         }
 
-        /* Секция "Выйти" в мобильном меню */
         .mobile-logout-section {
             margin-top: 8px;
             padding-top: 12px;
@@ -536,12 +568,7 @@
             margin-right: 10px;
         }
 
-        /* ============================================================
-           УЛУЧШЕНИЕ ТАЧ-ЗОН
-           ============================================================ */
-
         @media (max-width: 991.98px) {
-            /* Крупные тач-зоны для всех ссылок */
             #navbarNav .nav-link {
                 padding: 14px 16px;
                 font-size: 1rem;
@@ -559,21 +586,18 @@
                 background-color: rgba(255, 255, 255, 0.2);
             }
 
-            /* Отступ между иконкой и текстом */
             #navbarNav .nav-link i {
                 width: 22px;
                 text-align: center;
                 margin-right: 8px;
             }
 
-            /* Меню на всю высоту */
             #navbarNav {
                 padding-bottom: 16px;
                 max-height: calc(100vh - 60px);
                 overflow-y: auto;
             }
 
-            /* Кнопка бургера — крупнее */
             .navbar-toggler {
                 padding: 8px 12px;
                 border: 1px solid rgba(255, 255, 255, 0.3);
@@ -585,7 +609,6 @@
             }
         }
 
-        /* Очень маленькие экраны */
         @media (max-width: 400px) {
             .user-avatar-circle {
                 width: 32px;
@@ -604,12 +627,7 @@
             }
         }
 
-        /* ============================================================
-           ДЕСКТОПНЫЕ УЛУЧШЕНИЯ
-           ============================================================ */
-
         @media (min-width: 992px) {
-            /* Более компактный dropdown */
             .navbar .dropdown-menu {
                 border-radius: 8px;
                 border: none;
@@ -631,7 +649,6 @@
                 margin-right: 8px;
             }
 
-            /* Плавное поднятие при наведении */
             .navbar-nav .nav-link {
                 border-radius: 6px;
                 padding: 8px 12px !important;
@@ -644,21 +661,14 @@
             }
         }
 
-        /* ============================================================
-           ОБЩИЕ УЛУЧШЕНИЯ
-           ============================================================ */
-
-        /* Sticky navbar с тенью при скролле */
         .navbar.sticky-top {
             transition: box-shadow 0.2s;
         }
 
-        /* Плавный скролл по странице */
         html {
             scroll-behavior: smooth;
         }
 
-        /* Футер прижат к низу */
         body {
             min-height: 100vh;
             display: flex;
@@ -670,20 +680,16 @@
             flex: 1;
         }
 
-        /* Контейнер с максимальной шириной для больших экранов */
         .container-xl {
             max-width: 1320px;
         }
-
-        /* ============================================================
-           ПЕЧАТЬ
-           ============================================================ */
 
         @media print {
             .navbar,
             .btn,
             .alert,
-            footer {
+            footer,
+            .breadcrumbs {
                 display: none !important;
             }
 

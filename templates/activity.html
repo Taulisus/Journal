@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Действия', None),
+    ]) }}
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <h2 class="mb-0">
+        <i class="bi bi-activity text-danger"></i>
+        Последние действия
+    </h2>
+    <div class="text-muted small">
+        Всего записей: <strong>{{ data.total }}</strong>
+    </div>
+</div>
+
+<!-- ФИЛЬТРЫ -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('main.activity_log_page') }}" class="row g-2 align-items-end">
+
+            <div class="col-12 col-md-6 col-lg-3">
+                <label class="form-label small mb-1">Пользователь</label>
+                <select name="user_id" class="form-select form-select-sm">
+                    <option value="">— Все —</option>
+                    {% for u in all_users %}
+                        <option value="{{ u.user_id }}"
+                                {% if filters.user_id == u.user_id %}selected{% endif %}>
+                            {{ u.full_name or u.username }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-2">
+                <label class="form-label small mb-1">Действие</label>
+                <select name="action" class="form-select form-select-sm">
+                    <option value="">— Все —</option>
+                    {% for a in all_actions %}
+                        <option value="{{ a }}"
+                                {% if filters.action == a %}selected{% endif %}>
+                            {{ action_labels.get(a, a) }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-2">
+                <label class="form-label small mb-1">Тип объекта</label>
+                <select name="target_type" class="form-select form-select-sm">
+                    <option value="">— Все —</option>
+                    {% for t in all_target_types %}
+                        <option value="{{ t }}"
+                                {% if filters.target_type == t %}selected{% endif %}>
+                            {{ target_type_labels.get(t, t) }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small mb-1">Дата с</label>
+                <input type="date" name="date_from" class="form-control form-control-sm"
+                       value="{{ filters.date_from or '' }}">
+            </div>
+
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small mb-1">Дата по</label>
+                <input type="date" name="date_to" class="form-control form-control-sm"
+                       value="{{ filters.date_to or '' }}">
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-3">
+                <label class="form-label small mb-1">Поиск</label>
+                <input type="text" name="search" class="form-control form-control-sm"
+                       placeholder="ФИО, логин, текст"
+                       value="{{ filters.search or '' }}">
+            </div>
+
+            <div class="col-12 col-md-6 col-lg-2">
+                <label class="form-label small mb-1">На странице</label>
+                <select name="per_page" class="form-select form-select-sm">
+                    {% for n in [20, 50, 100, 200] %}
+                        <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-lg-7 d-flex gap-2 flex-wrap">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="bi bi-funnel"></i>
+                    Применить
+                </button>
+                <a href="{{ url_for('main.activity_log_page') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-x-circle"></i>
+                    Сбросить
+                </a>
+
+                {% set export_query = [] %}
+                {% if filters.user_id %}{% set _ = export_query.append('user_id=' ~ filters.user_id) %}{% endif %}
+                {% if filters.action %}{% set _ = export_query.append('action=' ~ filters.action) %}{% endif %}
+                {% if filters.target_type %}{% set _ = export_query.append('target_type=' ~ filters.target_type) %}{% endif %}
+                {% if filters.date_from %}{% set _ = export_query.append('date_from=' ~ filters.date_from) %}{% endif %}
+                {% if filters.date_to %}{% set _ = export_query.append('date_to=' ~ filters.date_to) %}{% endif %}
+                {% if filters.search %}{% set _ = export_query.append('search=' ~ filters.search) %}{% endif %}
+
+                <a href="{{ url_for('main.activity_export_csv') }}{% if export_query %}?{{ export_query|join('&') }}{% endif %}"
+                   class="btn btn-success btn-sm">
+                    <i class="bi bi-download"></i>
+                    Скачать CSV
+                </a>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<!-- ТАБЛИЦА -->
+{% if data['items'] %}
+<div class="card shadow-sm mb-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 60px;">ID</th>
+                    <th style="width: 150px;">Когда</th>
+                    <th>Пользователь</th>
+                    <th>Действие</th>
+                    <th>Описание</th>
+                    <th class="text-center" style="width: 80px;">Объект</th>
+                    <th class="text-muted small" style="width: 120px;">IP</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for a in data['items'] %}
+                <tr>
+                    <td class="text-muted small">#{{ a.id }}</td>
+                    <td class="text-nowrap small">
+                        <i class="bi bi-clock"></i>
+                        {{ a.created_at_human }}
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:28px; height:28px; font-size:0.8rem; font-weight:700;">
+                                {{ a.display_name[0]|upper if a.display_name else '?' }}
+                            </div>
+                            <div>
+                                <div class="fw-semibold small">{{ a.display_name }}</div>
+                                {% if a.username and a.username != a.display_name %}
+                                    <div class="text-muted" style="font-size:0.75rem;">{{ a.username }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border small">
+                            {% if a.action == 'login' %}
+                                <i class="bi bi-box-arrow-in-right text-success"></i>
+                            {% elif a.action == 'logout' %}
+                                <i class="bi bi-box-arrow-right text-secondary"></i>
+                            {% elif a.action.startswith('add_') %}
+                                <i class="bi bi-plus-circle text-primary"></i>
+                            {% elif a.action.startswith('edit_') or a.action.startswith('set_') or a.action == 'assign_journals' %}
+                                <i class="bi bi-pencil-square text-warning"></i>
+                            {% elif a.action.startswith('delete_') %}
+                                <i class="bi bi-x-circle text-danger"></i>
+                            {% elif a.action == 'profile_edit' or a.action == 'password_change' %}
+                                <i class="bi bi-person-badge text-info"></i>
+                            {% elif a.action == 'import_students' %}
+                                <i class="bi bi-upload text-primary"></i>
+                            {% elif a.action == 'activity_export' %}
+                                <i class="bi bi-download text-success"></i>
+                            {% elif a.action == 'activity_cleanup' %}
+                                <i class="bi bi-trash text-danger"></i>
+                            {% else %}
+                                <i class="bi bi-dot text-muted"></i>
+                            {% endif %}
+                            {{ action_labels.get(a.action, a.action) }}
+                        </span>
+                    </td>
+                    <td class="small">{{ a.description or '—' }}</td>
+                    <td class="text-center">
+                        {% if a.target_url %}
+                            <a href="{{ a.target_url }}" class="btn btn-sm btn-outline-primary py-0 px-2"
+                               title="Перейти к объекту">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                            </a>
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted small">{{ a.ip or '—' }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ПАГИНАЦИЯ -->
+{% if data.total_pages > 1 %}
+<nav aria-label="Пагинация">
+    <ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item {% if data.page <= 1 %}disabled{% endif %}">
+            <a class="page-link"
+               href="{{ url_for('main.activity_log_page', page=data.page-1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">
+                &laquo;
+            </a>
+        </li>
+
+        {% set start_page = [1, data.page - 3]|max %}
+        {% set end_page = [data.total_pages, data.page + 3]|min %}
+
+        {% if start_page > 1 %}
+            <li class="page-item">
+                <a class="page-link"
+                   href="{{ url_for('main.activity_log_page', page=1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">1</a>
+            </li>
+            {% if start_page > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+        {% endif %}
+
+        {% for p in range(start_page, end_page + 1) %}
+            <li class="page-item {% if p == data.page %}active{% endif %}">
+                <a class="page-link"
+                   href="{{ url_for('main.activity_log_page', page=p, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">{{ p }}</a>
+            </li>
+        {% endfor %}
+
+        {% if end_page < data.total_pages %}
+            {% if end_page < data.total_pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+            <li class="page-item">
+                <a class="page-link"
+                   href="{{ url_for('main.activity_log_page', page=data.total_pages, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">{{ data.total_pages }}</a>
+            </li>
+        {% endif %}
+
+        <li class="page-item {% if data.page >= data.total_pages %}disabled{% endif %}">
+            <a class="page-link"
+               href="{{ url_for('main.activity_log_page', page=data.page+1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">
+                &raquo;
+            </a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    Записей по заданным фильтрам не найдено.
+    <a href="{{ url_for('main.activity_log_page') }}" class="alert-link">Сбросить фильтры</a>
+</div>
+{% endif %}
+
+<!-- ОЧИСТКА СТАРОГО ЛОГА -->
+<div class="card shadow-sm mt-4 border-warning">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+            <div>
+                <h6 class="mb-1">
+                    <i class="bi bi-trash text-warning"></i>
+                    Очистка старого лога
+                </h6>
+                <div class="text-muted small">
+                    Всего записей: <strong>{{ cleanup_stats.total }}</strong>.
+                    {% if cleanup_stats.old_count > 0 %}
+                        Старше 90 дней: <strong class="text-danger">{{ cleanup_stats.old_count }}</strong>
+                        (самая старая — {{ cleanup_stats.oldest_date }}).
+                    {% else %}
+                        Записей старше 90 дней нет.
+                    {% endif %}
+                </div>
+                <div class="text-muted small mt-1">
+                    Граница: всё, что старше {{ cleanup_stats.cutoff_date }}, будет удалено.
+                </div>
+            </div>
+
+            <form method="post"
+                  action="{{ url_for('main.activity_cleanup') }}"
+                  onsubmit="return confirm('Удалить {{ cleanup_stats.old_count }} записей старше 90 дней?\n\nДействие необратимо.');"
+                  class="d-inline">
+                <input type="hidden" name="days" value="90">
+                <button type="submit"
+                        class="btn btn-outline-warning btn-sm"
+                        {% if cleanup_stats.old_count == 0 %}disabled{% endif %}>
+                    <i class="bi bi-trash"></i>
+                    Удалить старые записи
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

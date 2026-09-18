@@ -1,177 +1,147 @@
 {% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Журналы', url_for('main.group_subjects')),
+        ('Мои часы', None),
+    ]) }}
+{% endblock %}
+
 {% block content %}
 
-<h2 class="mb-3">
-    <i class="bi bi-clock-history"></i> Статистика проведенных часов
+<h2 class="mb-4">
+    <i class="bi bi-clock-history"></i> Мои часы
 </h2>
 
-<!-- Общие итоги -->
-<div class="row mb-4">
-    <div class="col-md-3 mb-3">
-        <div class="card text-white bg-primary h-100">
-            <div class="card-body text-center">
-                <i class="bi bi-calendar-check" style="font-size: 2rem;"></i>
-                <h5 class="mt-2">План (всего)</h5>
-                <p class="display-5 mb-0">{{ total_planned.total }}</p>
-                <small>академических часов</small>
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0">
+                    <i class="bi bi-calendar-check"></i> План
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Лекции:</span>
+                    <strong>{{ total_planned.lecture }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Практика:</span>
+                    <strong>{{ total_planned.practice }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>С/Р:</span>
+                    <strong>{{ total_planned.independent }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Экзамен:</span>
+                    <strong>{{ total_planned.exam }}</strong>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <span class="fw-bold">Итого:</span>
+                    <strong class="text-primary">{{ total_planned.total }}</strong>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3 mb-3">
-        <div class="card text-white bg-success h-100">
-            <div class="card-body text-center">
-                <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
-                <h5 class="mt-2">Проведено</h5>
-                <p class="display-5 mb-0">{{ total_actual.total }}</p>
-                <small>академических часов</small>
+
+    <div class="col-12 col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0">
+                    <i class="bi bi-check-circle"></i> Проведено
+                </h6>
             </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-3">
-        <div class="card text-white bg-info h-100">
-            <div class="card-body text-center">
-                <i class="bi bi-hourglass-split" style="font-size: 2rem;"></i>
-                <h5 class="mt-2">Осталось</h5>
-                <p class="display-5 mb-0">{{ total_planned.total - total_actual.total }}</p>
-                <small>академических часов</small>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-3">
-        <div class="card text-white bg-warning h-100">
-            <div class="card-body text-center">
-                <i class="bi bi-pie-chart" style="font-size: 2rem;"></i>
-                <h5 class="mt-2">Выполнение</h5>
-                <p class="display-5 mb-0">
-                    {% if total_planned.total > 0 %}
-                    {{ (total_actual.total / total_planned.total * 100)|round|int }}%
-                    {% else %}—{% endif %}
-                </p>
-                <small>от плана</small>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Лекции:</span>
+                    <strong>{{ total_actual.lecture }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Практика:</span>
+                    <strong>{{ total_actual.practice }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>С/Р:</span>
+                    <strong>{{ total_actual.independent }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Экзамен:</span>
+                    <strong>{{ total_actual.exam }}</strong>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <span class="fw-bold">Итого:</span>
+                    <strong class="text-success">{{ total_actual.total }}</strong>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Детализация по журналам -->
-{% if stats %}
-{% for s in stats %}
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">
-            <span class="badge bg-secondary fs-6">{{ s.group_name }}</span>
-            <span class="ms-2">{{ s.subject_name }}</span>
-        </h5>
-        <a href="{{ url_for('main.journal', gsid=s.gs_id) }}" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-journal-text"></i> Открыть журнал
-        </a>
+<div class="card shadow-sm">
+    <div class="card-header bg-white">
+        <h6 class="mb-0">Детали по журналам</h6>
     </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-bordered mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width: 25%;">Тип часов</th>
-                        <th class="text-center" style="width: 15%;">План</th>
-                        <th class="text-center" style="width: 15%;">Проведено</th>
-                        <th class="text-center" style="width: 15%;">Осталось</th>
-                        <th class="text-center" style="width: 30%;">% выполнения</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% set types = [
-                        ('lecture', 'Лекции', 'bi-easel'),
-                        ('practice', 'Практические', 'bi-tools'),
-                        ('independent', 'Самостоятельные', 'bi-person'),
-                        ('exam', 'Экзамен', 'bi-pencil-square')
-                    ] %}
-                    
-                    {% for type_key, type_name, type_icon in types %}
-                    <tr>
-                        <td>
-                            <i class="bi {{ type_icon }} me-2"></i>
-                            <strong>{{ type_name }}</strong>
-                        </td>
-                        <td class="text-center">{{ s.planned[type_key] }}</td>
-                        <td class="text-center">
-                            {% if s.actual[type_key] > 0 %}
-                            <span class="badge bg-success fs-6">{{ s.actual[type_key] }}</span>
-                            {% else %}
-                            <span class="text-muted">0</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            {% set remaining = s.planned[type_key] - s.actual[type_key] %}
-                            {% if remaining > 0 %}
-                            <span class="text-primary">{{ remaining }}</span>
-                            {% elif remaining < 0 %}
-                            <span class="text-danger">+{{ remaining|abs }}</span>
-                            {% else %}
-                            <span class="badge bg-success">✓</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if s.planned[type_key] > 0 %}
-                            <div class="progress" style="height: 24px;">
-                                {% set percent = (s.actual[type_key] / s.planned[type_key] * 100)|round|int %}
-                                <div class="progress-bar 
-                                    {% if percent >= 100 %}bg-success
-                                    {% elif percent >= 50 %}bg-info
-                                    {% elif percent > 0 %}bg-warning
-                                    {% else %}bg-secondary{% endif %}" 
-                                    style="width: {{ [percent, 100]|min }}%">
-                                    <strong>{{ percent }}%</strong>
-                                </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Группа</th>
+                    <th>Предмет</th>
+                    <th class="text-center">Сем.</th>
+                    <th class="text-center">План</th>
+                    <th class="text-center">Проведено</th>
+                    <th style="min-width: 140px;">Прогресс</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for st in stats %}
+                <tr>
+                    <td class="fw-semibold">{{ st.group_name }}</td>
+                    <td>
+                        <a href="{{ url_for('main.journal', gsid=st.gs_id, semester=st.semester) }}"
+                           class="text-decoration-none">
+                            {{ st.subject_name }}
+                        </a>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-secondary">{{ st.semester }}</span>
+                    </td>
+                    <td class="text-center">{{ st.planned.total }}</td>
+                    <td class="text-center">{{ st.actual.total }}</td>
+                    <td>
+                        {% set pct = (st.actual.total / st.planned.total * 100) if st.planned.total > 0 else 0 %}
+                        {% set pct = [pct, 100]|min %}
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height: 8px;">
+                                <div class="progress-bar {% if pct >= 100 %}bg-success{% elif pct >= 50 %}bg-primary{% elif pct >= 25 %}bg-warning{% else %}bg-danger{% endif %}"
+                                     role="progressbar"
+                                     style="width: {{ pct }}%;"
+                                     aria-valuenow="{{ pct }}"
+                                     aria-valuemin="0"
+                                     aria-valuemax="100"></div>
                             </div>
-                            {% else %}
-                            <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                    
-                    <!-- Итого -->
-                    <tr class="table-active fw-bold">
-                        <td><i class="bi bi-calculator me-2"></i>Итого</td>
-                        <td class="text-center">{{ s.planned.total }}</td>
-                        <td class="text-center">{{ s.actual.total }}</td>
-                        <td class="text-center">
-                            {% set total_remaining = s.planned.total - s.actual.total %}
-                            {% if total_remaining > 0 %}{{ total_remaining }}
-                            {% elif total_remaining < 0 %}<span class="text-danger">+{{ total_remaining|abs }}</span>
-                            {% else %}<span class="badge bg-success">✓</span>{% endif %}
-                        </td>
-                        <td>
-                            {% if s.planned.total > 0 %}
-                            <div class="progress" style="height: 24px;">
-                                {% set total_percent = (s.actual.total / s.planned.total * 100)|round|int %}
-                                <div class="progress-bar {% if total_percent >= 100 %}bg-success{% elif total_percent >= 50 %}bg-info{% else %}bg-warning{% endif %}" 
-                                    style="width: {{ [total_percent, 100]|min }}%">
-                                    <strong>{{ total_percent }}%</strong>
-                                </div>
-                            </div>
-                            {% endif %}
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                            <small class="text-muted text-nowrap">{{ pct|round(0, 'floor')|int }}%</small>
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
     </div>
-</div>
-{% endfor %}
-{% else %}
-<div class="alert alert-info text-center py-4">
-    <i class="bi bi-info-circle" style="font-size: 2rem;"></i>
-    <h5 class="mt-2">У вас нет назначенных журналов</h5>
-    <p class="text-muted">Обратитесь к администратору для назначения журналов</p>
-</div>
-{% endif %}
 
-<!-- Кнопка возврата -->
-<div class="text-center mt-4 mb-5">
-    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> На главную
-    </a>
+    {% if not stats %}
+        <div class="text-center text-muted py-4">
+            <i class="bi bi-inbox" style="font-size:2rem;"></i>
+            <p class="mt-2 mb-0">У вас пока нет назначенных журналов</p>
+        </div>
+    {% endif %}
 </div>
 
 {% endblock %}

@@ -1,10 +1,291 @@
 {% extends "base.html" %}
+
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-speedometer2"></i> Панель управления</h2>
-<div class="row">
-    <div class="col-md-3 mb-3"><div class="card text-white bg-primary"><div class="card-body text-center"><i class="bi bi-people-fill" style="font-size:3rem;"></i><h5 class="mt-2">Группы</h5><p class="display-6">{{ groups_count }}</p><a href="{{ url_for('main.groups') }}" class="btn btn-light btn-sm">Управление</a></div></div></div>
-    <div class="col-md-3 mb-3"><div class="card text-white bg-success"><div class="card-body text-center"><i class="bi bi-book-fill" style="font-size:3rem;"></i><h5 class="mt-2">Предметы</h5><p class="display-6">{{ subjects_count }}</p><a href="{{ url_for('main.subjects') }}" class="btn btn-light btn-sm">Управление</a></div></div></div>
-    <div class="col-md-3 mb-3"><div class="card text-white bg-info"><div class="card-body text-center"><i class="bi bi-person-lines-fill" style="font-size:3rem;"></i><h5 class="mt-2">Студенты</h5><p class="display-6">{{ students_count }}</p><a href="{{ url_for('main.students') }}" class="btn btn-light btn-sm">Управление</a></div></div></div>
-    <div class="col-md-3 mb-3"><div class="card text-white bg-warning"><div class="card-body text-center"><i class="bi bi-journal-text" style="font-size:3rem;"></i><h5 class="mt-2">Журналы</h5><p class="display-6">{{ pairs_count }}</p><a href="{{ url_for('main.group_subjects') }}" class="btn btn-light btn-sm">Открыть</a></div></div></div>
+
+<h2 class="mb-4">
+    <i class="bi bi-speedometer2"></i> Панель управления
+</h2>
+
+<!-- ============================================================
+     РЯД 1. Базовые счётчики
+     ============================================================ -->
+<div class="row g-3 mb-4">
+
+    <div class="col-6 col-lg-3">
+        <div class="card text-white bg-primary h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-people-fill" style="font-size:2.2rem;"></i>
+                <h6 class="mt-2 mb-1">Группы</h6>
+                <div class="fs-3 fw-bold mb-2">{{ groups_count }}</div>
+                <a href="{{ url_for('main.groups') }}" class="btn btn-light btn-sm">
+                    Управление
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-book-fill" style="font-size:2.2rem;"></i>
+                <h6 class="mt-2 mb-1">Предметы</h6>
+                <div class="fs-3 fw-bold mb-2">{{ subjects_count }}</div>
+                <a href="{{ url_for('main.subjects') }}" class="btn btn-light btn-sm">
+                    Управление
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+        <div class="card text-white bg-info h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-person-lines-fill" style="font-size:2.2rem;"></i>
+                <h6 class="mt-2 mb-1">Студенты</h6>
+                <div class="fs-3 fw-bold mb-2">{{ students_count }}</div>
+                <a href="{{ url_for('main.students') }}" class="btn btn-light btn-sm">
+                    Управление
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-6 col-lg-3">
+        <div class="card text-white bg-warning h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-journal-text" style="font-size:2.2rem;"></i>
+                <h6 class="mt-2 mb-1">Журналы</h6>
+                <div class="fs-3 fw-bold mb-2">{{ pairs_count }}</div>
+                <a href="{{ url_for('main.group_subjects') }}" class="btn btn-light btn-sm">
+                    Открыть
+                </a>
+            </div>
+        </div>
+    </div>
+
 </div>
+
+<!-- ============================================================
+     РЯД 2. Среднее число пар в неделю
+     ============================================================ -->
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0"
+                             style="width:56px; height:56px; font-size:1.5rem;">
+                            <i class="bi bi-graph-up-arrow"></i>
+                        </div>
+                        <div>
+                            {% if weekly_avg and weekly_avg.has_data %}
+                                <div class="fs-4 fw-bold lh-1">
+                                    {{ weekly_avg.avg }}
+                                    <small class="text-muted fs-6 fw-normal">пар в неделю</small>
+                                </div>
+                                <div class="text-muted small mt-1">
+                                    За последние {{ weekly_avg.weeks }} нед.:
+                                    <strong>{{ weekly_avg.total_lessons }}</strong> пар
+                                </div>
+                            {% else %}
+                                <div class="fs-5 fw-bold text-muted lh-1">
+                                    Пока нет данных
+                                </div>
+                                <div class="text-muted small mt-1">
+                                    Записывайте занятия в журнал — здесь появится статистика
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            id="btn-refresh-stats"
+                            class="btn btn-outline-primary"
+                            data-url="{{ url_for('main.refresh_stats') }}">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        Обновить
+                    </button>
+
+                </div>
+                <div id="refresh-status" class="small mt-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     РЯД 3. Мои часы
+     ============================================================ -->
+{% if teacher_stats and teacher_stats.has_data %}
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock-history text-primary"></i>
+                    Мои часы
+                </h5>
+                <div class="small text-muted">
+                    Проведено <strong>{{ teacher_stats.total_actual }}</strong>
+                    из <strong>{{ teacher_stats.total_planned }}</strong> ч
+                    &middot; осталось <strong>{{ teacher_stats.total_remaining }}</strong> ч
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Группа</th>
+                            <th>Предмет</th>
+                            <th class="text-center">Сем.</th>
+                            <th style="min-width: 180px;">Прогресс</th>
+                            <th class="text-end">Осталось</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for item in teacher_stats['items'] %}
+                        <tr>
+                            <td class="fw-semibold">{{ item.group_name }}</td>
+                            <td>
+                                <a href="{{ url_for('main.journal', gsid=item.gs_id, semester=item.semester) }}"
+                                   class="text-decoration-none">
+                                    {{ item.subject_name }}
+                                </a>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ item.semester }}</span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% set pct = item.percent %}
+                                    {% if pct > 100 %}{% set pct = 100 %}{% endif %}
+                                    {% if pct >= 100 %}
+                                        {% set bar_color = 'bg-success' %}
+                                    {% elif pct >= 50 %}
+                                        {% set bar_color = 'bg-primary' %}
+                                    {% elif pct >= 25 %}
+                                        {% set bar_color = 'bg-warning' %}
+                                    {% else %}
+                                        {% set bar_color = 'bg-danger' %}
+                                    {% endif %}
+                                    <div class="progress flex-grow-1" style="height: 8px;">
+                                        <div class="progress-bar {{ bar_color }}"
+                                             role="progressbar"
+                                             style="width: {{ pct }}%;"
+                                             aria-valuenow="{{ pct }}"
+                                             aria-valuemin="0"
+                                             aria-valuemax="100"></div>
+                                    </div>
+                                    <span class="text-muted small text-nowrap">
+                                        {{ item.actual_total }} / {{ item.planned_total }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="text-end">
+                                {% if item.remaining > 0 %}
+                                    <span class="badge bg-info text-dark">{{ item.remaining }} ч</span>
+                                {% else %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-lg"></i> Готово
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ============================================================
+     РЯД 4. Последние действия
+     ============================================================ -->
+{% if activity %}
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-activity text-danger"></i>
+                    Последние действия
+                </h5>
+                <span class="badge bg-secondary">{{ activity|length }}</span>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for a in activity %}
+                    <div class="list-group-item d-flex align-items-start gap-3">
+                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0"
+                             style="width:36px; height:36px; font-weight:700;">
+                            {{ a.display_name[0]|upper if a.display_name else '?' }}
+                        </div>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="d-flex flex-wrap justify-content-between gap-2">
+                                <div class="fw-semibold">{{ a.display_name }}</div>
+                                <div class="text-muted small">
+                                    <i class="bi bi-clock"></i>
+                                    {{ a.created_at_human }}
+                                </div>
+                            </div>
+                            <div class="text-muted small">{{ a.description or a.action }}</div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('btn-refresh-stats');
+    if (!btn) return;
+
+    var statusEl = document.getElementById('refresh-status');
+
+    btn.addEventListener('click', function () {
+        var url = btn.getAttribute('data-url');
+        if (!url) return;
+
+        var original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Обновление...';
+        statusEl.textContent = '';
+        statusEl.className = 'small mt-2';
+
+        fetch(url, {
+            method: 'POST',
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            credentials: 'same-origin'
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (resp) {
+            if (resp && resp.success) {
+                statusEl.textContent = 'Обновлено. Перезагрузите страницу, чтобы увидеть новое значение.';
+                statusEl.className = 'small mt-2 text-success';
+            } else {
+                statusEl.textContent = 'Не удалось обновить';
+                statusEl.className = 'small mt-2 text-danger';
+            }
+        })
+        .catch(function () {
+            statusEl.textContent = 'Ошибка сети';
+            statusEl.className = 'small mt-2 text-danger';
+        })
+        .finally(function () {
+            btn.disabled = false;
+            btn.innerHTML = original;
+        });
+    });
+});
+</script>
 {% endblock %}

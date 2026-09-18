@@ -108,6 +108,15 @@ def init_db():
             UNIQUE(user_id, permission_id)
         );
 
+        CREATE TABLE IF NOT EXISTS position_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id INTEGER NOT NULL,
+            permission_id INTEGER NOT NULL,
+            FOREIGN KEY (position_id) REFERENCES positions(id) ON DELETE CASCADE,
+            FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+            UNIQUE(position_id, permission_id)
+        );
+
         CREATE TABLE IF NOT EXISTS teacher_journals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -141,7 +150,6 @@ def init_db():
         );
     ''')
 
-    # Создаем админа
     user = cursor.execute("SELECT COUNT(*) as count FROM users").fetchone()
     if user['count'] == 0:
         cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
@@ -149,7 +157,6 @@ def init_db():
         cursor.execute("INSERT INTO user_profiles (user_id, full_name, phone) VALUES (?, ?, ?)",
                        (1, 'Администратор', ''))
 
-    # Создаем должности
     pos_count = cursor.execute("SELECT COUNT(*) as count FROM positions").fetchone()
     if pos_count['count'] == 0:
         positions = [
@@ -163,7 +170,6 @@ def init_db():
             cursor.execute("INSERT INTO positions (code, name) VALUES (?, ?)", (code, name))
         cursor.execute("INSERT INTO user_positions (user_id, position_id) VALUES (1, 1)")
 
-    # Создаем права
     perm_count = cursor.execute("SELECT COUNT(*) as count FROM permissions").fetchone()
     if perm_count['count'] == 0:
         perms = [
@@ -222,6 +228,9 @@ class User:
 
     @staticmethod
     def create(username, password, full_name='', phone='', position_ids=None, permission_ids=None):
+        """
+        Возвращает (success, message, new_user_id).
+        """
         conn = get_db()
         try:
             cur = conn.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
@@ -244,10 +253,10 @@ class User:
                         pass
             conn.commit()
             conn.close()
-            return True, f"Пользователь {username} создан"
+            return True, f"Пользователь {username} создан", uid
         except sqlite3.IntegrityError:
             conn.close()
-            return False, "Пользователь с таким логином уже существует"
+            return False, "Пользователь с таким логином уже существует", None
 
     @staticmethod
     def delete(user_id):
@@ -255,6 +264,77 @@ class User:
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
         conn.close()
+
+    @staticmethod
+    def update_profile(user_id, username, full_name, phone):
+        username = (username or '').strip()
+        full_name = (full_name or '').strip()
+        phone = (phone or '').strip()
+
+        if not username:
+            return False, 'Логин не может быть пустым'
+        if len(username) < 3:
+            return False, 'Логин должен быть не короче 3 символов'
+
+        conn = get_db()
+        try:
+            existing = conn.execute(
+                "SELECT id FROM users WHERE username = ? AND id != ?",
+                (username, user_id)
+            ).fetchone()
+            if existing:
+                return False, 'Такой логин уже занят'
+
+            conn.execute("UPDATE users SET username = ? WHERE id = ?", (username, user_id))
+            conn.execute("UPDATE user_profiles SET full_name = ?, phone = ? WHERE user_id = ?",
+                         (full_name, phone, user_id))
+            conn.commit()
+            return True, 'Профиль обновлён'
+        except Exception as e:
+            conn.rollback()
+            return False, f'Ошибка: {str(e)}'
+        finally:
+            conn.close()
+
+    @staticmethod
+    def change_password(user_id, current_password, new_password, new_password2):
+        if not current_password or not new_password or not new_password2:
+            return False, 'Заполните все поля'
+        if len(new_password) < 6:
+            return False, 'Новый пароль должен быть не короче 6 символов'
+        if new_password != new_password2:
+            return False, 'Новые пароли не совпадают'
+
+        conn = get_db()
+        try:
+            user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if not user:
+                return False, 'Пользователь не найден'
+            if not check_password_hash(user['password_hash'], current_password):
+                return False, 'Неверный текущий пароль'
+            conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                         (generate_password_hash(new_password), user_id))
+            conn.commit()
+            return True, 'Пароль изменён'
+        except Exception as e:
+            conn.rollback()
+            return False, f'Ошибка: {str(e)}'
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_profile(user_id):
+        conn = get_db()
+        try:
+            row = conn.execute('''
+                SELECT u.id, u.username, up.full_name, up.phone
+                FROM users u
+                LEFT JOIN user_profiles up ON u.id = up.user_id
+                WHERE u.id = ?
+            ''', (user_id,)).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
 
 
 class Group:
@@ -276,13 +356,14 @@ class Group:
     def create(name):
         conn = get_db()
         try:
-            conn.execute("INSERT INTO groups (name) VALUES (?)", (name,))
+            cur = conn.execute("INSERT INTO groups (name) VALUES (?)", (name,))
+            new_id = cur.lastrowid
             conn.commit()
             conn.close()
-            return True, "Группа создана"
+            return True, "Группа создана", new_id
         except sqlite3.IntegrityError:
             conn.close()
-            return False, "Группа с таким названием уже существует"
+            return False, "Группа с таким названием уже существует", None
 
     @staticmethod
     def update(gid, name):
@@ -323,10 +404,11 @@ class Subject:
     @staticmethod
     def create(name):
         conn = get_db()
-        conn.execute("INSERT INTO subjects (name) VALUES (?)", (name,))
+        cur = conn.execute("INSERT INTO subjects (name) VALUES (?)", (name,))
+        new_id = cur.lastrowid
         conn.commit()
         conn.close()
-        return True, "Предмет создан"
+        return True, "Предмет создан", new_id
 
     @staticmethod
     def update(sid, name, **kwargs):
@@ -373,28 +455,19 @@ class Student:
 
     @staticmethod
     def create(gid, name):
-        """
-        Создает студента и автоматически заполняет его записями
-        во всех существующих занятиях журналов его группы.
-        """
         conn = get_db()
         try:
-            # Создаём студента
             cur = conn.execute("INSERT INTO students (group_id, full_name) VALUES (?, ?)", (gid, name))
             student_id = cur.lastrowid
 
-            # Находим все журналы этой группы
             journals = conn.execute(
                 "SELECT id FROM group_subjects WHERE group_id = ?", (gid,)
             ).fetchall()
 
-            # Для каждого журнала находим все существующие занятия
-            # и создаём для нового студента записи с 'present' по умолчанию
             for journal in journals:
                 gsid = journal['id']
                 table_name = f"journal_{gsid}"
 
-                # Проверяем, существует ли таблица
                 table_exists = conn.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                     (table_name,)
@@ -403,13 +476,11 @@ class Student:
                 if not table_exists:
                     continue
 
-                # Получаем все уникальные занятия (дата + время + семестр + тип + тема)
                 lessons = conn.execute(f'''
                     SELECT DISTINCT date, time_interval, semester, topic, type
                     FROM {table_name}
                 ''').fetchall()
 
-                # Для каждого занятия создаём запись для нового студента
                 for lesson in lessons:
                     conn.execute(f'''
                         INSERT INTO {table_name} 
@@ -426,11 +497,11 @@ class Student:
 
             conn.commit()
             conn.close()
-            return True, "Студент добавлен"
+            return True, "Студент добавлен", student_id
         except Exception as e:
             conn.rollback()
             conn.close()
-            return False, f"Ошибка: {str(e)}"
+            return False, f"Ошибка: {str(e)}", None
 
     @staticmethod
     def update(sid, gid, name):
@@ -478,12 +549,6 @@ class GroupSubject:
 
     @staticmethod
     def create(gid, sid, semesters_data=None):
-        """
-        semesters_data = [
-            {'semester': 1, 'lecture': 10, 'practice': 20, 'independent': 5, 'exam': 2},
-            {'semester': 2, 'lecture': 15, 'practice': 15, 'independent': 10, 'exam': 2},
-        ]
-        """
         conn = get_db()
         try:
             cur = conn.execute("INSERT INTO group_subjects (group_id, subject_id) VALUES (?, ?)", (gid, sid))
@@ -522,10 +587,10 @@ class GroupSubject:
 
             conn.commit()
             conn.close()
-            return True, "Пара создана"
+            return True, "Пара создана", gsid
         except sqlite3.IntegrityError:
             conn.close()
-            return False, "Такая пара уже существует"
+            return False, "Такая пара уже существует", None
 
     @staticmethod
     def get_hours(gsid, semester=None):
@@ -642,6 +707,20 @@ class Position:
         return positions
 
     @staticmethod
+    def get_by_id(pid):
+        conn = get_db()
+        position = conn.execute("SELECT * FROM positions WHERE id = ?", (pid,)).fetchone()
+        conn.close()
+        return position
+
+    @staticmethod
+    def get_by_code(code):
+        conn = get_db()
+        position = conn.execute("SELECT * FROM positions WHERE code = ?", (code,)).fetchone()
+        conn.close()
+        return position
+
+    @staticmethod
     def get_user_positions(uid):
         conn = get_db()
         positions = conn.execute('''
@@ -664,6 +743,68 @@ class Position:
         conn.commit()
         conn.close()
 
+    @staticmethod
+    def count_users(pid):
+        """Сколько пользователей имеют эту роль."""
+        conn = get_db()
+        cnt = conn.execute(
+            "SELECT COUNT(*) as c FROM user_positions WHERE position_id = ?",
+            (pid,)
+        ).fetchone()['c']
+        conn.close()
+        return cnt
+
+
+class PositionPermission:
+    """Права, которые роль даёт по умолчанию."""
+
+    @staticmethod
+    def get_for_position(position_id):
+        """Список permission_id для роли."""
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT permission_id FROM position_permissions WHERE position_id = ?",
+            (position_id,)
+        ).fetchall()
+        conn.close()
+        return [r['permission_id'] for r in rows]
+
+    @staticmethod
+    def set_for_position(position_id, permission_ids):
+        """Сохранить набор прав для роли (перезапись)."""
+        conn = get_db()
+        try:
+            conn.execute("DELETE FROM position_permissions WHERE position_id = ?", (position_id,))
+            for pid in permission_ids:
+                try:
+                    conn.execute(
+                        "INSERT INTO position_permissions (position_id, permission_id) VALUES (?, ?)",
+                        (position_id, int(pid))
+                    )
+                except:
+                    pass
+            conn.commit()
+            return True, "Права роли сохранены"
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка: {str(e)}"
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_permissions_for_user_via_positions(uid):
+        """Все permission-коды, которые пользователь получает от своих ролей."""
+        conn = get_db()
+        rows = conn.execute('''
+            SELECT DISTINCT p.code
+            FROM user_positions up
+            JOIN position_permissions pp ON pp.position_id = up.position_id
+            JOIN permissions p ON p.id = pp.permission_id
+            WHERE up.user_id = ?
+        ''', (uid,)).fetchall()
+        conn.close()
+        return [r['code'] for r in rows]
+
 
 class Permission:
     @staticmethod
@@ -674,7 +815,8 @@ class Permission:
         return permissions
 
     @staticmethod
-    def get_user_permissions(uid):
+    def get_personal_permissions(uid):
+        """Только личные права пользователя (user_permissions)."""
         conn = get_db()
         permissions = conn.execute('''
             SELECT p.code FROM permissions p
@@ -685,12 +827,23 @@ class Permission:
         return [p['code'] for p in permissions]
 
     @staticmethod
+    def get_user_permissions(uid):
+        """
+        ИТОГОВЫЕ права пользователя = личные + от ролей.
+        Объединение, без дубликатов.
+        """
+        personal = set(Permission.get_personal_permissions(uid))
+        from_roles = set(PositionPermission.get_permissions_for_user_via_positions(uid))
+        return sorted(personal | from_roles)
+
+    @staticmethod
     def has_permission(uid, code):
         perms = Permission.get_user_permissions(uid)
         return code in perms
 
     @staticmethod
     def save(uid, pids):
+        """Сохранить ТОЛЬКО личные права (user_permissions)."""
         conn = get_db()
         conn.execute("DELETE FROM user_permissions WHERE user_id = ?", (uid,))
         for pid in pids:

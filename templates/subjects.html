@@ -1,168 +1,90 @@
 {% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Справочники', None),
+        ('Предметы', None),
+    ]) }}
+{% endblock %}
+
 {% block content %}
 
-<h2 class="mb-3">
+<h2 class="mb-4">
     <i class="bi bi-book-fill"></i> Предметы
 </h2>
 
 <div class="row">
-    <!-- Форма добавления -->
-    <div class="col-md-4 mb-3">
+    <div class="col-12 col-md-5 col-lg-4 mb-3">
         <div class="card shadow-sm">
-            <div class="card-header bg-light">
-                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Добавить предмет</h5>
+            <div class="card-header bg-white">
+                <h6 class="mb-0">
+                    <i class="bi bi-plus-circle text-success"></i>
+                    Добавить предмет
+                </h6>
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('main.add_subject') }}">
-                    <div class="mb-3">
-                        <label for="subject_name" class="form-label fw-bold">Название предмета</label>
-                        <input type="text" class="form-control no-emoji" id="subject_name"
-                               name="name" placeholder="Например: Математика" required>
+                    <div class="input-group">
+                        <input type="text" name="name" class="form-control no-emoji"
+                               placeholder="Например, Математика" required>
+                        <button class="btn btn-success" type="submit">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-plus-circle"></i> Добавить предмет
-                    </button>
                 </form>
-            </div>
-        </div>
-
-        <div class="card mt-3 shadow-sm">
-            <div class="card-header bg-light">
-                <h6 class="mb-0"><i class="bi bi-info-circle"></i> Информация</h6>
-            </div>
-            <div class="card-body">
-                <p class="small text-muted mb-0">
-                    Часы нагрузки указываются при создании пары Группа-Предмет
-                    в разделе <strong>"Журналы"</strong>. Это позволяет задавать
-                    разные часы для разных групп по одному предмету.
-                </p>
             </div>
         </div>
     </div>
 
-    <!-- Список предметов -->
-    <div class="col-md-8">
+    <div class="col-12 col-md-7 col-lg-8">
         <div class="card shadow-sm">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-list"></i> Список предметов
-                    <span class="badge bg-primary ms-2">{{ subjects|length }}</span>
-                </h5>
-                <input type="text" id="subjectSearch" class="form-control form-control-sm"
-                       style="max-width: 250px;" placeholder="🔍 Поиск...">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 60px;">ID</th>
+                            <th>Название</th>
+                            <th class="text-end" style="width: 180px;">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in subjects %}
+                        <tr>
+                            <td class="text-muted small">#{{ s.id }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('main.edit_subject', sid=s.id) }}"
+                                      class="d-flex gap-2 align-items-center">
+                                    <input type="text" name="name" class="form-control form-control-sm no-emoji"
+                                           value="{{ s.name }}" required>
+                                    <button type="submit" class="btn btn-sm btn-outline-primary" title="Сохранить">
+                                        <i class="bi bi-save"></i>
+                                    </button>
+                                </form>
+                            </td>
+                            <td class="text-end">
+                                <a href="{{ url_for('main.delete_subject', sid=s.id) }}"
+                                   class="btn btn-sm btn-outline-danger"
+                                   onclick="return confirm('Удалить предмет «{{ s.name }}»?');">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
             </div>
-            <div class="card-body p-0">
-                {% if subjects %}
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0" id="subjectsTable">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 10%;">ID</th>
-                                <th style="width: 60%;">Название</th>
-                                <th style="width: 30%;">Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for subject in subjects %}
-                            <tr data-search="{{ subject.name }}">
-                                <td class="text-muted">{{ subject.id }}</td>
-                                <td><strong>{{ subject.name }}</strong></td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary edit-btn"
-                                                data-id="{{ subject.id }}"
-                                                data-name="{{ subject.name }}"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#editSubjectModal"
-                                                title="Редактировать">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <a href="{{ url_for('main.delete_subject', sid=subject.id) }}"
-                                           class="btn btn-outline-danger"
-                                           onclick="return confirm('Удалить предмет {{ subject.name }}?\n\nВсе связанные журналы также будут удалены!')"
-                                           title="Удалить">
-                                            <i class="bi bi-trash"></i>
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+
+            {% if not subjects %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-inbox" style="font-size:2rem;"></i>
+                    <p class="mt-2 mb-0">Нет предметов</p>
                 </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="bi bi-book" style="font-size: 4rem; color: #ccc;"></i>
-                    <p class="text-muted mt-3">Предметы не добавлены</p>
-                    <p class="text-muted small">Добавьте предмет через форму слева</p>
-                </div>
-                {% endif %}
-            </div>
-            {% if subjects %}
-            <div class="card-footer text-muted small">
-                <i class="bi bi-info-circle"></i> Всего предметов: {{ subjects|length }}
-            </div>
             {% endif %}
         </div>
     </div>
 </div>
 
-<!-- Модальное окно редактирования -->
-<div class="modal fade" id="editSubjectModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" id="editSubjectForm">
-                <div class="modal-header bg-light">
-                    <h5 class="modal-title">
-                        <i class="bi bi-pencil-square"></i> Редактировать предмет
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="edit_subject_name" class="form-label fw-bold">Название</label>
-                        <input type="text" class="form-control no-emoji" id="edit_subject_name"
-                               name="name" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="bi bi-x-circle"></i> Отмена
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-circle"></i> Сохранить
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-{% endblock %}
-
-{% block scripts %}
-<script>
-// Поиск по предметам
-document.getElementById('subjectSearch').addEventListener('input', function() {
-    var searchText = this.value.toLowerCase().trim();
-    var rows = document.querySelectorAll('#subjectsTable tbody tr');
-
-    rows.forEach(function(row) {
-        var searchData = row.dataset.search.toLowerCase();
-        if (searchText === '' || searchData.includes(searchText)) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    });
-});
-
-// Редактирование предмета
-document.querySelectorAll('.edit-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        document.getElementById('edit_subject_name').value = this.dataset.name;
-        document.getElementById('editSubjectForm').action = '/subjects/edit/' + this.dataset.id;
-    });
-});
-</script>
 {% endblock %}

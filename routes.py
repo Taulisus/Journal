@@ -1,11 +1,25 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response
 from decorators import login_required
 from models import Group, Subject, Student, GroupSubject, get_db, UserProfile, Permission, Position, TeacherJournal, \
-    Curator, TeacherHours, User, SemesterGrade
+    Curator, TeacherHours, User, SemesterGrade, PositionPermission
 from journal_manager import JournalManager
 from utils import import_students_from_xlsx, generate_report_chart, generate_student_chart
 from config import Config
 from werkzeug.security import generate_password_hash
+from stats import get_user_weekly_avg, refresh_user_weekly_avg, get_teacher_stats
+from activity import (
+    log_activity,
+    get_recent_activity,
+    get_activity_filtered,
+    get_activity_for_export,
+    get_unique_actions,
+    get_unique_users,
+    get_unique_target_types,
+    activity_to_csv,
+    get_old_activity_stats,
+    clear_old_activity,
+)
+from datetime import datetime
 import os
 import re
 
@@ -41,15 +55,383 @@ def has_emoji(text):
     return bool(emoji_pattern.search(text))
 
 
+# ============================================================
+#                 ГЛАВНАЯ
+# ============================================================
+
 @main_bp.route('/')
 @login_required
 def dashboard():
+    uid = session['user_id']
+
     groups_count = len(Group.get_all())
     subjects_count = len(Subject.get_all())
     students_count = len(Student.get_all())
     pairs_count = len(GroupSubject.get_all())
-    return render_template('dashboard.html', groups_count=groups_count, subjects_count=subjects_count,
-                           students_count=students_count, pairs_count=pairs_count)
+
+    weekly_avg = get_user_weekly_avg(uid, weeks=4)
+
+    activity = None
+    if Permission.has_permission(uid, 'manage_users'):
+        activity = get_recent_activity(limit=20)
+
+    teacher_stats = None
+    has_journals = len(TeacherJournal.get_user_journals(uid)) > 0
+    if has_journals:
+        teacher_stats = get_teacher_stats(uid)
+
+    return render_template(
+        'dashboard.html',
+        groups_count=groups_count,
+        subjects_count=subjects_count,
+        students_count=students_count,
+        pairs_count=pairs_count,
+        weekly_avg=weekly_avg,
+        activity=activity,
+        teacher_stats=teacher_stats,
+    )
+
+
+@main_bp.route('/dashboard/refresh-stats', methods=['POST'])
+@login_required
+def refresh_stats():
+    uid = session['user_id']
+    data = refresh_user_weekly_avg(uid, weeks=4)
+    return jsonify({'success': True, 'data': data})
+
+
+# ============================================================
+#                 ЛОГ ДЕЙСТВИЙ
+# ============================================================
+
+ACTION_LABELS = {
+    'login': 'Вход в систему',
+    'logout': 'Выход из системы',
+    'add_group': 'Создание группы',
+    'edit_group': 'Редактирование группы',
+    'delete_group': 'Удаление группы',
+    'add_subject': 'Создание предмета',
+    'edit_subject': 'Редактирование предмета',
+    'delete_subject': 'Удаление предмета',
+    'add_student': 'Добавление студента',
+    'edit_student': 'Редактирование студента',
+    'delete_student': 'Удаление студента',
+    'import_students': 'Импорт студентов',
+    'add_journal': 'Создание журнала',
+    'delete_journal': 'Удаление журнала',
+    'edit_hours': 'Изменение часов',
+    'add_lesson': 'Добавление занятия',
+    'delete_lesson': 'Удаление занятия',
+    'edit_lesson_type': 'Изменение типа занятия',
+    'set_semester_grade': 'Оценка за семестр',
+    'add_user': 'Создание пользователя',
+    'edit_user': 'Редактирование пользователя',
+    'delete_user': 'Удаление пользователя',
+    'assign_journals': 'Назначение журналов',
+    'profile_edit': 'Обновление профиля',
+    'password_change': 'Смена пароля',
+    'activity_export': 'Экспорт лога',
+    'activity_cleanup': 'Очистка лога',
+    'edit_role': 'Изменение прав роли',
+}
+
+TARGET_TYPE_LABELS = {
+    'user': 'Пользователь',
+    'group': 'Группа',
+    'subject': 'Предмет',
+    'student': 'Студент',
+    'journal': 'Журнал',
+    'lesson': 'Занятие',
+    'position': 'Роль',
+}
+
+
+def _parse_activity_filters():
+    return {
+        'user_id': request.args.get('user_id', type=int),
+        'action': (request.args.get('action') or '').strip() or None,
+        'target_type': (request.args.get('target_type') or '').strip() or None,
+        'date_from': (request.args.get('date_from') or '').strip() or None,
+        'date_to': (request.args.get('date_to') or '').strip() or None,
+        'search': (request.args.get('search') or '').strip() or None,
+    }
+
+
+@main_bp.route('/activity')
+@login_required
+def activity_log_page():
+    uid = session['user_id']
+    if not Permission.has_permission(uid, 'manage_users'):
+        flash('Недостаточно прав', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    filters = _parse_activity_filters()
+
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    if per_page not in (20, 50, 100, 200):
+        per_page = 50
+
+    data = get_activity_filtered(filters, page=page, per_page=per_page)
+
+    all_users = get_unique_users()
+    all_actions = get_unique_actions()
+    all_target_types = get_unique_target_types()
+
+    cleanup_stats = get_old_activity_stats(days=90)
+
+    return render_template(
+        'activity.html',
+        data=data,
+        filters=filters,
+        all_users=all_users,
+        all_actions=all_actions,
+        all_target_types=all_target_types,
+        action_labels=ACTION_LABELS,
+        target_type_labels=TARGET_TYPE_LABELS,
+        cleanup_stats=cleanup_stats,
+        per_page=per_page,
+    )
+
+
+@main_bp.route('/activity/export.csv')
+@login_required
+def activity_export_csv():
+    uid = session['user_id']
+    if not Permission.has_permission(uid, 'manage_users'):
+        flash('Недостаточно прав', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    filters = _parse_activity_filters()
+    items = get_activity_for_export(filters, limit=10000)
+
+    csv_content = activity_to_csv(items)
+    csv_bytes = '\ufeff'.encode('utf-8') + csv_content.encode('utf-8')
+
+    filename = f'activity_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+
+    log_activity(uid, 'activity_export',
+                 f'Экспорт лога в CSV ({len(items)} записей)',
+                 'user', uid)
+
+    return Response(
+        csv_bytes,
+        mimetype='text/csv; charset=utf-8',
+        headers={
+            'Content-Disposition': f'attachment; filename="{filename}"',
+        }
+    )
+
+
+@main_bp.route('/activity/cleanup', methods=['POST'])
+@login_required
+def activity_cleanup():
+    uid = session['user_id']
+    if not Permission.has_permission(uid, 'manage_users'):
+        flash('Недостаточно прав', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    days = request.form.get('days', 90, type=int)
+    if days not in (30, 60, 90, 180, 365):
+        days = 90
+
+    deleted, error = clear_old_activity(days=days)
+
+    if error:
+        flash(f'Ошибка очистки: {error}', 'danger')
+    elif deleted == 0:
+        flash(f'Нет записей старше {days} дней — нечего удалять', 'info')
+    else:
+        log_activity(uid, 'activity_cleanup',
+                     f'Очищено {deleted} записей старше {days} дней',
+                     'user', uid)
+        flash(f'Удалено {deleted} записей старше {days} дней', 'success')
+
+    return redirect(url_for('main.activity_log_page'))
+
+
+# ============================================================
+#                 РОЛИ И ПРАВА
+# ============================================================
+
+@main_bp.route('/roles')
+@login_required
+def roles():
+    uid = session['user_id']
+    if not Permission.has_permission(uid, 'manage_permissions'):
+        flash('Недостаточно прав', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    positions = Position.get_all()
+    permissions = Permission.get_all()
+
+    roles_data = []
+    for pos in positions:
+        pos_dict = dict(pos)
+        pos_dict['permissions'] = PositionPermission.get_for_position(pos['id'])
+        pos_dict['users_count'] = Position.count_users(pos['id'])
+        roles_data.append(pos_dict)
+
+    return render_template(
+        'roles.html',
+        roles=roles_data,
+        permissions=permissions,
+    )
+
+
+@main_bp.route('/roles/<int:role_id>/save', methods=['POST'])
+@login_required
+def update_role_permissions(role_id):
+    uid = session['user_id']
+    if not Permission.has_permission(uid, 'manage_permissions'):
+        flash('Недостаточно прав', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    pos = Position.get_by_id(role_id)
+    if not pos:
+        flash('Роль не найдена', 'danger')
+        return redirect(url_for('main.roles'))
+
+    permission_ids = request.form.getlist('permissions')
+    permission_ids = [int(p) for p in permission_ids if p.isdigit()]
+
+    s, m = PositionPermission.set_for_position(role_id, permission_ids)
+
+    if s:
+        log_activity(uid, 'edit_role',
+                     f'Изменены права роли «{pos["name"]}» '
+                     f'({len(permission_ids)} прав)',
+                     'position', role_id)
+
+    flash(m, 'success' if s else 'danger')
+    return redirect(url_for('main.roles'))
+
+
+# ============================================================
+#                 ПРОФИЛЬ
+# ============================================================
+
+@main_bp.route('/profile')
+@login_required
+def profile():
+    uid = session['user_id']
+    return _render_profile(uid, is_self=True)
+
+
+@main_bp.route('/profile/<int:uid>')
+@login_required
+def profile_view(uid):
+    current_uid = session['user_id']
+    if not Permission.has_permission(current_uid, 'manage_users'):
+        flash('Недостаточно прав', 'danger')
+        return redirect(url_for('main.profile'))
+
+    if uid == current_uid:
+        return redirect(url_for('main.profile'))
+
+    target = User.get_by_id(uid)
+    if not target:
+        flash('Пользователь не найден', 'danger')
+        return redirect(url_for('main.users'))
+
+    return _render_profile(uid, is_self=False)
+
+
+def _render_profile(uid, is_self):
+    profile_data = User.get_profile(uid)
+    if not profile_data:
+        flash('Пользователь не найден', 'danger')
+        return redirect(url_for('main.dashboard'))
+
+    positions = Position.get_user_positions(uid)
+    journals = TeacherJournal.get_user_journals(uid)
+    weekly_avg = get_user_weekly_avg(uid, weeks=4)
+    recent_activity = get_recent_activity(limit=10, user_id=uid)
+
+    # Разделяем права: личные и от ролей
+    perms_personal = Permission.get_personal_permissions(uid)
+    perms_from_roles = PositionPermission.get_permissions_for_user_via_positions(uid)
+    perms_all = Permission.get_user_permissions(uid)
+
+    # Словарь: code → name (из БД)
+    perms_dict = {}
+    for p in Permission.get_all():
+        perms_dict[p['code']] = p['name']
+
+    # Для каждой роли — её права
+    positions_with_perms = []
+    for pos in positions:
+        pos_perms_ids = PositionPermission.get_for_position(pos['id'])
+        pos_perms_codes = []
+        for p in Permission.get_all():
+            if p['id'] in pos_perms_ids:
+                pos_perms_codes.append(p['code'])
+        positions_with_perms.append({
+            'position': dict(pos),
+            'permission_codes': pos_perms_codes,
+        })
+
+    return render_template(
+        'profile.html',
+        profile_user=profile_data,
+        positions=positions,
+        positions_with_perms=positions_with_perms,
+        perms=perms_all,
+        perms_personal=perms_personal,
+        perms_from_roles=perms_from_roles,
+        perms_dict=perms_dict,
+        journals=journals,
+        weekly_avg=weekly_avg,
+        recent_activity=recent_activity,
+        is_self=is_self,
+    )
+
+
+@main_bp.route('/profile/edit', methods=['POST'])
+@login_required
+def profile_edit():
+    uid = session['user_id']
+
+    username = request.form.get('username', '').strip()
+    full_name = request.form.get('full_name', '').strip()
+    phone = request.form.get('phone', '').strip()
+
+    if has_emoji(username) or has_emoji(full_name):
+        flash('Эмодзи запрещены', 'danger')
+        return redirect(url_for('main.profile'))
+
+    phone = re.sub(r'[^\d]', '', phone)[:11] if phone else ''
+
+    s, m = User.update_profile(uid, username, full_name, phone)
+
+    if s:
+        session['username'] = username
+        log_activity(uid, 'profile_edit',
+                     f'Обновлён профиль (логин: {username})',
+                     'user', uid)
+
+    flash(m, 'success' if s else 'danger')
+    return redirect(url_for('main.profile'))
+
+
+@main_bp.route('/profile/change-password', methods=['POST'])
+@login_required
+def profile_change_password():
+    uid = session['user_id']
+
+    current_password = request.form.get('current_password', '')
+    new_password = request.form.get('new_password', '')
+    new_password2 = request.form.get('new_password2', '')
+
+    s, m = User.change_password(uid, current_password, new_password, new_password2)
+
+    if s:
+        log_activity(uid, 'password_change',
+                     'Пароль изменён',
+                     'user', uid)
+
+    flash(m, 'success' if s else 'danger')
+    return redirect(url_for('main.profile'))
 
 
 # ============ Группы ============
@@ -69,7 +451,14 @@ def add_group():
     if has_emoji(name):
         flash('Эмодзи запрещены', 'danger')
         return redirect(url_for('main.groups'))
-    s, m = Group.create(name)
+
+    s, m, new_id = Group.create(name)
+
+    if s:
+        log_activity(session['user_id'], 'add_group',
+                     f'Создана группа «{name}»',
+                     'group', new_id)
+
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.groups'))
 
@@ -85,6 +474,9 @@ def edit_group(gid):
         flash('Эмодзи запрещены', 'danger')
         return redirect(url_for('main.groups'))
     s, m = Group.update(gid, name)
+    if s:
+        log_activity(session['user_id'], 'edit_group',
+                     f'Переименована группа #{gid} → «{name}»', 'group', gid)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.groups'))
 
@@ -92,7 +484,12 @@ def edit_group(gid):
 @main_bp.route('/groups/delete/<int:gid>')
 @login_required
 def delete_group(gid):
+    grp = Group.get_by_id(gid)
+    grp_name = grp['name'] if grp else f'#{gid}'
     s, m = Group.delete(gid)
+    if s:
+        log_activity(session['user_id'], 'delete_group',
+                     f'Удалена группа «{grp_name}»', 'group', gid)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.groups'))
 
@@ -114,7 +511,14 @@ def add_subject():
     if has_emoji(name):
         flash('Эмодзи запрещены', 'danger')
         return redirect(url_for('main.subjects'))
-    s, m = Subject.create(name)
+
+    s, m, new_id = Subject.create(name)
+
+    if s:
+        log_activity(session['user_id'], 'add_subject',
+                     f'Создан предмет «{name}»',
+                     'subject', new_id)
+
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.subjects'))
 
@@ -130,6 +534,9 @@ def edit_subject(sid):
         flash('Эмодзи запрещены', 'danger')
         return redirect(url_for('main.subjects'))
     s, m = Subject.update(sid, name)
+    if s:
+        log_activity(session['user_id'], 'edit_subject',
+                     f'Переименован предмет #{sid} → «{name}»', 'subject', sid)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.subjects'))
 
@@ -137,7 +544,12 @@ def edit_subject(sid):
 @main_bp.route('/subjects/delete/<int:sid>')
 @login_required
 def delete_subject(sid):
+    subj = Subject.get_by_id(sid)
+    subj_name = subj['name'] if subj else f'#{sid}'
     s, m = Subject.delete(sid)
+    if s:
+        log_activity(session['user_id'], 'delete_subject',
+                     f'Удалён предмет «{subj_name}»', 'subject', sid)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.subjects'))
 
@@ -160,7 +572,14 @@ def add_student():
     if has_emoji(name):
         flash('Эмодзи запрещены', 'danger')
         return redirect(url_for('main.students'))
-    s, m = Student.create(gid, name)
+
+    s, m, new_id = Student.create(gid, name)
+
+    if s:
+        log_activity(session['user_id'], 'add_student',
+                     f'Добавлен студент «{name}»',
+                     'student', new_id)
+
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.students'))
 
@@ -177,6 +596,9 @@ def edit_student(sid):
         flash('Эмодзи запрещены', 'danger')
         return redirect(url_for('main.students'))
     s, m = Student.update(sid, gid, name)
+    if s:
+        log_activity(session['user_id'], 'edit_student',
+                     f'Изменён студент #{sid} → «{name}»', 'student', sid)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.students'))
 
@@ -187,7 +609,12 @@ def delete_student(sid):
     if not Permission.has_permission(session['user_id'], 'delete_student'):
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('main.students'))
+    st = Student.get_by_id(sid)
+    st_name = st['full_name'] if st else f'#{sid}'
     s, m = Student.delete(sid)
+    if s:
+        log_activity(session['user_id'], 'delete_student',
+                     f'Удалён студент «{st_name}»', 'student', sid)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.students'))
 
@@ -210,6 +637,9 @@ def import_students():
         flash('Выберите группу', 'danger')
         return redirect(url_for('main.students'))
     s, m = import_students_from_xlsx(file, gid)
+    if s:
+        log_activity(session['user_id'], 'import_students',
+                     f'Импорт студентов: {m}', 'group', int(gid) if gid else None)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.students'))
 
@@ -236,16 +666,13 @@ def add_group_subject():
     gid = request.form['group_id']
     sid = request.form['subject_id']
 
-    # Собираем данные по семестрам из формы
     semesters_data = []
-
     for sem_num in [1, 2, 3]:
         lecture = int(request.form.get(f'semester_{sem_num}_lecture', 0) or 0)
         practice = int(request.form.get(f'semester_{sem_num}_practice', 0) or 0)
         independent = int(request.form.get(f'semester_{sem_num}_independent', 0) or 0)
         exam = int(request.form.get(f'semester_{sem_num}_exam', 0) or 0)
 
-        # Добавляем семестр только если есть хотя бы один час
         if lecture > 0 or practice > 0 or independent > 0 or exam > 0:
             semesters_data.append({
                 'semester': sem_num,
@@ -255,11 +682,20 @@ def add_group_subject():
                 'exam': exam
             })
 
-    # Если ничего не выбрано, создаем с одним пустым семестром
     if not semesters_data:
         semesters_data = [{'semester': 1, 'lecture': 0, 'practice': 0, 'independent': 0, 'exam': 0}]
 
-    s, m = GroupSubject.create(gid, sid, semesters_data)
+    s, m, new_id = GroupSubject.create(gid, sid, semesters_data)
+
+    if s:
+        grp = Group.get_by_id(gid)
+        subj = Subject.get_by_id(sid)
+        gname = grp['name'] if grp else f'#{gid}'
+        sname = subj['name'] if subj else f'#{sid}'
+        log_activity(session['user_id'], 'add_journal',
+                     f'Создан журнал «{gname}» / «{sname}»',
+                     'journal', new_id)
+
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.group_subjects'))
 
@@ -267,7 +703,12 @@ def add_group_subject():
 @main_bp.route('/group-subjects/delete/<int:gsid>')
 @login_required
 def delete_group_subject(gsid):
+    pair = GroupSubject.get_by_id(gsid)
+    pair_name = f'{pair["group_name"]} / {pair["subject_name"]}' if pair else f'#{gsid}'
     s, m = GroupSubject.delete(gsid)
+    if s:
+        log_activity(session['user_id'], 'delete_journal',
+                     f'Удалён журнал «{pair_name}»', 'journal', gsid)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.group_subjects'))
 
@@ -276,7 +717,6 @@ def delete_group_subject(gsid):
 @main_bp.route('/group-subjects/get-hours/<int:gsid>')
 @login_required
 def get_group_subject_hours(gsid):
-    """API для получения часов пары"""
     semesters = GroupSubject.get_semesters(gsid)
     hours = {}
     for sem in semesters:
@@ -294,7 +734,6 @@ def get_group_subject_hours(gsid):
 @main_bp.route('/group-subjects/edit-hours', methods=['POST'])
 @login_required
 def edit_group_subject_hours():
-    """Сохранение отредактированных часов пары"""
     if not Permission.has_permission(session['user_id'], 'add_journal'):
         flash('Недостаточно прав', 'danger')
         return redirect(url_for('main.group_subjects'))
@@ -317,6 +756,8 @@ def edit_group_subject_hours():
             ''', (lecture, practice, independent, exam, gsid, sem))
 
         conn.commit()
+        log_activity(session['user_id'], 'edit_hours',
+                     f'Изменены часы журнала #{gsid}', 'journal', int(gsid))
         flash('Часы обновлены', 'success')
     except Exception as e:
         conn.rollback()
@@ -400,6 +841,11 @@ def add_lesson(gsid):
             }
 
         s, m = JournalManager.add_lesson(gsid, date, ti, topic, ltype, semester, students_data)
+        if s:
+            log_activity(session['user_id'], 'add_lesson',
+                         f'Добавлено занятие: {pair["group_name"]} / {pair["subject_name"]} '
+                         f'({date}, {ti})',
+                         'journal', gsid)
         flash(m, 'success' if s else 'danger')
         return redirect(url_for('main.journal', gsid=gsid, semester=semester))
 
@@ -421,8 +867,6 @@ def update_entry(gsid):
 @main_bp.route('/journal/update-lesson-type', methods=['POST'])
 @login_required
 def update_lesson_type():
-    """Изменение типа занятия для всех записей с указанной датой и временем"""
-
     gsid = request.form['gsid']
     date = request.form['date']
     time_interval = request.form['time_interval']
@@ -436,7 +880,6 @@ def update_lesson_type():
     table_name = JournalManager.get_table_name(gsid)
 
     try:
-        # Если меняем на exam - проверяем, нет ли уже экзамена
         if new_type == 'exam':
             exam_exists = conn.execute(
                 f"SELECT COUNT(*) as c FROM {table_name} WHERE semester=? AND type='exam' AND NOT (date=? AND time_interval=?)",
@@ -446,7 +889,6 @@ def update_lesson_type():
                 conn.close()
                 return jsonify({'success': False, 'message': 'Экзамен в этом семестре уже существует!'})
 
-        # Обновляем тип для всех записей с этой датой и временем
         conn.execute(f'''
             UPDATE {table_name} 
             SET type = ?
@@ -455,6 +897,11 @@ def update_lesson_type():
 
         conn.commit()
         conn.close()
+
+        log_activity(session['user_id'], 'edit_lesson_type',
+                     f'Изменён тип занятия: журнал #{gsid}, {date} {time_interval} → {new_type}',
+                     'journal', int(gsid))
+
         return jsonify({'success': True, 'message': 'Тип занятия обновлен'})
     except Exception as e:
         conn.rollback()
@@ -467,6 +914,10 @@ def update_lesson_type():
 def delete_lesson(gsid, date, ti):
     semester = request.args.get('semester', 1, type=int)
     s, m = JournalManager.delete_lesson(gsid, date, ti)
+    if s:
+        log_activity(session['user_id'], 'delete_lesson',
+                     f'Удалено занятие: журнал #{gsid}, {date} {ti}',
+                     'journal', gsid)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.journal', gsid=gsid, semester=semester))
 
@@ -483,6 +934,12 @@ def set_semester_grade(gsid):
     grade = request.form.get('grade', None)
 
     SemesterGrade.set_grade(student_id, gsid, semester, grade)
+
+    log_activity(session['user_id'], 'set_semester_grade',
+                 f'Выставлена оценка за семестр: журнал #{gsid}, студент #{student_id}, '
+                 f'семестр {semester}, оценка {grade or "—"}',
+                 'journal', int(gsid))
+
     return jsonify({'success': True})
 
 
@@ -697,8 +1154,9 @@ def users():
         user = dict(u)
         user['positions'] = Position.get_user_positions(user['id'])
         user['position_ids'] = [p['id'] for p in user['positions']]
-        user['perms'] = Permission.get_user_permissions(user['id'])
-        user['perm_ids'] = [p['id'] for p in permissions if p['code'] in user['perms']]
+        user['perms'] = Permission.get_user_permissions(user['id'])  # итоговые (личные + роли)
+        user['personal_perms'] = Permission.get_personal_permissions(user['id'])
+        user['perm_ids'] = [p['id'] for p in permissions if p['code'] in user['personal_perms']]
         users_list.append(user)
 
     return render_template('users.html', users=users_list, positions=positions, permissions=permissions)
@@ -730,7 +1188,13 @@ def add_user():
 
     phone = re.sub(r'[^\d]', '', phone)[:11] if phone else ''
 
-    s, m = User.create(username, password, full_name, phone, position_ids, permission_ids)
+    s, m, new_id = User.create(username, password, full_name, phone, position_ids, permission_ids)
+
+    if s:
+        log_activity(session['user_id'], 'add_user',
+                     f'Создан пользователь «{username}» ({full_name})',
+                     'user', new_id)
+
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.users'))
 
@@ -775,6 +1239,9 @@ def edit_user(uid):
     Position.save(uid, position_ids)
     Permission.save(uid, permission_ids)
 
+    log_activity(session['user_id'], 'edit_user',
+                 f'Изменён пользователь #{uid} ({full_name})', 'user', uid)
+
     flash('Данные обновлены', 'success')
     return redirect(url_for('main.users'))
 
@@ -798,7 +1265,14 @@ def delete_user(uid):
         flash('Нельзя удалить последнего пользователя', 'danger')
         return redirect(url_for('main.users'))
 
+    target = User.get_by_id(uid)
+    uname = target['username'] if target else f'#{uid}'
+
     User.delete(uid)
+
+    log_activity(session['user_id'], 'delete_user',
+                 f'Удалён пользователь «{uname}»', 'user', uid)
+
     flash('Пользователь удален', 'success')
     return redirect(url_for('main.users'))
 
@@ -854,6 +1328,12 @@ def assign_journals(uid):
                     pass
 
             conn.commit()
+
+            log_activity(session['user_id'], 'assign_journals',
+                         f'Обновлены назначения для пользователя #{uid} '
+                         f'(журналов: {len(gs_ids)}, кураторство: {len(curator_gids)})',
+                         'user', uid)
+
             flash('Назначения сохранены', 'success')
         except Exception as e:
             conn.rollback()

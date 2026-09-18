@@ -1,43 +1,78 @@
 {% extends "base.html" %}
-{% block content %}
-<h2 class="mb-3"><i class="bi bi-shield-lock"></i> Управление ролями и правами</h2>
 
-<div class="row">
-    {% for role_data in roles %}
-    <div class="col-lg-6 mb-4">
-        <div class="card h-100 shadow-sm">
-            <div class="card-header bg-light">
-                <h5 class="mb-0">
-                    <i class="bi bi-person-badge"></i> {{ role_data.role.name }}
-                    <small class="text-muted">({{ role_data.role.code }})</small>
-                </h5>
-                {% if role_data.role.description %}
-                <small class="text-muted">{{ role_data.role.description }}</small>
-                {% endif %}
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <h2 class="mb-0">
+        <i class="bi bi-shield-lock"></i>
+        Роли и права доступа
+    </h2>
+    <div class="text-muted small">
+        Всего ролей: <strong>{{ roles|length }}</strong>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    Права роли даются <strong>автоматически</strong> всем пользователям с этой ролью.
+    Итоговые права пользователя = права от ролей + личные права.
+</div>
+
+<div class="row g-3">
+    {% for role in roles %}
+    <div class="col-12 col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">
+                        <i class="bi bi-person-badge"></i>
+                        {{ role.name }}
+                        <small class="text-muted">({{ role.code }})</small>
+                    </h5>
+                    <small class="text-muted">
+                        Пользователей с этой ролью:
+                        <strong>{{ role.users_count }}</strong>
+                    </small>
+                </div>
+                <span class="badge bg-primary">
+                    {{ role.permissions|length }} прав
+                </span>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('main.update_role_permissions', role_id=role_data.role.id) }}">
+
+                {% if role.code == 'admin' %}
+                    <div class="alert alert-warning small mb-3">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Роль «Администратор» имеет все права. Изменения не рекомендуются.
+                    </div>
+                {% endif %}
+
+                <form method="POST"
+                      action="{{ url_for('main.update_role_permissions', role_id=role.id) }}">
+
                     <div class="row">
                         {% for perm in permissions %}
                         <div class="col-12 mb-2">
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" 
+                                <input class="form-check-input" type="checkbox"
                                        name="permissions" value="{{ perm.id }}"
-                                       id="perm_{{ role_data.role.id }}_{{ perm.id }}"
-                                       {% if perm.id in role_data.permissions %}checked{% endif %}>
-                                <label class="form-check-label" for="perm_{{ role_data.role.id }}_{{ perm.id }}">
+                                       id="perm_{{ role.id }}_{{ perm.id }}"
+                                       {% if perm.id in role.permissions %}checked{% endif %}>
+                                <label class="form-check-label"
+                                       for="perm_{{ role.id }}_{{ perm.id }}">
                                     <strong>{{ perm.name }}</strong>
                                     {% if perm.description %}
-                                    <br><small class="text-muted">{{ perm.description }}</small>
+                                        <br><small class="text-muted">{{ perm.description }}</small>
                                     {% endif %}
                                 </label>
                             </div>
                         </div>
                         {% endfor %}
                     </div>
-                    
+
                     <button type="submit" class="btn btn-primary mt-3">
-                        <i class="bi bi-save"></i> Сохранить права
+                        <i class="bi bi-save"></i>
+                        Сохранить права роли
                     </button>
                 </form>
             </div>
@@ -46,9 +81,4 @@
     {% endfor %}
 </div>
 
-<div class="alert alert-info mt-3">
-    <i class="bi bi-info-circle"></i>
-    <strong>Подсказка:</strong> Изменения прав вступают в силу сразу после сохранения. 
-    Пользователь получит новые права при следующем входе в систему.
-</div>
 {% endblock %}

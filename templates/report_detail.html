@@ -1,175 +1,134 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Отчет: {{ pair.group_name }} - {{ pair.subject_name }}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <style>
-        @media print {
-            .no-print { display: none !important; }
-            body { font-size: 12px; }
-            .card { border: 1px solid #ddd !important; box-shadow: none !important; }
-            .card-header { background-color: #f8f9fa !important; }
-            .progress { border: 1px solid #ddd; }
-            @page { margin: 1cm; }
-        }
-        .progress { height: 20px; }
-        .stat-card { transition: transform 0.2s; }
-        .stat-card:hover { transform: translateY(-2px); }
-    </style>
-</head>
-<body>
-    <div class="container mt-3 mb-5">
-        <!-- Кнопки управления -->
-        <div class="no-print mb-3 d-flex gap-2">
-            <button onclick="window.print()" class="btn btn-primary">
-                <i class="bi bi-printer"></i> Печать отчета
-            </button>
-            <button onclick="window.history.back()" class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i> Назад
-            </button>
-            <a href="{{ url_for('main.journal', gsid=pair.id) }}" class="btn btn-outline-primary">
-                <i class="bi bi-journal-text"></i> Открыть журнал
-            </a>
-        </div>
+{% extends "base.html" %}
 
-        <!-- Заголовок -->
-        <div class="text-center mb-4">
-            <h2>Отчет по успеваемости</h2>
-            <h3 class="text-muted">{{ pair.group_name }} — {{ pair.subject_name }}</h3>
-            <hr>
-        </div>
+{% from "_breadcrumbs.html" import breadcrumbs %}
 
-        <!-- Общая статистика -->
-        <div class="row mb-4">
-            <div class="col-md-3 mb-3">
-                <div class="card text-white bg-primary stat-card h-100">
-                    <div class="card-body text-center">
-                        <i class="bi bi-calendar-check" style="font-size: 2rem;"></i>
-                        <h5 class="mt-2">Всего занятий</h5>
-                        <p class="display-6 mb-0">{{ stats.total_lessons }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card text-white bg-danger stat-card h-100">
-                    <div class="card-body text-center">
-                        <i class="bi bi-x-circle" style="font-size: 2rem;"></i>
-                        <h5 class="mt-2">Всего пропусков</h5>
-                        <p class="display-6 mb-0">{{ stats.total_absences }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card text-white bg-success stat-card h-100">
-                    <div class="card-body text-center">
-                        <i class="bi bi-star" style="font-size: 2rem;"></i>
-                        <h5 class="mt-2">Средний балл</h5>
-                        <p class="display-6 mb-0">{{ stats.avg_grade }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card text-white bg-info stat-card h-100">
-                    <div class="card-body text-center">
-                        <i class="bi bi-people" style="font-size: 2rem;"></i>
-                        <h5 class="mt-2">Студентов</h5>
-                        <p class="display-6 mb-0">{{ student_stats|length }}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Отчёты', url_for('main.reports')),
+        (pair.group_name, None),
+        (pair.subject_name, None),
+    ]) }}
+{% endblock %}
 
-        <!-- График -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> График успеваемости</h5>
-            </div>
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <h2 class="mb-0">
+        <i class="bi bi-graph-up"></i>
+        {{ pair.group_name }} — {{ pair.subject_name }}
+    </h2>
+    <a href="{{ url_for('main.reports') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> К отчётам
+    </a>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="card text-white bg-primary">
             <div class="card-body text-center">
-                <img src="{{ url_for('static', filename=chart_filename) }}"
-                     class="img-fluid"
-                     alt="График успеваемости"
-                     style="max-width: 100%;">
+                <div class="fs-4 fw-bold">{{ stats.total_lessons }}</div>
+                <small>занятий</small>
             </div>
-        </div>
-
-        <!-- Детальная статистика -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-table"></i> Детальная статистика по студентам</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 5%;">№</th>
-                                <th style="width: 35%;">ФИО студента</th>
-                                <th class="text-center" style="width: 10%;">Занятий</th>
-                                <th class="text-center" style="width: 10%;">Пропуски</th>
-                                <th class="text-center" style="width: 25%;">% пропусков</th>
-                                <th class="text-center" style="width: 15%;">Средний балл</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for sid, s in student_stats.items() %}
-                            <tr>
-                                <td class="text-muted">{{ loop.index }}</td>
-                                <td>
-                                    <strong>{{ s.name }}</strong>
-                                </td>
-                                <td class="text-center">{{ s.total }}</td>
-                                <td class="text-center">
-                                    {% if s.absences > 0 %}
-                                    <span class="badge bg-danger">{{ s.absences }}</span>
-                                    {% else %}
-                                    <span class="badge bg-success">0</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="progress">
-                                        <div class="progress-bar
-                                            {% if s.absence_percent > 25 %}bg-danger
-                                            {% elif s.absence_percent > 10 %}bg-warning
-                                            {% else %}bg-success{% endif %}"
-                                            role="progressbar"
-                                            style="width: {{ s.absence_percent }}%"
-                                            title="{{ s.absence_percent }}% пропусков">
-                                            {% if s.absence_percent > 5 %}
-                                            {{ s.absence_percent }}%
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="text-center">
-                                    {% if s.avg_grade > 0 %}
-                                    <span class="badge fs-6
-                                        {% if s.avg_grade >= 4.5 %}bg-success
-                                        {% elif s.avg_grade >= 3.5 %}bg-primary
-                                        {% elif s.avg_grade >= 2.5 %}bg-warning
-                                        {% else %}bg-danger{% endif %}">
-                                        {{ s.avg_grade }}
-                                    </span>
-                                    {% else %}
-                                    <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Подвал -->
-        <div class="text-center text-muted mt-4 small">
-            <p>Отчет сгенерирован автоматически. Электронный журнал v2.0</p>
         </div>
     </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body text-center">
+                <div class="fs-4 fw-bold">{{ stats.total_absences }}</div>
+                <small>пропусков</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body text-center">
+                <div class="fs-4 fw-bold">{{ stats.avg_grade }}</div>
+                <small>средний балл</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body text-center">
+                <div class="fs-4 fw-bold">{{ stats.students|length }}</div>
+                <small>студентов</small>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+{% if chart_filename %}
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-white">
+        <h6 class="mb-0">
+            <i class="bi bi-bar-chart"></i> График успеваемости
+        </h6>
+    </div>
+    <div class="card-body text-center">
+        <img src="{{ url_for('static', filename=chart_filename) }}"
+             class="img-fluid" alt="График">
+    </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white">
+        <h6 class="mb-0">Детали по студентам</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Студент</th>
+                    <th class="text-center">Посещений</th>
+                    <th class="text-center">Пропусков</th>
+                    <th class="text-center">% пропусков</th>
+                    <th class="text-center">Средний балл</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for s in stats.students %}
+                {% set info = student_stats.get(s.student_id) %}
+                {% if info %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('main.student_card', sid=s.student_id) }}"
+                               class="text-decoration-none">
+                                {{ info.name }}
+                            </a>
+                        </td>
+                        <td class="text-center">{{ info.attendances }}</td>
+                        <td class="text-center text-danger">{{ info.absences }}</td>
+                        <td class="text-center">
+                            {% if info.absence_percent > 25 %}
+                                <span class="badge bg-danger">{{ info.absence_percent }}%</span>
+                            {% elif info.absence_percent > 10 %}
+                                <span class="badge bg-warning text-dark">{{ info.absence_percent }}%</span>
+                            {% else %}
+                                <span class="badge bg-success">{{ info.absence_percent }}%</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if info.avg_grade > 0 %}
+                                <span class="badge bg-primary">{{ info.avg_grade }}</span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if not stats.students %}
+        <div class="text-center text-muted py-4">
+            <i class="bi bi-inbox" style="font-size:2rem;"></i>
+            <p class="mt-2 mb-0">Нет данных для отчёта</p>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}
