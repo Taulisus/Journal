@@ -6,6 +6,13 @@ from routes import main_bp
 import os
 
 
+def _env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -26,4 +33,8 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True, host='192.168.3.5', port=5000)
+    app.run(
+        host=os.getenv('FLASK_HOST', '192.168.3.5'),
+        port=int(os.getenv('FLASK_PORT', '5000')),
+        debug=_env_bool('FLASK_DEBUG', False),
+    )
