@@ -126,16 +126,16 @@
 {% if data['items'] %}
 <div class="card shadow-sm mb-4">
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
+        <table class="table table-hover align-middle mb-0 activity-table">
             <thead class="table-light">
                 <tr>
-                    <th style="width: 60px;">ID</th>
-                    <th style="width: 150px;">Когда</th>
+                    <th class="col-id">ID</th>
+                    <th class="col-when">Когда</th>
                     <th>Пользователь</th>
                     <th>Действие</th>
-                    <th>Описание</th>
-                    <th class="text-center" style="width: 80px;">Объект</th>
-                    <th class="text-muted small" style="width: 120px;">IP</th>
+                    <th class="col-desc">Описание</th>
+                    <th class="text-center col-target">Объект</th>
+                    <th class="text-muted small col-ip">IP</th>
                 </tr>
             </thead>
             <tbody>
@@ -208,7 +208,7 @@
 <!-- ПАГИНАЦИЯ -->
 {% if data.total_pages > 1 %}
 <nav aria-label="Пагинация">
-    <ul class="pagination pagination-sm justify-content-center">
+    <ul class="pagination pagination-sm justify-content-center flex-wrap">
         <li class="page-item {% if data.page <= 1 %}disabled{% endif %}">
             <a class="page-link"
                href="{{ url_for('main.activity_log_page', page=data.page-1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">
@@ -299,4 +299,42 @@
     </div>
 </div>
 
+{% endblock %}
+
+
+{% block scripts %}
+<style>
+/* Ширина колонок на десктопе */
+.col-id { width: 60px; }
+.col-when { width: 150px; }
+.col-desc { min-width: 200px; }
+.col-target { width: 80px; }
+.col-ip { width: 120px; }
+
+/* iPhone 12 mini и подобные (375px) */
+@media (max-width: 575.98px) {
+    /* Таблица: горизонтальный скролл, чтобы не сжималась */
+    .activity-table {
+        min-width: 720px;
+    }
+
+    /* Фильтры на всю ширину, кнопки в столбик */
+    .card-body form > [class*="col-"] {
+        width: 100%;
+    }
+
+    /* Кнопки «Применить» / «Сбросить» / «Скачать CSV» — на всю ширину */
+    .card-body form .btn {
+        width: 100%;
+        min-height: 42px;
+    }
+
+    /* Иконки-кнопки в таблице (touch-target) */
+    .activity-table .btn-sm {
+        min-width: 40px;
+        min-height: 40px;
+        padding: 0.4rem;
+    }
+}
+</style>
 {% endblock %}

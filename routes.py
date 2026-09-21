@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response
 from decorators import login_required
 from models import Group, Subject, Student, GroupSubject, get_db, UserProfile, Permission, Position, TeacherJournal, \
-    Curator, TeacherHours, User, SemesterGrade, PositionPermission
+    Curator, TeacherHours, User, SemesterGrade, PositionPermission, StudentGroupHistory
 from journal_manager import JournalManager
 from utils import import_students_from_xlsx, generate_report_chart, generate_student_chart
 from config import Config
@@ -22,6 +22,7 @@ from activity import (
 from datetime import datetime
 import os
 import re
+import shutil
 
 main_bp = Blueprint('main', __name__)
 
@@ -53,6 +54,28 @@ def has_emoji(text):
         "[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\u2600-\u27BF\U0001F900-\U0001F9FF]+",
         flags=re.UNICODE)
     return bool(emoji_pattern.search(text))
+
+
+def _make_db_backup(prefix='mass_transfer'):
+    """
+    Делает копию journal.db в backups/ с указанным префиксом.
+    Возвращает путь или None.
+    """
+    try:
+        db_path = Config.DATABASE
+        if not os.path.exists(db_path):
+            return None
+
+        backup_dir = os.path.join(os.path.dirname(os.path.abspath(db_path)), 'backups')
+        os.makedirs(backup_dir, exist_ok=True)
+
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        dst = os.path.join(backup_dir, f'journal_{ts}_before_{prefix}.db')
+        shutil.copy2(db_path, dst)
+        return dst
+    except Exception as e:
+        print(f"[backup] Ошибка: {e}")
+        return None
 
 
 # ============================================================
@@ -117,6 +140,7 @@ ACTION_LABELS = {
     'edit_student': 'Редактирование студента',
     'delete_student': 'Удаление студента',
     'import_students': 'Импорт студентов',
+    'mass_transfer': 'Массовый перевод студентов',
     'add_journal': 'Создание журнала',
     'delete_journal': 'Удаление журнала',
     'edit_hours': 'Изменение часов',
@@ -348,17 +372,14 @@ def _render_profile(uid, is_self):
     weekly_avg = get_user_weekly_avg(uid, weeks=4)
     recent_activity = get_recent_activity(limit=10, user_id=uid)
 
-    # Разделяем права: личные и от ролей
     perms_personal = Permission.get_personal_permissions(uid)
     perms_from_roles = PositionPermission.get_permissions_for_user_via_positions(uid)
     perms_all = Permission.get_user_permissions(uid)
 
-    # Словарь: code → name (из БД)
     perms_dict = {}
     for p in Permission.get_all():
         perms_dict[p['code']] = p['name']
 
-    # Для каждой роли — её права
     positions_with_perms = []
     for pos in positions:
         pos_perms_ids = PositionPermission.get_for_position(pos['id'])
@@ -558,7 +579,20 @@ def delete_subject(sid):
 @main_bp.route('/students')
 @login_required
 def students():
-    return render_template('students.html', students=Student.get_all(), groups=Group.get_all())
+    all_groups = Group.get_all()
+
+    group_id = request.args.get('group_id', type=int)
+    if group_id:
+        students_list = Student.get_by_group(group_id)
+    else:
+        students_list = Student.get_all()
+
+    return render_template(
+        'students.html',
+        students=students_list,
+        groups=all_groups,
+        current_group_id=group_id,
+    )
 
 
 @main_bp.route('/students/add', methods=['POST'])
@@ -642,6 +676,147 @@ def import_students():
                      f'Импорт студентов: {m}', 'group', int(gid) if gid else None)
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.students'))
+
+
+@main_bp.route('/students/mass-transfer', methods=['POST'])
+@login_required
+def mass_transfer_students():
+    """Массовый перевод студентов в другую группу."""
+    uid = session['user_id']
+
+    if not Permission.has_permission(uid, 'manage_users'):
+        flash('Недостаточно прав для массового перевода', 'danger')
+        return redirect(url_for('main.students'))
+
+    student_ids = request.form.getlist('student_ids')
+    student_ids = [int(s) for s in student_ids if s.isdigit()]
+
+    new_group_id = request.form.get('new_group_id', type=int)
+    transfer_date = (request.form.get('transfer_date') or '').strip()
+
+    if not student_ids:
+        flash('Не выбрано ни одного студента', 'danger')
+        return redirect(url_for('main.students'))
+
+    if not new_group_id:
+        flash('Не выбрана группа-приёмник', 'danger')
+        return redirect(url_for('main.students'))
+
+    new_group = Group.get_by_id(new_group_id)
+    if not new_group:
+        flash('Группа-приёмник не найдена', 'danger')
+        return redirect(url_for('main.students'))
+
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', transfer_date):
+        transfer_date = datetime.now().strftime('%Y-%m-%d')
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM academic_years WHERE is_current = 1 LIMIT 1"
+        ).fetchone()
+        academic_year_id = row['id'] if row else None
+    finally:
+        conn.close()
+
+    if not academic_year_id:
+        flash('Не найден текущий учебный год (academic_years.is_current)', 'danger')
+        return redirect(url_for('main.students'))
+
+    backup_path = _make_db_backup(prefix='mass_transfer')
+
+    stats = Student.mass_transfer(
+        student_ids=student_ids,
+        new_group_id=new_group_id,
+        transfer_date=transfer_date,
+        academic_year_id=academic_year_id,
+    )
+
+    log_activity(
+        uid, 'mass_transfer',
+        f'Массовый перевод: {stats["transferred"]} студ. → «{new_group["name"]}» '
+        f'(пропущено: {stats["skipped_same"] + stats["skipped_dup"]}, '
+        f'ошибок: {len(stats["errors"])})',
+        'group', new_group_id
+    )
+
+    parts = [f'Переведено: {stats["transferred"]}']
+    if stats['skipped_same']:
+        parts.append(f'уже в группе: {stats["skipped_same"]}')
+    if stats['skipped_dup']:
+        parts.append(f'дубликатов: {stats["skipped_dup"]}')
+    if stats['errors']:
+        parts.append(f'ошибок: {len(stats["errors"])}')
+
+    msg = ' • '.join(parts)
+
+    if backup_path:
+        msg += f' • бекап: {os.path.basename(backup_path)}'
+
+    category = 'success' if stats['transferred'] > 0 else 'warning'
+    flash(msg, category)
+
+    return redirect(url_for('main.students', group_id=new_group_id))
+
+
+@main_bp.route('/students/transfer-info/<int:new_group_id>')
+@login_required
+def transfer_info(new_group_id):
+    """API для предпросмотра массового перевода."""
+    uid = session['user_id']
+    if not Permission.has_permission(uid, 'manage_users'):
+        return jsonify({'success': False, 'message': 'Недостаточно прав'})
+
+    ids_param = request.args.get('ids', '')
+    student_ids = [int(s) for s in ids_param.split(',') if s.strip().isdigit()]
+
+    new_group = Group.get_by_id(new_group_id)
+    if not new_group:
+        return jsonify({'success': False, 'message': 'Группа не найдена'})
+
+    if not student_ids:
+        return jsonify({'success': True, 'data': {
+            'total': 0, 'same_group': 0, 'duplicates': 0, 'ok': 0,
+        }})
+
+    conn = get_db()
+    try:
+        placeholders = ','.join('?' for _ in student_ids)
+
+        rows = conn.execute(f'''
+            SELECT id, full_name, group_id FROM students WHERE id IN ({placeholders})
+        ''', student_ids).fetchall()
+
+        existing_in_new = {
+            r['lname'] for r in conn.execute(
+                "SELECT LOWER(full_name) AS lname FROM students WHERE group_id = ?",
+                (new_group_id,)
+            ).fetchall()
+        }
+
+        same_group = 0
+        duplicates = 0
+        ok = 0
+
+        for r in rows:
+            if r['group_id'] == new_group_id:
+                same_group += 1
+            elif r['full_name'].lower() in existing_in_new:
+                duplicates += 1
+            else:
+                ok += 1
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'total': len(rows),
+                'same_group': same_group,
+                'duplicates': duplicates,
+                'ok': ok,
+            }
+        })
+    finally:
+        conn.close()
 
 
 # ============ Пары Группа-Предмет ============
@@ -1154,7 +1329,7 @@ def users():
         user = dict(u)
         user['positions'] = Position.get_user_positions(user['id'])
         user['position_ids'] = [p['id'] for p in user['positions']]
-        user['perms'] = Permission.get_user_permissions(user['id'])  # итоговые (личные + роли)
+        user['perms'] = Permission.get_user_permissions(user['id'])
         user['personal_perms'] = Permission.get_personal_permissions(user['id'])
         user['perm_ids'] = [p['id'] for p in permissions if p['code'] in user['personal_perms']]
         users_list.append(user)

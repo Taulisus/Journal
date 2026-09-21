@@ -14,7 +14,7 @@
     <div class="col-6 col-lg-3">
         <div class="card text-white bg-primary h-100">
             <div class="card-body text-center">
-                <i class="bi bi-people-fill" style="font-size:2.2rem;"></i>
+                <i class="bi bi-people-fill stat-icon"></i>
                 <h6 class="mt-2 mb-1">Группы</h6>
                 <div class="fs-3 fw-bold mb-2">{{ groups_count }}</div>
                 <a href="{{ url_for('main.groups') }}" class="btn btn-light btn-sm">
@@ -27,7 +27,7 @@
     <div class="col-6 col-lg-3">
         <div class="card text-white bg-success h-100">
             <div class="card-body text-center">
-                <i class="bi bi-book-fill" style="font-size:2.2rem;"></i>
+                <i class="bi bi-book-fill stat-icon"></i>
                 <h6 class="mt-2 mb-1">Предметы</h6>
                 <div class="fs-3 fw-bold mb-2">{{ subjects_count }}</div>
                 <a href="{{ url_for('main.subjects') }}" class="btn btn-light btn-sm">
@@ -40,7 +40,7 @@
     <div class="col-6 col-lg-3">
         <div class="card text-white bg-info h-100">
             <div class="card-body text-center">
-                <i class="bi bi-person-lines-fill" style="font-size:2.2rem;"></i>
+                <i class="bi bi-person-lines-fill stat-icon"></i>
                 <h6 class="mt-2 mb-1">Студенты</h6>
                 <div class="fs-3 fw-bold mb-2">{{ students_count }}</div>
                 <a href="{{ url_for('main.students') }}" class="btn btn-light btn-sm">
@@ -53,7 +53,7 @@
     <div class="col-6 col-lg-3">
         <div class="card text-white bg-warning h-100">
             <div class="card-body text-center">
-                <i class="bi bi-journal-text" style="font-size:2.2rem;"></i>
+                <i class="bi bi-journal-text stat-icon"></i>
                 <h6 class="mt-2 mb-1">Журналы</h6>
                 <div class="fs-3 fw-bold mb-2">{{ pairs_count }}</div>
                 <a href="{{ url_for('main.group_subjects') }}" class="btn btn-light btn-sm">
@@ -75,8 +75,7 @@
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
 
                     <div class="d-flex align-items-center gap-3">
-                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0"
-                             style="width:56px; height:56px; font-size:1.5rem;">
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0 stat-circle">
                             <i class="bi bi-graph-up-arrow"></i>
                         </div>
                         <div>
@@ -140,7 +139,7 @@
                             <th>Группа</th>
                             <th>Предмет</th>
                             <th class="text-center">Сем.</th>
-                            <th style="min-width: 180px;">Прогресс</th>
+                            <th class="col-progress">Прогресс</th>
                             <th class="text-end">Осталось</th>
                         </tr>
                     </thead>
@@ -288,4 +287,62 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+
+<style>
+/* Стандартные размеры (десктоп) */
+.stat-icon {
+    font-size: 2.2rem;
+}
+.stat-circle {
+    width: 56px;
+    height: 56px;
+    font-size: 1.5rem;
+}
+
+/* iPhone 12 mini и подобные (375px) */
+@media (max-width: 575.98px) {
+    /* Иконки в карточках счётчиков меньше */
+    .stat-icon {
+        font-size: 1.6rem;
+    }
+
+    /* Круглая иконка рядом с «пар в неделю» меньше */
+    .stat-circle {
+        width: 44px;
+        height: 44px;
+        font-size: 1.15rem;
+    }
+
+    /* Кнопки в карточках — на всю ширину */
+    .card-body .btn-light.btn-sm {
+        width: 100%;
+        padding: 0.4rem 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    /* Заголовки и цифры компактнее */
+    .fs-3 {
+        font-size: 1.4rem !important;
+    }
+    .fs-4 {
+        font-size: 1.15rem !important;
+    }
+
+    /* Кнопка «Обновить» на всю ширину */
+    #btn-refresh-stats {
+        width: 100%;
+    }
+
+    /* Таблица «Мои часы» — прогресс-колонка уже */
+    .col-progress {
+        min-width: 120px;
+    }
+
+    /* Карточка «Мои часы» — заголовок и итоги в столбик */
+    .card-header .small.text-muted {
+        font-size: 0.8rem;
+        width: 100%;
+    }
+}
+</style>
 {% endblock %}

@@ -88,18 +88,82 @@
 
     <div class="col-12 col-lg-8">
         <div class="card shadow-sm">
+
+            <!-- Фильтр по группе -->
+            <div class="card-header bg-white">
+                <form method="get" action="{{ url_for('main.students') }}"
+                      class="row g-2 align-items-center">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small mb-1">Фильтр по группе:</label>
+                        <select name="group_id" class="form-select form-select-sm"
+                                onchange="this.form.submit()">
+                            <option value="">Все группы ({{ students|length }})</option>
+                            {% for g in groups %}
+                                <option value="{{ g.id }}"
+                                        {% if current_group_id == g.id %}selected{% endif %}>
+                                    {{ g.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6 d-flex align-items-end">
+                        {% if current_group_id %}
+                            <a href="{{ url_for('main.students') }}"
+                               class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-x-circle"></i> Сбросить фильтр
+                            </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+
+            <!-- Панель массовых действий (появляется при выборе) -->
+            {% if has_permission('manage_users') %}
+            <div class="card-body py-2 bg-light border-bottom"
+                 id="bulkPanel" style="display:none;">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <i class="bi bi-check2-square"></i>
+                        Выбрано: <strong id="selectedCount">0</strong>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                onclick="clearSelection()">
+                            <i class="bi bi-x-circle"></i> Снять выбор
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary"
+                                data-bs-toggle="modal" data-bs-target="#massTransferModal">
+                            <i class="bi bi-arrow-left-right"></i> Перевести в группу
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table table-hover align-middle mb-0 students-table">
                     <thead class="table-light">
                         <tr>
+                            {% if has_permission('manage_users') %}
+                            <th style="width: 40px;" class="text-center">
+                                <input type="checkbox" class="form-check-input"
+                                       id="selectAll" title="Выбрать все на странице">
+                            </th>
+                            {% endif %}
                             <th>ФИО</th>
-                            <th style="width: 160px;">Группа</th>
-                            <th class="text-end" style="width: 180px;">Действия</th>
+                            <th class="col-group">Группа</th>
+                            <th class="text-end col-actions">Действия</th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for s in students %}
-                        <tr>
+                        <tr data-student-id="{{ s.id }}">
+                            {% if has_permission('manage_users') %}
+                            <td class="text-center">
+                                <input type="checkbox" class="form-check-input student-checkbox"
+                                       value="{{ s.id }}">
+                            </td>
+                            {% endif %}
                             <td>
                                 <a href="{{ url_for('main.student_card', sid=s.id) }}"
                                    class="text-decoration-none fw-semibold">
@@ -177,4 +241,251 @@
 </div>
 {% endfor %}
 
+{# Модалка массового перевода #}
+{% if has_permission('manage_users') %}
+<div class="modal fade" id="massTransferModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('main.mass_transfer_students') }}"
+                  id="massTransferForm">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-arrow-left-right"></i>
+                        Массовый перевод студентов
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <!-- Скрытые поля со списком выбранных ID -->
+                    <div id="hiddenStudentIds"></div>
+
+                    <div class="alert alert-info mb-3">
+                        <i class="bi bi-info-circle"></i>
+                        Выбрано студентов: <strong id="modalSelectedCount">0</strong>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Группа-приёмник</label>
+                        <select name="new_group_id" id="newGroupSelect" class="form-select" required>
+                            <option value="">— Выберите группу —</option>
+                            {% for g in groups %}
+                                <option value="{{ g.id }}">{{ g.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Дата перевода</label>
+                        <input type="date" name="transfer_date" id="transferDate"
+                               class="form-control" required>
+                        <small class="text-muted">
+                            С этой даты студенты считаются в новой группе.
+                            Прошлые занятия остаются в старой группе.
+                        </small>
+                    </div>
+
+                    <!-- Предпросмотр -->
+                    <div id="previewBox" class="alert alert-secondary small" style="display:none;">
+                        <div><strong>Предпросмотр:</strong></div>
+                        <div id="previewContent"></div>
+                    </div>
+
+                    <div class="alert alert-warning small mb-0">
+                        <i class="bi bi-shield-exclamation"></i>
+                        Перед операцией автоматически создаётся бекап БД.
+                        Старые журналы <strong>не изменяются</strong>,
+                        оценки за семестр <strong>сохраняются</strong>.
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="submitTransferBtn">
+                        <i class="bi bi-check-circle"></i> Перевести
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+// ==================== ВЫДЕЛЕНИЕ СТУДЕНТОВ ====================
+(function() {
+    var selectAll = document.getElementById('selectAll');
+    var bulkPanel = document.getElementById('bulkPanel');
+    var selectedCountEl = document.getElementById('selectedCount');
+    var hiddenIds = document.getElementById('hiddenStudentIds');
+    var modalSelectedCount = document.getElementById('modalSelectedCount');
+    var previewBox = document.getElementById('previewBox');
+    var previewContent = document.getElementById('previewContent');
+    var newGroupSelect = document.getElementById('newGroupSelect');
+    var transferDate = document.getElementById('transferDate');
+    var submitBtn = document.getElementById('submitTransferBtn');
+
+    if (!selectAll) return;  // не админ — выходим
+
+    var checkboxes = document.querySelectorAll('.student-checkbox');
+
+    function getSelected() {
+        var arr = [];
+        checkboxes.forEach(function(cb) {
+            if (cb.checked) arr.push(parseInt(cb.value));
+        });
+        return arr;
+    }
+
+    function updatePanel() {
+        var selected = getSelected();
+        var n = selected.length;
+
+        if (n > 0) {
+            bulkPanel.style.display = '';
+            selectedCountEl.textContent = n;
+            modalSelectedCount.textContent = n;
+            submitBtn.disabled = false;
+        } else {
+            bulkPanel.style.display = 'none';
+            selectedCountEl.textContent = '0';
+            modalSelectedCount.textContent = '0';
+            submitBtn.disabled = true;
+        }
+
+        // Обновляем скрытые input'ы для формы
+        hiddenIds.innerHTML = '';
+        selected.forEach(function(id) {
+            var inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'student_ids';
+            inp.value = id;
+            hiddenIds.appendChild(inp);
+        });
+
+        // Проверка "все выбраны" для selectAll
+        if (selectAll) {
+            selectAll.checked = (n > 0 && n === checkboxes.length);
+            selectAll.indeterminate = (n > 0 && n < checkboxes.length);
+        }
+    }
+
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', updatePanel);
+    });
+
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(function(cb) {
+            cb.checked = selectAll.checked;
+        });
+        updatePanel();
+    });
+
+    window.clearSelection = function() {
+        checkboxes.forEach(function(cb) { cb.checked = false; });
+        if (selectAll) selectAll.checked = false;
+        updatePanel();
+    };
+
+    // ==================== ПРЕДПРОСМОТР ПЕРЕВОДА ====================
+    function updatePreview() {
+        var ids = getSelected();
+        var gid = parseInt(newGroupSelect.value);
+
+        if (!ids.length || !gid) {
+            previewBox.style.display = 'none';
+            return;
+        }
+
+        fetch("{{ url_for('main.transfer_info', new_group_id=0) }}".replace('/0', '/' + gid) + '?ids=' + ids.join(','))
+            .then(function(r) { return r.json(); })
+            .then(function(resp) {
+                if (!resp.success) {
+                    previewBox.style.display = 'none';
+                    return;
+                }
+
+                var d = resp.data;
+                var html = '';
+                html += 'Всего выбрано: <strong>' + d.total + '</strong><br>';
+                html += 'Будет переведено: <strong class="text-success">' + d.ok + '</strong><br>';
+                if (d.same_group > 0) {
+                    html += 'Уже в этой группе: <strong class="text-muted">' + d.same_group + '</strong><br>';
+                }
+                if (d.duplicates > 0) {
+                    html += 'Однофамильцев в группе: <strong class="text-warning">' + d.duplicates + '</strong>';
+                }
+
+                previewContent.innerHTML = html;
+                previewBox.style.display = '';
+            })
+            .catch(function() {
+                previewBox.style.display = 'none';
+            });
+    }
+
+    newGroupSelect.addEventListener('change', updatePreview);
+
+    // При открытии модалки — сбросить предпросмотр
+    var modalEl = document.getElementById('massTransferModal');
+    if (modalEl) {
+        modalEl.addEventListener('show.bs.modal', function () {
+            previewBox.style.display = 'none';
+            if (newGroupSelect.value) {
+                updatePreview();
+            }
+        });
+    }
+
+    // Инициализация даты — сегодня
+    if (transferDate && !transferDate.value) {
+        var today = new Date();
+        var y = today.getFullYear();
+        var m = String(today.getMonth() + 1).padStart(2, '0');
+        var d = String(today.getDate()).padStart(2, '0');
+        transferDate.value = y + '-' + m + '-' + d;
+    }
+})();
+</script>
+
+<style>
+/* iPhone 12 mini и подобные (375px) */
+@media (max-width: 575.98px) {
+    .students-table {
+        min-width: 480px;
+    }
+    .students-table .col-group {
+        width: 120px;
+    }
+    .students-table .col-actions {
+        width: 110px;
+    }
+
+    .students-table .btn-sm {
+        min-width: 40px;
+        min-height: 40px;
+        padding: 0.4rem;
+    }
+
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+    .modal-footer .btn {
+        min-height: 44px;
+        padding: 0.5rem 1rem;
+    }
+
+    #bulkPanel {
+        position: sticky;
+        top: 60px;
+        z-index: 5;
+    }
+}
+</style>
 {% endblock %}

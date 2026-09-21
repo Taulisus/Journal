@@ -1,4 +1,16 @@
 {% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Журналы', url_for('main.group_subjects')),
+        (pair.group_name, None),
+        (pair.subject_name, None),
+    ]) }}
+{% endblock %}
+
 {% block content %}
 
 {% set type_names = {
@@ -685,10 +697,61 @@
         }
     }
 
+    /* ============ ОПТИМИЗАЦИЯ ПОД iPHONE 12 MINI (375px) ============ */
+    @media (max-width: 575.98px) {
+        /* Заголовок страницы компактнее */
+        h2 {
+            font-size: 1.2rem;
+        }
+
+        /* Кнопка «Добавить занятие» на всю ширину */
+        .btn-success.btn-lg {
+            width: 100%;
+            font-size: 1rem;
+            padding: 0.55rem 1rem;
+        }
+
+        /* Переключатель семестров — равномерно на всю ширину */
+        .btn-group.btn-group-sm {
+            display: flex;
+            width: 100%;
+        }
+        .btn-group.btn-group-sm .btn {
+            flex: 1;
+            padding: 0.5rem 0.25rem;
+            font-size: 0.85rem;
+        }
+
+        /* Мобильный список занятий — компактнее */
+        .mobile-lesson-card {
+            padding: 0.55rem !important;
+        }
+        .mobile-lesson-card strong {
+            font-size: 0.92rem;
+        }
+        .mobile-lesson-card .badge {
+            font-size: 0.68rem;
+        }
+
+        /* Кнопки отметок — крупнее для пальца */
+        .attendance-buttons .btn {
+            min-width: 44px;
+            min-height: 44px;
+            padding: 0.5rem 0.6rem;
+            font-size: 0.95rem;
+        }
+
+        /* Заголовок карточки студентов */
+        .student-mobile-row {
+            padding: 0.6rem !important;
+        }
+    }
+
     /* ============ ПЕЧАТЬ ============ */
     @media print {
         .navbar, .btn, .edit-entry-btn, .semester-grade-select,
-        .lesson-type-select, .alert, .d-md-none, footer {
+        .lesson-type-select, .alert, .d-md-none, footer,
+        .breadcrumbs {
             display: none !important;
         }
 

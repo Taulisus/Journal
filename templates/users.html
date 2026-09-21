@@ -1,5 +1,16 @@
 {% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Пользователи', None),
+    ]) }}
+{% endblock %}
+
 {% block content %}
+
 <h2 class="mb-3"><i class="bi bi-people-fill"></i> Управление пользователями</h2>
 
 <div class="row">
@@ -289,6 +300,68 @@
     }
     .badge {
         font-size: 0.85rem;
+    }
+
+    /* ============ ОПТИМИЗАЦИЯ ПОД iPHONE 12 MINI (375px) ============ */
+    @media (max-width: 575.98px) {
+        /* Поиск на всю ширину — переносится вниз */
+        .card-header.d-flex {
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 0.5rem;
+        }
+        #userSearch {
+            max-width: 100% !important;
+            width: 100%;
+        }
+
+        /* Кнопки в таблице — крупнее для пальца */
+        .btn-group.btn-group-sm {
+            flex-wrap: wrap;
+            gap: 2px;
+        }
+        .btn-group.btn-group-sm .btn {
+            min-width: 40px;
+            min-height: 40px;
+            padding: 0.4rem;
+            font-size: 0.85rem;
+        }
+        /* Кнопка «Журналы» с текстом — компактнее */
+        .btn-group .btn-outline-info {
+            padding: 0.4rem 0.5rem;
+        }
+        .btn-group .btn-outline-info i {
+            margin-right: 0;
+        }
+
+        /* Модалка почти на всю ширину */
+        .modal-dialog.modal-lg {
+            max-width: calc(100% - 1rem);
+            margin: 0.5rem;
+        }
+        .modal-footer .btn {
+            min-height: 44px;
+            padding: 0.5rem 1rem;
+        }
+
+        /* Чекбоксы чуть крупнее для тапа */
+        .form-check-input {
+            width: 1.15em;
+            height: 1.15em;
+            margin-top: 0.15em;
+        }
+        .form-check {
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+
+        /* Заголовок страницы компактнее */
+        h2 {
+            font-size: 1.25rem;
+        }
+        h5 {
+            font-size: 1.05rem;
+        }
     }
 </style>
 {% endblock %}
