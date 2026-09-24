@@ -1049,10 +1049,10 @@ def add_lesson(gsid):
         semester = int(request.form.get('semester', 1))
 
         if not ti:
-            flash('Введите время занятия', 'danger')
+            flash('Выберите время занятия', 'danger')
             return redirect(url_for('main.add_lesson', gsid=gsid, semester=semester))
         if not re.match(r'^\d{4}-\d{4}$', ti):
-            flash('Формат: 0900-1030', 'danger')
+            flash('Некорректный формат времени. Используйте кнопки с временами пар.', 'danger')
             return redirect(url_for('main.add_lesson', gsid=gsid, semester=semester))
         if len(topic) > 50:
             flash('Тема не может быть длиннее 50 символов', 'danger')
