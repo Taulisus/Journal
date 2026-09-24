@@ -22,7 +22,15 @@
     'diff_credit': 'Дифф. зачет'
 } %}
 
-{# Проверяем, есть ли уже экзамен в этом семестре (через namespace — иначе scoping в Jinja2) #}
+{% set type_short = {
+    'lecture': 'Лек',
+    'practice': 'Пр',
+    'independent': 'СР',
+    'dictation': 'ПЗ',
+    'exam': 'Экз',
+    'diff_credit': 'ДЗ'
+} %}
+
 {% set ns = namespace(has_exam=false) %}
 {% if journal_data %}
     {% for lesson in journal_data %}
@@ -33,7 +41,7 @@
 {% endif %}
 
 <!-- Заголовок и кнопки -->
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 no-print">
     <h2 class="mb-0">
         <i class="bi bi-journal-bookmark-fill"></i>
         {{ pair.group_name }} — {{ pair.subject_name }}
@@ -50,7 +58,7 @@
         {% endif %}
 
         {% if not ns.has_exam %}
-        <a href="{{ url_for('main.add_lesson', gsid=pair.id, semester=current_semester) }}"
+        <a href="{{ url_for('journals.add_lesson', gsid=pair.id, semester=current_semester) }}"
            class="btn btn-success btn-lg">
             <i class="bi bi-plus-circle"></i>
             <span class="d-none d-sm-inline">Добавить занятие</span>
@@ -68,8 +76,8 @@
     </div>
 </div>
 
-<!-- Переключатель семестров -->
-<div class="mb-3 d-flex flex-wrap align-items-center gap-2">
+<!-- Переключатель семестров + навигация по датам -->
+<div class="mb-3 d-flex flex-wrap align-items-center gap-2 no-print">
     <div class="btn-group btn-group-sm">
         {% for sem in semesters %}
         <a href="{{ url_for('journals.journal', gsid=pair.id, semester=sem) }}"
@@ -87,9 +95,46 @@
 
 {% if journal_data %}
 
+<!-- ============ ПАНЕЛЬ НАВИГАЦИИ ПО ДАТАМ ============ -->
+<div class="card shadow-sm mb-2 no-print" id="dateNavPanel">
+    <div class="card-body py-2">
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <span class="text-muted small">
+                <i class="bi bi-calendar3"></i> Перейти к месяцу:
+            </span>
+            <div class="btn-group btn-group-sm" id="monthNav" role="group">
+                <!-- JS заполнит -->
+            </div>
+
+            <div class="d-flex gap-1 ms-auto">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="navToToday" title="К ближайшему занятию">
+                    <i class="bi bi-calendar-event"></i> Сегодня
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="navToStart" title="К первому занятию">
+                    <i class="bi bi-chevron-double-left"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="navToEnd" title="К последнему занятию">
+                    <i class="bi bi-chevron-double-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <input type="text"
+                   class="form-control form-control-sm"
+                   id="dateSearchInput"
+                   placeholder="🔍 Найти дату (например 21.09)"
+                   style="max-width: 220px;">
+            <span class="small text-muted" id="dateSearchStatus"></span>
+        </div>
+
+    </div>
+</div>
+
 <!-- ============ ДЕСКТОПНАЯ ТАБЛИЦА ============ -->
 <div class="card shadow-sm d-none d-md-block">
-    <div class="card-header bg-light py-2">
+    <div class="card-header bg-light py-2 no-print">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <small class="text-muted">
                 <i class="bi bi-info-circle"></i>
@@ -116,65 +161,94 @@
                         </th>
 
                         {% for lesson in journal_data %}
-                        <th class="lesson-column {% if lesson.type == 'exam' %}exam-column{% endif %}">
+                        <th class="lesson-column {% if lesson.type == 'exam' %}exam-column{% endif %}"
+                            data-lesson-date="{{ lesson.date }}"
+                            data-lesson-month="{{ lesson.date[5:7] }}">
 
-                            <div class="date-header">
-                                <small>
-                                    <strong>{{ lesson.date_formatted }}</strong>
-                                    {% if lesson.day_of_week %}
-                                    <span class="badge bg-light text-dark ms-1" style="font-size: 0.65rem;">
-                                        {{ lesson.day_of_week }}
-                                    </span>
-                                    {% endif %}
-                                </small>
+                            <!-- Дата + день недели -->
+                            <div class="lh-header-date">
+                                <span class="lh-date">{{ lesson.date_formatted }}</span>
+                                {% if lesson.day_of_week %}
+                                <span class="lh-dow">{{ lesson.day_of_week }}</span>
+                                {% endif %}
                             </div>
 
-                            {% if lesson.time_interval %}
-                            <div class="mt-1">
-                                <span class="badge bg-info lesson-time-badge"
-                                      role="button"
-                                      title="Изменить время занятия"
-                                      data-date="{{ lesson.date }}"
-                                      data-time="{{ lesson.time_interval }}"
-                                      data-time-formatted="{{ format_time(lesson.time_interval) }}"
-                                      data-semester="{{ lesson.semester }}"
-                                      data-bs-toggle="modal"
-                                      data-bs-target="#editLessonTimeModal"
-                                      style="cursor:pointer;">
-                                    <i class="bi bi-clock"></i>
-                                    {{ format_time(lesson.time_interval) }}
-                                    <i class="bi bi-pencil-square ms-1" style="font-size:0.7em;"></i>
-                                </span>
+                            <!-- Время + тип -->
+                            <div class="lh-header-time">
+                                {% if lesson.time_interval %}
+                                <span class="lh-time">{{ format_time(lesson.time_interval) }}</span>
+                                {% endif %}
+                                <span class="lh-type">{{ type_short.get(lesson.type, lesson.type) }}</span>
                             </div>
-                            {% endif %}
 
-                            <div class="lesson-type mt-1">
-                                <select class="form-select form-select-sm lesson-type-select"
-                                        data-gsid="{{ pair.id }}"
-                                        data-date="{{ lesson.date }}"
-                                        data-time="{{ lesson.time_interval }}"
-                                        data-semester="{{ lesson.semester }}"
-                                        title="Изменить тип занятия">
-                                    {% for type_val, type_label in type_names.items() %}
-                                    <option value="{{ type_val }}" {% if lesson.type == type_val %}selected{% endif %}>
-                                        {{ type_label }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
+                            <!-- Меню «⋮» -->
+                            <div class="dropdown lh-header-menu">
+                                <button class="btn btn-sm btn-link p-0 lh-menu-btn"
+                                        type="button"
+                                        data-bs-toggle="dropdown"
+                                        data-bs-strategy="fixed"
+                                        aria-expanded="false"
+                                        title="Действия">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <button type="button"
+                                                class="dropdown-item mass-grade-btn"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#massGradeModal"
+                                                data-date="{{ lesson.date }}"
+                                                data-time="{{ lesson.time_interval }}">
+                                            <i class="bi bi-list-check text-success"></i>
+                                            Массовые оценки
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button type="button"
+                                                class="dropdown-item lesson-time-badge"
+                                                data-date="{{ lesson.date }}"
+                                                data-time="{{ lesson.time_interval }}"
+                                                data-time-formatted="{{ format_time(lesson.time_interval) }}"
+                                                data-semester="{{ lesson.semester }}"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editLessonTimeModal">
+                                            <i class="bi bi-clock text-info"></i>
+                                            Изменить время
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button type="button"
+                                                class="dropdown-item"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#editLessonTypeModal"
+                                                data-gsid="{{ pair.id }}"
+                                                data-date="{{ lesson.date }}"
+                                                data-time="{{ lesson.time_interval }}"
+                                                data-semester="{{ lesson.semester }}"
+                                                data-current-type="{{ lesson.type }}"
+                                                data-date-formatted="{{ lesson.date_formatted }}"
+                                                data-time-formatted="{{ format_time(lesson.time_interval) }}">
+                                            <i class="bi bi-tag text-warning"></i>
+                                            Изменить тип
+                                        </button>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item text-danger"
+                                           href="{{ url_for('journals.delete_lesson', gsid=pair.id, date=lesson.date, ti=lesson.time_interval, semester=current_semester) }}"
+                                           onclick="return confirm('Удалить занятие от {{ lesson.date_formatted }} {{ format_time(lesson.time_interval) }}?')">
+                                            <i class="bi bi-trash"></i>
+                                            Удалить занятие
+                                        </a>
+                                    </li>
+                                </ul>
                             </div>
 
                             {% if lesson.topic %}
-                            <div class="topic mt-1" title="{{ lesson.topic }}">
-                                <small class="text-muted">{{ lesson.topic }}</small>
+                            <div class="lh-header-topic" title="{{ lesson.topic }}">
+                                {{ lesson.topic }}
                             </div>
                             {% endif %}
-
-                            <a href="{{ url_for('journals.delete_lesson', gsid=pair.id, date=lesson.date, ti=lesson.time_interval, semester=current_semester) }}"
-                               class="btn btn-sm btn-outline-danger mt-2"
-                               onclick="return confirm('Удалить занятие от {{ lesson.date_formatted }} {{ format_time(lesson.time_interval) }}?')"
-                               title="Удалить занятие">
-                                <i class="bi bi-trash"></i>
-                            </a>
                         </th>
                         {% endfor %}
                     </tr>
@@ -184,7 +258,8 @@
                     <tr>
                         <td class="student-name fixed-left-col">
                             <a href="{{ url_for('student_card.card', sid=student.id) }}"
-                               class="text-decoration-none text-dark fw-bold">
+                               class="text-decoration-none text-dark fw-bold"
+                               data-student-id="{{ student.id }}">
                                 {{ student.full_name }}
                             </a>
                         </td>
@@ -196,7 +271,13 @@
                                  data-semester="{{ current_semester }}">
 
                                 {% set g = semester_grades.get(student.id) %}
-                                <span class="badge bg-{{ grade_color(g) }} grade-display">
+                                <span class="badge grade-display grade-cell
+                                    {% if g == 'passed' %}grade-cell-passed
+                                    {% elif g == '5' %}grade-cell-5
+                                    {% elif g == '4' %}grade-cell-4
+                                    {% elif g == '3' %}grade-cell-3
+                                    {% elif g == '2' %}grade-cell-2
+                                    {% else %}grade-cell-empty{% endif %}">
                                     {% if g == 'passed' %}Зачтено
                                     {% elif g %} {{ g }}
                                     {% else %} — {% endif %}
@@ -222,13 +303,18 @@
 
                             {% if entry %}
                                 {% if entry.attendance == 'absent' %}
-                                    <span class="badge bg-{{ attendance_color(entry.attendance) }} attendance-badge">н</span>
+                                    <span class="cell-mark cell-mark-absent" title="Отсутствовал">●</span>
                                 {% elif entry.grade %}
-                                    <span class="badge bg-{{ grade_color(entry.grade) }} grade-badge">
+                                    <span class="cell-mark
+                                        {% if entry.grade == 'passed' %}grade-cell-passed
+                                        {% elif entry.grade == '5' %}grade-cell-5
+                                        {% elif entry.grade == '4' %}grade-cell-4
+                                        {% elif entry.grade == '3' %}grade-cell-3
+                                        {% elif entry.grade == '2' %}grade-cell-2{% endif %}">
                                         {% if entry.grade == 'passed' %}з{% else %}{{ entry.grade }}{% endif %}
                                     </span>
                                 {% else %}
-                                    <span class="badge bg-{{ attendance_color(entry.attendance) }} attendance-badge">+</span>
+                                    <span class="cell-mark cell-mark-present" title="Присутствовал">●</span>
                                 {% endif %}
 
                                 <br>
@@ -261,8 +347,7 @@
 <!-- ============ МОБИЛЬНАЯ ВЕРСИЯ ============ -->
 <div class="d-md-none">
 
-    <!-- Список занятий карточками -->
-    <div class="card shadow-sm mb-3">
+    <div class="card shadow-sm mb-3 no-print">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
             <h6 class="mb-0">
                 <i class="bi bi-list-check"></i>
@@ -271,7 +356,6 @@
             <span class="badge bg-primary">{{ journal_data|length }}</span>
         </div>
         <div class="card-body p-2">
-            <!-- Фильтр по типу занятия -->
             <div class="mb-2">
                 <select class="form-select form-select-sm" id="mobileTypeFilter" onchange="filterMobileLessons()">
                     <option value="">Все типы занятий</option>
@@ -284,7 +368,6 @@
                 </select>
             </div>
 
-            <!-- Поиск по дате/теме -->
             <div class="mb-2">
                 <input type="text"
                        class="form-control form-control-sm"
@@ -293,7 +376,6 @@
                        oninput="filterMobileLessons()">
             </div>
 
-            <!-- Список занятий (новые сверху) -->
             <div class="mobile-lessons-list" id="mobileLessonsList" style="max-height: 400px; overflow-y: auto;">
                 {% for lesson in journal_data|reverse|list %}
                 {% set original_index = journal_data|length - loop.index %}
@@ -327,7 +409,6 @@
                     </div>
                     {% endif %}
 
-                    <!-- Краткая статистика -->
                     <div class="mt-1 small">
                         {% set present_count = lesson.entries.values()|selectattr('attendance', 'equalto', 'present')|list|length %}
                         {% set absent_count = lesson.entries.values()|selectattr('attendance', 'equalto', 'absent')|list|length %}
@@ -341,7 +422,6 @@
         </div>
     </div>
 
-    <!-- Информация о выбранном занятии -->
     <div class="card shadow-sm mb-3" id="selectedLessonCard" style="display:none;">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <div>
@@ -362,7 +442,6 @@
         </div>
     </div>
 
-    <!-- Список студентов для выбранного занятия -->
     <div id="mobileStudentsList" style="display:none;">
         <div class="card shadow-sm">
             <div class="card-header bg-primary text-white">
@@ -376,7 +455,7 @@
                 <div class="student-mobile-row p-2 mb-2 border rounded"
                      data-student-id="{{ student.id }}">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <a href="{{ url_for('main.student_card', sid=student.id) }}"
+                        <a href="{{ url_for('student_card.card', sid=student.id) }}"
                            class="text-decoration-none text-dark fw-bold small">
                             <i class="bi bi-person-circle"></i> {{ student.full_name }}
                         </a>
@@ -384,7 +463,6 @@
 
                     <div class="attendance-buttons d-flex gap-1 flex-wrap"
                          data-student-id="{{ student.id }}">
-                        <!-- JS заполнит -->
                     </div>
                 </div>
                 {% endfor %}
@@ -395,14 +473,17 @@
 </div>
 
 <!-- Легенда -->
-<div class="card mt-3 shadow-sm">
+<div class="card mt-3 shadow-sm no-print">
     <div class="card-body py-2">
-        <div class="d-flex flex-wrap gap-2 align-items-center">
+        <div class="d-flex flex-wrap gap-3 align-items-center">
             <small class="text-muted fw-bold">Обозначения:</small>
-            <span class="badge bg-success">+</span> <small>Присутствовал</small>
-            <span class="badge bg-danger">н</span> <small>Отсутствовал</small>
-            <span class="badge bg-info">5</span> <small>Оценка</small>
-            <span class="badge bg-success">з</span> <small>Зачтено</small>
+            <span><span class="cell-mark cell-mark-present">●</span> <small>Присутствовал</small></span>
+            <span><span class="cell-mark cell-mark-absent">●</span> <small>Отсутствовал</small></span>
+            <span><span class="cell-mark grade-cell-5">5</span> <small>Отлично</small></span>
+            <span><span class="cell-mark grade-cell-4">4</span> <small>Хорошо</small></span>
+            <span><span class="cell-mark grade-cell-3">3</span> <small>Удовл.</small></span>
+            <span><span class="cell-mark grade-cell-2">2</span> <small>Неуд.</small></span>
+            <span><span class="cell-mark grade-cell-passed">з</span> <small>Зачтено</small></span>
         </div>
     </div>
 </div>
@@ -535,12 +616,158 @@
     </div>
 </div>
 
+<!-- Модалка изменения типа занятия -->
+<div class="modal fade" id="editLessonTypeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title">
+                    <i class="bi bi-tag"></i>
+                    Изменить тип занятия
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border mb-3">
+                    <small>
+                        <strong>Дата:</strong> <span id="editTypeDate">—</span><br>
+                        <strong>Время:</strong> <span id="editTypeTime">—</span>
+                    </small>
+                </div>
+
+                <form id="editLessonTypeForm">
+                    <input type="hidden" id="editTypeGsid" name="gsid">
+                    <input type="hidden" id="editTypeDateInput" name="date">
+                    <input type="hidden" id="editTypeTimeInput" name="time_interval">
+                    <input type="hidden" name="semester" value="{{ current_semester }}">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Тип занятия</label>
+                        <select class="form-select" id="editTypeSelect" name="type">
+                            {% for type_val, type_label in type_names.items() %}
+                            <option value="{{ type_val }}">{{ type_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="alert alert-warning small mb-0">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Тип занятия изменится у <strong>всех студентов</strong> этой пары.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Отмена
+                </button>
+                <button type="submit" form="editLessonTypeForm" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Сохранить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     МОДАЛКА МАССОВЫХ ОЦЕНОК
+     ============================================================ -->
+<div class="modal fade" id="massGradeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-list-check"></i>
+                    Массовое выставление оценок
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-0">
+
+                <div class="p-3 bg-light border-bottom">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <strong id="mgLessonTitle">—</strong>
+                            <div class="small text-muted" id="mgLessonSubtitle">—</div>
+                        </div>
+                        <span class="badge bg-secondary" id="mgCountBadge">0 студентов</span>
+                    </div>
+                </div>
+
+                <div class="p-3 border-bottom">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold mb-1">
+                            <i class="bi bi-lightning-charge"></i>
+                            Поставить всем <u>присутствующим и выбранным</u>:
+                        </label>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button type="button" class="btn btn-sm btn-success mg-set-all" data-grade="5">5</button>
+                            <button type="button" class="btn btn-sm btn-info mg-set-all" data-grade="4">4</button>
+                            <button type="button" class="btn btn-sm btn-warning mg-set-all" data-grade="3">3</button>
+                            <button type="button" class="btn btn-sm btn-danger mg-set-all" data-grade="2">2</button>
+                            <button type="button" class="btn btn-sm btn-outline-success mg-set-all" data-grade="passed">Зачёт</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mg-set-all" data-grade="">—</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="form-label small fw-bold mb-1">
+                            <i class="bi bi-funnel"></i>
+                            Показать:
+                        </label>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <input type="radio" class="btn-check" name="mgFilter" id="mgFilterAll" value="all" checked>
+                            <label class="btn btn-outline-secondary" for="mgFilterAll">Все</label>
+
+                            <input type="radio" class="btn-check" name="mgFilter" id="mgFilterPresent" value="present">
+                            <label class="btn btn-outline-success" for="mgFilterPresent">Присутствующие</label>
+
+                            <input type="radio" class="btn-check" name="mgFilter" id="mgFilterAbsent" value="absent">
+                            <label class="btn btn-outline-danger" for="mgFilterAbsent">Отсутствующие</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="max-height: 50vh;">
+                    <table class="table table-sm table-hover align-middle mb-0" id="mgStudentsTable">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width: 40px;" class="text-center">
+                                    <input type="checkbox" class="form-check-input" id="mgSelectAll" checked>
+                                </th>
+                                <th>Студент</th>
+                                <th style="width: 90px;" class="text-center">Посещ.</th>
+                                <th style="width: 280px;" class="text-center">Оценка</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mgStudentsBody">
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <div class="me-auto small text-muted" id="mgStatus"></div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Отмена
+                </button>
+                <button type="button" class="btn btn-success" id="mgSaveBtn">
+                    <i class="bi bi-check-lg"></i> Сохранить оценки
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Данные для JS -->
 <script id="journalDataScript" type="application/json">
 {
     "gsid": {{ pair.id }},
     "semester": {{ current_semester }},
     "studentsCount": {{ students|length }},
+    "groupName": "{{ pair.group_name }}",
+    "subjectName": "{{ pair.subject_name }}",
     "lessons": [
         {% for lesson in journal_data %}
         {
@@ -568,7 +795,9 @@
 </script>
 
 <style>
-    /* ============ DRAG-TO-SCROLL КОНТЕЙНЕР ============ */
+    /* ============================================================
+       DRAG-TO-SCROLL КОНТЕЙНЕР
+       ============================================================ */
     .journal-scroll-container {
         overflow-x: auto;
         max-width: 100%;
@@ -579,49 +808,39 @@
         scrollbar-width: thin;
         scrollbar-color: #c0c0c0 #f1f1f1;
     }
-
-    .journal-scroll-container.dragging {
-        cursor: grabbing;
-    }
-
-    .journal-scroll-container.dragging * {
-        pointer-events: none;
-    }
-
-    .journal-scroll-container .lesson-type-select,
-    .journal-scroll-container .semester-grade-select,
-    .journal-scroll-container .edit-entry-btn,
+    .journal-scroll-container.dragging { cursor: grabbing; }
+    .journal-scroll-container.dragging * { pointer-events: none; }
     .journal-scroll-container .lesson-time-badge,
+    .journal-scroll-container .mass-grade-btn,
+    .journal-scroll-container .edit-entry-btn,
+    .journal-scroll-container .semester-grade-select,
     .journal-scroll-container .btn,
-    .journal-scroll-container a {
-        pointer-events: auto;
-    }
-
-    .journal-scroll-container.dragging .lesson-type-select,
-    .journal-scroll-container.dragging .semester-grade-select,
-    .journal-scroll-container.dragging .edit-entry-btn,
+    .journal-scroll-container .dropdown,
+    .journal-scroll-container a { pointer-events: auto; }
     .journal-scroll-container.dragging .lesson-time-badge,
+    .journal-scroll-container.dragging .mass-grade-btn,
+    .journal-scroll-container.dragging .edit-entry-btn,
+    .journal-scroll-container.dragging .semester-grade-select,
     .journal-scroll-container.dragging .btn,
-    .journal-scroll-container.dragging a {
-        pointer-events: none;
-    }
+    .journal-scroll-container.dragging .dropdown,
+    .journal-scroll-container.dragging a { pointer-events: none; }
 
-    /* ============ ТАБЛИЦА ============ */
+    /* ============================================================
+       ТАБЛИЦА
+       ============================================================ */
     .journal-table {
         font-size: 0.9rem;
         border-collapse: separate;
         border-spacing: 0;
         min-width: max-content;
     }
-
     .journal-table th,
     .journal-table td {
         vertical-align: middle;
         text-align: center;
-        padding: 8px;
+        padding: 6px 6px;
         border: 1px solid #dee2e6;
     }
-
     .journal-table thead th {
         background-color: #f8f9fa;
         font-weight: 600;
@@ -629,7 +848,6 @@
         top: 0;
         z-index: 1;
     }
-
     .fixed-left-col {
         position: sticky !important;
         left: 0 !important;
@@ -639,7 +857,6 @@
         text-align: left !important;
         white-space: nowrap;
     }
-
     .fixed-left-col-2 {
         position: sticky !important;
         left: 220px !important;
@@ -648,215 +865,377 @@
         box-shadow: 2px 0 4px rgba(0,0,0,0.08);
         min-width: 110px;
     }
-
     .journal-table thead .fixed-left-col,
     .journal-table thead .fixed-left-col-2 {
         z-index: 4 !important;
         background-color: #f8f9fa !important;
     }
 
+    /* ============================================================
+       КОМПАКТНАЯ ШАПКА КОЛОНКИ ЗАНЯТИЯ
+       ============================================================ */
     .lesson-column {
-        min-width: 130px;
+        min-width: 110px;
+        max-width: 130px;
         background-color: #fafbfc;
+        padding: 4px !important;
+        vertical-align: top !important;
     }
-
-    .date-header {
+    .lh-header-date {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
         white-space: nowrap;
+        line-height: 1.1;
     }
-
-    .topic {
-        max-width: 110px;
+    .lh-date {
+        font-weight: 600;
+        font-size: 0.78rem;
+    }
+    .lh-dow {
+        font-size: 0.7rem;
+        color: #6c757d;
+    }
+    .lh-header-time {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        margin-top: 2px;
+        line-height: 1.1;
+    }
+    .lh-time {
+        font-size: 0.7rem;
+        color: #0d6efd;
+        font-weight: 500;
+    }
+    .lh-type {
+        font-size: 0.65rem;
+        background-color: #e9ecef;
+        color: #495057;
+        padding: 1px 5px;
+        border-radius: 3px;
+    }
+    .lh-header-menu {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+    }
+    .lh-menu-btn {
+        color: #6c757d;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.15s;
+    }
+    .lh-menu-btn:hover { opacity: 1; color: #0d6efd; }
+    .lesson-column { position: relative; }
+    .lh-header-topic {
+        font-size: 0.68rem;
+        color: #6c757d;
+        margin-top: 2px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        max-width: 120px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* ============================================================
+       ЕДИНЫЙ СТИЛЬ ОЦЕНОК И ОТМЕТОК
+       ============================================================ */
+    .cell-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 24px;
+        height: 24px;
+        padding: 0 6px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        line-height: 1;
+        vertical-align: middle;
+    }
+    .cell-mark-present {
+        color: #198754;
+        background-color: #d1e7dd;
+        font-size: 1rem;
+    }
+    .cell-mark-absent {
+        color: #dc3545;
+        background-color: #f8d7da;
+        font-size: 1rem;
+    }
+    .grade-cell { padding: 2px 8px; }
+    .grade-cell-5 {
+        background-color: #d1e7dd;
+        color: #0a3622;
+        border: 1px solid #a3cfbb;
+    }
+    .grade-cell-4 {
+        background-color: #cff4fc;
+        color: #055160;
+        border: 1px solid #9eeaf9;
+    }
+    .grade-cell-3 {
+        background-color: #fff3cd;
+        color: #664d03;
+        border: 1px solid #ffe69c;
+    }
+    .grade-cell-2 {
+        background-color: #f8d7da;
+        color: #58151c;
+        border: 1px solid #f1aeb5;
+    }
+    .grade-cell-passed {
+        background-color: #d1e7dd;
+        color: #0a3622;
+        border: 1px solid #a3cfbb;
+    }
+    .grade-cell-empty {
+        background-color: #f8f9fa;
+        color: #adb5bd;
+        border: 1px solid #e9ecef;
+    }
+
+    .edit-entry-btn {
+        text-decoration: none;
         font-size: 0.75rem;
-        margin: 0 auto;
+        padding: 1px 3px;
+        opacity: 0.35;
+        transition: opacity 0.2s;
+    }
+    .cell-hover:hover .edit-entry-btn { opacity: 1; }
+
+    .semester-grade-select {
+        width: 85px;
+        display: inline-block;
+        font-size: 0.75rem;
+        cursor: pointer;
     }
 
     .exam-column {
         background-color: #fff5f5 !important;
         border-left: 3px solid #dc3545 !important;
     }
+    .exam-cell { background-color: #fffafa; }
 
-    .exam-cell {
-        background-color: #fffafa;
-    }
-
-    .attendance-badge {
-        font-size: 1rem;
-        padding: 6px 12px;
-        min-width: 32px;
-        display: inline-block;
-    }
-
-    .grade-badge {
-        font-size: 1.1rem;
-        padding: 6px 12px;
-        min-width: 32px;
-        display: inline-block;
-    }
-
-    .edit-entry-btn {
-        text-decoration: none;
-        font-size: 0.75rem;
-        padding: 2px 4px;
-        opacity: 0.4;
-        transition: opacity 0.2s;
-    }
-
-    .cell-hover:hover .edit-entry-btn {
-        opacity: 1;
-    }
-
-    .semester-grade-select {
-        width: 90px;
-        display: inline-block;
-        font-size: 0.75rem;
-        cursor: pointer;
-    }
-
-    .lesson-type-select {
-        width: 115px;
-        display: inline-block;
-        font-size: 0.75rem;
-        cursor: pointer;
-    }
-
-    /* ============ МОБИЛЬНАЯ ВЕРСИЯ ============ */
-    .mobile-lessons-list {
-        scrollbar-width: thin;
-    }
-
+    /* ============================================================
+       МОБИЛЬНАЯ ВЕРСИЯ
+       ============================================================ */
+    .mobile-lessons-list { scrollbar-width: thin; }
     .mobile-lesson-card {
         background-color: #fafbfc;
         transition: all 0.15s;
         cursor: pointer;
     }
-
     .mobile-lesson-card:active {
         background-color: #e7f1ff;
         transform: scale(0.98);
     }
-
     .mobile-lesson-card.selected {
         background-color: #cfe2ff;
         border-color: #0d6efd !important;
         border-width: 2px !important;
     }
-
-    .mobile-lesson-card.filtered-out {
-        display: none;
-    }
-
-    .student-mobile-row {
-        background-color: #fafbfc;
-    }
-
+    .mobile-lesson-card.filtered-out { display: none; }
+    .student-mobile-row { background-color: #fafbfc; }
     .attendance-buttons .btn {
         min-width: 42px;
         padding: 8px 10px;
         font-weight: 600;
         font-size: 0.9rem;
     }
-
-    .attendance-buttons .btn:active {
-        transform: scale(0.95);
-    }
+    .attendance-buttons .btn:active { transform: scale(0.95); }
 
     @media (max-width: 767px) {
-        .mobile-lessons-list {
-            max-height: 350px !important;
-        }
+        .mobile-lessons-list { max-height: 350px !important; }
     }
 
-    /* ============ ОПТИМИЗАЦИЯ ПОД iPHONE 12 MINI (375px) ============ */
     @media (max-width: 575.98px) {
-        h2 {
-            font-size: 1.2rem;
-        }
-
+        h2 { font-size: 1.2rem; }
         .btn-success.btn-lg {
             width: 100%;
             font-size: 1rem;
             padding: 0.55rem 1rem;
         }
-
-        .btn-group.btn-group-sm {
-            display: flex;
-            width: 100%;
-        }
+        .btn-group.btn-group-sm { display: flex; width: 100%; }
         .btn-group.btn-group-sm .btn {
             flex: 1;
             padding: 0.5rem 0.25rem;
             font-size: 0.85rem;
         }
-
-        .mobile-lesson-card {
-            padding: 0.55rem !important;
-        }
-        .mobile-lesson-card strong {
-            font-size: 0.92rem;
-        }
-        .mobile-lesson-card .badge {
-            font-size: 0.68rem;
-        }
-
+        .mobile-lesson-card { padding: 0.55rem !important; }
+        .mobile-lesson-card strong { font-size: 0.92rem; }
+        .mobile-lesson-card .badge { font-size: 0.68rem; }
         .attendance-buttons .btn {
             min-width: 44px;
             min-height: 44px;
             padding: 0.5rem 0.6rem;
             font-size: 0.95rem;
         }
-
-        .student-mobile-row {
-            padding: 0.6rem !important;
-        }
+        .student-mobile-row { padding: 0.6rem !important; }
     }
 
-    /* ============ ПЕЧАТЬ ============ */
+    /* ============================================================
+       ПАНЕЛЬ НАВИГАЦИИ ПО ДАТАМ
+       ============================================================ */
+    #dateNavPanel .btn-group-sm .btn {
+        min-width: 44px;
+        font-size: 0.8rem;
+    }
+    #monthNav .btn.active {
+        background-color: #0d6efd;
+        color: #fff;
+        border-color: #0d6efd;
+    }
+
+    /* ============================================================
+       ПЕЧАТЬ (улучшенная)
+       ============================================================ */
     @media print {
-        .navbar, .btn, .edit-entry-btn, .semester-grade-select,
-        .lesson-type-select, .alert, .d-md-none, footer,
-        .breadcrumbs, .lesson-time-badge {
+        @page {
+            size: A4 landscape;
+            margin: 8mm 6mm;
+        }
+
+        /* Скрываем всё интерактивное */
+        .no-print,
+        .navbar,
+        footer,
+        .breadcrumbs,
+        .btn,
+        .alert,
+        .dropdown,
+        .lh-header-menu,
+        .edit-entry-btn,
+        .semester-grade-select,
+        .mass-grade-btn,
+        #dateNavPanel {
             display: none !important;
         }
 
+        /* Заголовок страницы */
+        body {
+            background: #fff;
+            font-size: 10px;
+        }
+
+        h2 {
+            font-size: 14px;
+            margin-bottom: 6px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 4px;
+        }
+
+        /* Все карточки разворачиваем */
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+        }
+        .card-header,
+        .card-body {
+            padding: 0 !important;
+        }
+
+        /* Таблица во всю ширину */
         .journal-scroll-container {
             overflow: visible !important;
+            max-width: 100% !important;
         }
 
         .journal-table {
-            font-size: 9px;
-            min-width: auto;
+            font-size: 8px;
+            min-width: auto !important;
+            width: 100% !important;
+            border-collapse: collapse !important;
         }
 
+        .journal-table th,
+        .journal-table td {
+            padding: 2px 3px !important;
+            border: 1px solid #666 !important;
+        }
+
+        /* Убираем sticky */
         .fixed-left-col,
         .fixed-left-col-2 {
             position: static !important;
             box-shadow: none !important;
+            background-color: #f5f5f5 !important;
         }
 
-        .card {
-            border: none !important;
-            box-shadow: none !important;
+        .journal-table thead th {
+            position: static !important;
+            background-color: #e9ecef !important;
+        }
+
+        /* Шапка колонки компактнее */
+        .lesson-column {
+            min-width: auto !important;
+            max-width: 70px !important;
+            padding: 2px !important;
+        }
+
+        .lh-date { font-size: 8px; }
+        .lh-dow { font-size: 7px; }
+        .lh-time { font-size: 7px; }
+        .lh-type { font-size: 7px; padding: 0 3px; }
+        .lh-header-topic { display: none; }
+
+        /* Цветные ячейки сохраняем, но чуть приглушаем */
+        .cell-mark,
+        .grade-cell {
+            min-width: 16px;
+            height: 16px;
+            font-size: 8px;
+            padding: 0 3px;
+            border-radius: 8px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .cell-mark-present,
+        .cell-mark-absent {
+            font-size: 10px;
+        }
+
+        /* Студент — компактнее */
+        .student-name {
+            max-width: 120px !important;
+            font-size: 8px !important;
+        }
+
+        /* Экзамен-колонка — рамка */
+        .exam-column {
+            border-left: 2px solid #dc3545 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* Легенду печатаем мелко */
+        .card.mt-3 .card-body {
+            padding: 4px !important;
+            font-size: 7px;
         }
     }
 </style>
 
 {% endblock %}
 
+
 {% block scripts %}
 
 <script>
-// ==================== ДАННЫЕ ЖУРНАЛА ====================
 var journalData = JSON.parse(document.getElementById('journalDataScript').textContent);
 
-// Данные об интервалах по дням недели (из app.py)
 var ALL_TIME_INTERVALS = {{ all_time_intervals | tojson }};
 var DAY_NAMES_SHORT = {{ day_names_short | tojson }};
-var DEFAULT_DAY_FOR_INTERVALS = '1'; // Вт
+var DEFAULT_DAY_FOR_INTERVALS = '1';
 
-// ==================== DRAG-TO-SCROLL (десктоп) ====================
+// ==================== DRAG-TO-SCROLL ====================
 (function() {
     var container = document.getElementById('journalScroll');
     if (!container) return;
@@ -866,37 +1245,183 @@ var DEFAULT_DAY_FOR_INTERVALS = '1'; // Вт
     var scrollLeft;
 
     container.addEventListener('mousedown', function(e) {
-        if (e.target.closest('button, select, a, input, .lesson-time-badge')) return;
+        if (e.target.closest('button, select, a, input, .dropdown, .lh-menu-btn')) return;
 
         isDown = true;
         container.classList.add('dragging');
         startX = e.pageX - container.offsetLeft;
         scrollLeft = container.scrollLeft;
     });
-
     container.addEventListener('mouseleave', function() {
         isDown = false;
         container.classList.remove('dragging');
     });
-
     container.addEventListener('mouseup', function() {
         isDown = false;
         container.classList.remove('dragging');
     });
-
     container.addEventListener('mousemove', function(e) {
         if (!isDown) return;
         e.preventDefault();
-
         var x = e.pageX - container.offsetLeft;
         var walk = (x - startX) * 1.5;
-
         container.scrollLeft = scrollLeft - walk;
     });
-
     container.addEventListener('auxclick', function(e) {
         if (e.button === 1) e.preventDefault();
     });
+})();
+
+// ==================== НАВИГАЦИЯ ПО ДАТАМ ====================
+(function() {
+    var container = document.getElementById('journalScroll');
+    if (!container) return;
+
+    var months = {};  // {MM: [lessonIndex, ...]}
+
+    journalData.lessons.forEach(function(l, i) {
+        var mm = l.date.substring(5, 7);
+        if (!months[mm]) months[mm] = [];
+        months[mm].push(i);
+    });
+
+    var monthNames = {
+        '01': 'Янв', '02': 'Фев', '03': 'Мар', '04': 'Апр',
+        '05': 'Май', '06': 'Июн', '07': 'Июл', '08': 'Авг',
+        '09': 'Сен', '10': 'Окт', '11': 'Ноя', '12': 'Дек'
+    };
+
+    var nav = document.getElementById('monthNav');
+    var sortedMonths = Object.keys(months).sort();
+
+    sortedMonths.forEach(function(mm) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-outline-primary';
+        btn.textContent = monthNames[mm] || mm;
+        btn.dataset.month = mm;
+        btn.addEventListener('click', function() {
+            scrollToMonth(mm);
+        });
+        nav.appendChild(btn);
+    });
+
+    function scrollToMonth(mm) {
+        var indices = months[mm] || [];
+        if (!indices.length) return;
+        var firstIdx = indices[0];
+        var th = document.querySelector('th.lesson-column[data-lesson-month="' + mm + '"]');
+        if (th) {
+            // Прокрутка по горизонтали
+            var table = document.getElementById('journalTable');
+            var fixedCols = 220 + 110; // суммарная ширина sticky-колонок
+            var thLeft = th.offsetLeft;
+            container.scrollLeft = Math.max(0, thLeft - fixedCols - 20);
+
+            // Подсветка
+            nav.querySelectorAll('.btn').forEach(function(b) { b.classList.remove('active'); });
+            var btn = nav.querySelector('[data-month="' + mm + '"]');
+            if (btn) btn.classList.add('active');
+
+            // Плавный скролл
+            container.scrollTo({ left: container.scrollLeft, behavior: 'smooth' });
+        }
+    }
+
+    // Кнопка «Сегодня»
+    document.getElementById('navToToday').addEventListener('click', function() {
+        var today = new Date();
+        var iso = today.toISOString().substring(0, 10);
+        // Найти ближайшее занятие: сначала точное совпадение, иначе — ближайшее будущее, иначе — последнее
+        var exact = journalData.lessons.findIndex(function(l) { return l.date === iso; });
+        var target = exact;
+
+        if (target === -1) {
+            // Ближайшее занятие в будущем
+            for (var i = 0; i < journalData.lessons.length; i++) {
+                if (journalData.lessons[i].date >= iso) { target = i; break; }
+            }
+        }
+        if (target === -1) {
+            // Последнее занятие
+            target = journalData.lessons.length - 1;
+        }
+        if (target >= 0) {
+            scrollToLesson(target);
+        }
+    });
+
+    // Кнопка «Начало»
+    document.getElementById('navToStart').addEventListener('click', function() {
+        if (journalData.lessons.length) {
+            scrollToLesson(0);
+        }
+    });
+
+    // Кнопка «Конец»
+    document.getElementById('navToEnd').addEventListener('click', function() {
+        var n = journalData.lessons.length;
+        if (n) {
+            scrollToLesson(n - 1);
+        }
+    });
+
+    function scrollToLesson(idx) {
+        var lesson = journalData.lessons[idx];
+        if (!lesson) return;
+        var th = document.querySelector('th.lesson-column[data-lesson-date="' + lesson.date + '"]');
+        if (th) {
+            var fixedCols = 220 + 110;
+            var thLeft = th.offsetLeft;
+            container.scrollLeft = Math.max(0, thLeft - fixedCols - 20);
+
+            // Подсветка колонки
+            th.style.transition = 'background-color 0.4s';
+            var oldBg = th.style.backgroundColor;
+            th.style.backgroundColor = '#fff3cd';
+            setTimeout(function() {
+                th.style.backgroundColor = oldBg;
+            }, 1200);
+        }
+    }
+
+    // Поиск по дате
+    var searchInput = document.getElementById('dateSearchInput');
+    var searchStatus = document.getElementById('dateSearchStatus');
+
+    if (searchInput) {
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+
+            var query = this.value.trim();
+            if (!query) {
+                searchStatus.textContent = '';
+                return;
+            }
+
+            // Ищем точное совпадение по dateFormatted или частичное
+            var found = -1;
+            for (var i = 0; i < journalData.lessons.length; i++) {
+                var l = journalData.lessons[i];
+                if (l.dateFormatted === query ||
+                    l.dateFormatted.indexOf(query) !== -1 ||
+                    l.dateFormatted.replace(/\./g, '').indexOf(query.replace(/\./g, '')) !== -1) {
+                    found = i;
+                    break;
+                }
+            }
+
+            if (found >= 0) {
+                scrollToLesson(found);
+                searchStatus.textContent = '✓ Найдено: ' + journalData.lessons[found].dateFormatted;
+                searchStatus.className = 'small text-success';
+            } else {
+                searchStatus.textContent = '✗ Не найдено';
+                searchStatus.className = 'small text-danger';
+            }
+        });
+    }
 })();
 
 // ==================== МОБИЛЬНАЯ ВЕРСИЯ ====================
@@ -1122,44 +1647,42 @@ document.getElementById('editEntryForm').addEventListener('submit', async functi
     }
 });
 
-// ==================== ДЕСКТОП: ИЗМЕНЕНИЕ ТИПА ЗАНЯТИЯ ====================
-document.querySelectorAll('.lesson-type-select').forEach(function(select) {
-    select.addEventListener('change', async function() {
-        var gsid = this.dataset.gsid;
-        var date = this.dataset.date;
-        var timeInterval = this.dataset.time;
-        var semester = this.dataset.semester;
-        var newType = this.value;
-
-        if (newType === 'exam') {
-            if (!confirm('Изменить на Экзамен?\n\nПосле этого нельзя будет добавить другие занятия.')) {
-                location.reload();
-                return;
-            }
-        } else {
-            if (!confirm('Изменить тип занятия?')) {
-                location.reload();
-                return;
-            }
-        }
-
-        var formData = new FormData();
-        formData.append('gsid', gsid);
-        formData.append('date', date);
-        formData.append('time_interval', timeInterval);
-        formData.append('semester', semester);
-        formData.append('type', newType);
-
-        try {
-            var response = await fetch('/journal/update-lesson-type', { method: 'POST', body: formData });
-            var result = await response.json();
-            if (result.success) location.reload();
-            else { alert('Ошибка: ' + result.message); location.reload(); }
-        } catch (error) {
-            alert('Ошибка соединения');
-            location.reload();
-        }
+// ==================== ИЗМЕНЕНИЕ ТИПА (МОДАЛКА) ====================
+document.querySelectorAll('[data-bs-target="#editLessonTypeModal"]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.getElementById('editTypeDate').textContent = this.dataset.dateFormatted;
+        document.getElementById('editTypeTime').textContent = this.dataset.timeFormatted;
+        document.getElementById('editTypeGsid').value = this.dataset.gsid;
+        document.getElementById('editTypeDateInput').value = this.dataset.date;
+        document.getElementById('editTypeTimeInput').value = this.dataset.time;
+        document.getElementById('editTypeSelect').value = this.dataset.currentType;
     });
+});
+
+document.getElementById('editLessonTypeForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    var formData = new FormData(this);
+    var newType = formData.get('type');
+
+    if (newType === 'exam') {
+        if (!confirm('Изменить на Экзамен?\n\nПосле этого нельзя будет добавить другие занятия.')) {
+            return;
+        }
+    }
+
+    try {
+        var response = await fetch('/journal/update-lesson-type', { method: 'POST', body: formData });
+        var result = await response.json();
+        if (result.success) {
+            bootstrap.Modal.getInstance(document.getElementById('editLessonTypeModal')).hide();
+            location.reload();
+        } else {
+            alert('Ошибка: ' + result.message);
+        }
+    } catch (error) {
+        alert('Ошибка соединения');
+    }
 });
 
 // ==================== ОЦЕНКА ЗА СЕМЕСТР ====================
@@ -1181,18 +1704,15 @@ document.querySelectorAll('.semester-grade-select').forEach(function(select) {
 
             if (result.success) {
                 var display = cell.querySelector('.grade-display');
-                var colors = {
-                    'passed': 'success', '5': 'success', '4': 'info',
-                    '3': 'warning text-dark', '2': 'danger'
-                };
-                if (grade) {
-                    var cls = colors[grade] || 'secondary';
-                    display.textContent = (grade === 'passed' ? 'Зачтено' : grade);
-                    display.className = 'badge bg-' + cls + ' grade-display';
-                } else {
-                    display.textContent = '—';
-                    display.className = 'badge bg-secondary grade-display';
-                }
+                display.textContent = (grade === 'passed' ? 'Зачтено' : (grade || '—'));
+
+                var cls = 'grade-cell ';
+                if (grade === 'passed' || grade === '5') cls += 'grade-cell-5';
+                else if (grade === '4') cls += 'grade-cell-4';
+                else if (grade === '3') cls += 'grade-cell-3';
+                else if (grade === '2') cls += 'grade-cell-2';
+                else cls += 'grade-cell-empty';
+                display.className = 'badge grade-display ' + cls;
             } else {
                 alert('Ошибка: ' + result.message);
                 location.reload();
@@ -1204,14 +1724,13 @@ document.querySelectorAll('.semester-grade-select').forEach(function(select) {
 });
 
 // ==================== ИЗМЕНЕНИЕ ВРЕМЕНИ ЗАНЯТИЯ ====================
-
 function getWeekdayFromDate(dateStr) {
     if (!dateStr) return null;
     var parts = dateStr.split('-');
     if (parts.length !== 3) return null;
     var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     if (isNaN(d.getTime())) return null;
-    var wd = d.getDay(); // 0=Вс, 1=Пн, ..., 6=Сб
+    var wd = d.getDay();
     return wd === 0 ? '6' : String(wd - 1);
 }
 
@@ -1223,7 +1742,6 @@ function formatHHMMEdit(v) {
 document.querySelectorAll('.lesson-time-badge').forEach(function (badge) {
     badge.addEventListener('click', function (e) {
         e.preventDefault();
-        e.stopPropagation();
 
         var date = this.dataset.date;
         var time = this.dataset.time;
@@ -1284,5 +1802,244 @@ if (editTimeForm) {
         }
     });
 }
+
+// ==================== МАССОВОЕ ВЫСТАВЛЕНИЕ ОЦЕНОК ====================
+var mgCurrentLesson = null;
+var mgCurrentGsid = {{ pair.id }};
+
+document.querySelectorAll('.mass-grade-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var date = this.dataset.date;
+        var time = this.dataset.time;
+
+        var idx = journalData.lessons.findIndex(function (l) {
+            return l.date === date && l.time === time;
+        });
+        if (idx === -1) {
+            alert('Занятие не найдено');
+            return;
+        }
+
+        mgCurrentLesson = idx;
+        var lesson = journalData.lessons[idx];
+
+        document.getElementById('mgLessonTitle').textContent =
+            lesson.dateFormatted + (lesson.dayOfWeek ? ' • ' + lesson.dayOfWeek : '') +
+            (lesson.time ? ' • ' + lesson.time : '');
+        document.getElementById('mgLessonSubtitle').textContent =
+            lesson.typeName + (lesson.topic ? ' • ' + lesson.topic : '');
+
+        mgBuildTable(lesson);
+        document.getElementById('mgCountBadge').textContent =
+            Object.keys(lesson.entries).length + ' студентов';
+        document.getElementById('mgStatus').textContent = '';
+
+        document.getElementById('mgFilterAll').checked = true;
+    });
+});
+
+function mgBuildTable(lesson) {
+    var tbody = document.getElementById('mgStudentsBody');
+    tbody.innerHTML = '';
+
+    var studentIds = Object.keys(lesson.entries);
+    var domOrder = {};
+    document.querySelectorAll('td.student-name a[data-student-id]').forEach(function (a, i) {
+        domOrder[a.dataset.studentId] = i;
+    });
+    studentIds.sort(function (a, b) {
+        return (domOrder[a] !== undefined ? domOrder[a] : 999) -
+               (domOrder[b] !== undefined ? domOrder[b] : 999);
+    });
+
+    studentIds.forEach(function (sid) {
+        var entry = lesson.entries[sid];
+
+        var nameLink = document.querySelector('td.student-name a[data-student-id="' + sid + '"]');
+        var fullName = nameLink ? nameLink.textContent.trim() : '#' + sid;
+
+        var tr = document.createElement('tr');
+        tr.dataset.studentId = sid;
+        tr.dataset.entryId = entry.id;
+        tr.dataset.attendance = entry.attendance;
+        tr.dataset.grade = entry.grade || '';
+
+        var tdCheck = document.createElement('td');
+        tdCheck.className = 'text-center';
+        tdCheck.innerHTML =
+            '<input type="checkbox" class="form-check-input mg-student-check" ' +
+            'data-student-id="' + sid + '" checked>';
+        tr.appendChild(tdCheck);
+
+        var tdName = document.createElement('td');
+        tdName.className = 'small';
+        tdName.textContent = fullName;
+        tr.appendChild(tdName);
+
+        var tdAtt = document.createElement('td');
+        tdAtt.className = 'text-center';
+        tdAtt.innerHTML = entry.attendance === 'present'
+            ? '<span class="badge bg-success">+</span>'
+            : '<span class="badge bg-danger">н</span>';
+        tr.appendChild(tdAtt);
+
+        var tdGrade = document.createElement('td');
+        tdGrade.className = 'text-center';
+        tdGrade.innerHTML = mgGradeButtonsHtml(entry.grade || '');
+        tr.appendChild(tdGrade);
+
+        tbody.appendChild(tr);
+    });
+
+    mgAttachHandlers();
+}
+
+function mgGradeButtonsHtml(currentGrade) {
+    var buttons = [
+        { value: '5', label: '5', cls: 'success' },
+        { value: '4', label: '4', cls: 'info' },
+        { value: '3', label: '3', cls: 'warning' },
+        { value: '2', label: '2', cls: 'danger' },
+        { value: 'passed', label: 'з', cls: 'success' },
+        { value: '', label: '—', cls: 'secondary' },
+    ];
+
+    return '<div class="btn-group btn-group-sm">' +
+        buttons.map(function (b) {
+            var active = b.value === currentGrade;
+            var cls = active
+                ? 'btn btn-' + b.cls
+                : 'btn btn-outline-' + b.cls;
+            return '<button type="button" class="' + cls + ' mg-grade-btn" ' +
+                'data-grade="' + b.value + '">' + b.label + '</button>';
+        }).join('') +
+        '</div>';
+}
+
+function mgAttachHandlers() {
+    document.querySelectorAll('#mgStudentsBody .mg-grade-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var tr = this.closest('tr');
+            var newGrade = this.dataset.grade;
+            tr.dataset.grade = newGrade;
+            var tdGrade = tr.querySelector('td:last-child');
+            tdGrade.innerHTML = mgGradeButtonsHtml(newGrade);
+            mgAttachHandlers();
+        });
+    });
+
+    document.querySelectorAll('.mg-student-check').forEach(function (cb) {
+        cb.addEventListener('change', mgUpdateSelection);
+    });
+
+    var selectAll = document.getElementById('mgSelectAll');
+    if (selectAll) {
+        selectAll.onchange = function () {
+            document.querySelectorAll('.mg-student-check').forEach(function (cb) {
+                cb.checked = selectAll.checked;
+            });
+            mgUpdateSelection();
+        };
+    }
+}
+
+function mgUpdateSelection() {
+    var checks = document.querySelectorAll('.mg-student-check');
+    var checked = document.querySelectorAll('.mg-student-check:checked').length;
+    var selectAll = document.getElementById('mgSelectAll');
+    if (selectAll) {
+        selectAll.checked = (checked === checks.length);
+        selectAll.indeterminate = (checked > 0 && checked < checks.length);
+    }
+}
+
+document.querySelectorAll('.mg-set-all').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var grade = this.dataset.grade;
+        document.querySelectorAll('#mgStudentsBody tr').forEach(function (tr) {
+            var check = tr.querySelector('.mg-student-check');
+            if (!check || !check.checked) return;
+
+            var attendance = tr.dataset.attendance;
+            if (attendance !== 'present') return;
+
+            tr.dataset.grade = grade;
+            var tdGrade = tr.querySelector('td:last-child');
+            tdGrade.innerHTML = mgGradeButtonsHtml(grade);
+        });
+        mgAttachHandlers();
+    });
+});
+
+document.querySelectorAll('input[name="mgFilter"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+        var val = this.value;
+        document.querySelectorAll('#mgStudentsBody tr').forEach(function (tr) {
+            if (val === 'all') {
+                tr.style.display = '';
+            } else if (val === 'present') {
+                tr.style.display = tr.dataset.attendance === 'present' ? '' : 'none';
+            } else if (val === 'absent') {
+                tr.style.display = tr.dataset.attendance === 'absent' ? '' : 'none';
+            }
+        });
+    });
+});
+
+document.getElementById('mgSaveBtn').addEventListener('click', async function () {
+    if (mgCurrentLesson === null) return;
+
+    var updates = [];
+
+    document.querySelectorAll('#mgStudentsBody tr').forEach(function (tr) {
+        var check = tr.querySelector('.mg-student-check');
+        if (!check || !check.checked) return;
+
+        var entryId = parseInt(tr.dataset.entryId);
+        var attendance = tr.dataset.attendance;
+        var grade = tr.dataset.grade || null;
+
+        updates.push({
+            entry_id: entryId,
+            attendance: attendance,
+            grade: grade,
+        });
+    });
+
+    if (updates.length === 0) {
+        alert('Не выбрано ни одного студента');
+        return;
+    }
+
+    var btn = this;
+    var originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Сохранение...';
+
+    try {
+        var response = await fetch('/journal/' + mgCurrentGsid + '/update-grades-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates: updates }),
+        });
+        var result = await response.json();
+
+        if (result.success) {
+            document.getElementById('mgStatus').textContent =
+                '✓ ' + (result.message || 'Сохранено');
+            setTimeout(function () {
+                window.location.reload();
+            }, 400);
+        } else {
+            alert('Ошибка: ' + result.message);
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    } catch (err) {
+        alert('Ошибка соединения');
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+});
 </script>
 {% endblock %}

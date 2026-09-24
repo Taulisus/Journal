@@ -1,12 +1,40 @@
 /* ============================================================
-   ОСНОВНЫЕ СТИЛИ
+   ОСНОВНЫЕ СТИЛИ + ФОН
    ============================================================ */
 
 body {
-    background-color: #f5f5f5;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    color: #212529;
+    background-color: #eaf1f8;   /* подложка, если фото не загрузится */
+    position: relative;
+}
+
+/* Слой с фото здания — фиксированный, слегка размытый */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background: url('img/IMG_5853.jpg') center top / cover no-repeat;
+    filter: blur(1.5px) brightness(1.05);
+    transform: scale(1.02);   /* прячем размытые края за пределами экрана */
+    image-rendering: auto;
+}
+
+/* Слой с синим градиентом и белой плёнкой — поверх фото */
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+        linear-gradient(135deg,
+            rgba(46, 93, 140, 0.08) 0%,
+            rgba(46, 155, 232, 0.08) 100%),
+        rgba(255, 255, 255, 0.78);
+    pointer-events: none;
 }
 
 footer {
@@ -16,6 +44,23 @@ footer {
 /* ============================================================
    НАВИГАЦИЯ
    ============================================================ */
+
+.app-navbar {
+    background: linear-gradient(135deg, #2E5D8C 0%, #2E9BE8 100%);
+    box-shadow: 0 2px 8px rgba(46, 93, 140, 0.25);
+}
+
+.app-logo {
+    height: 38px;
+    width: auto;
+    object-fit: contain;
+    display: block;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+@media (max-width: 575.98px) {
+    .app-logo { height: 32px; }
+}
 
 .navbar-brand {
     font-weight: 600;
@@ -38,7 +83,6 @@ footer {
     background-color: rgba(0, 0, 0, 0.02);
 }
 
-/* Таблица журнала */
 .journal-table {
     font-size: 0.9rem;
     border-collapse: separate;
@@ -95,7 +139,6 @@ footer {
     font-size: 0.75rem;
 }
 
-/* Колонка экзамена */
 .journal-table .exam-column {
     background-color: #fff5f5 !important;
     border-left: 3px solid #dc3545 !important;
@@ -146,7 +189,6 @@ footer {
     transform: scale(0.97);
 }
 
-/* Кнопка редактирования записи */
 .edit-entry-btn {
     text-decoration: none;
     font-size: 0.8rem;
@@ -163,7 +205,6 @@ footer {
     color: #0d6efd;
 }
 
-/* Кнопки быстрой отметки (мобильные) */
 .attendance-quick-btn {
     min-width: 40px;
     padding: 6px 10px;
@@ -185,7 +226,7 @@ footer {
 }
 
 .semester-grade-select:hover {
-    border-color: #0d6efd;
+    border-color: #2E9BE8;
 }
 
 .lesson-type-select {
@@ -194,8 +235,8 @@ footer {
 }
 
 .lesson-type-select:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    border-color: #2E9BE8;
+    box-shadow: 0 0 0 0.2rem rgba(46, 155, 232, 0.25);
 }
 
 /* ============================================================
@@ -227,7 +268,6 @@ footer {
     box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
 }
 
-/* Журналы (список пар) */
 .journal-item {
     transition: all 0.2s ease;
     border-left: 3px solid transparent;
@@ -235,7 +275,7 @@ footer {
 
 .journal-item:hover {
     background-color: #f8f9fa;
-    border-left-color: #0d6efd;
+    border-left-color: #2E9BE8;
     transform: translateX(2px);
 }
 
@@ -243,7 +283,6 @@ footer {
     display: none;
 }
 
-/* Семестры */
 .semester-card {
     transition: all 0.3s ease;
 }
@@ -257,14 +296,8 @@ footer {
    ============================================================ */
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-5px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .alert {
@@ -275,177 +308,63 @@ footer {
    МОБИЛЬНАЯ АДАПТАЦИЯ
    ============================================================ */
 
-/* Планшеты и большие телефоны (до 768px) */
 @media (max-width: 768px) {
-    /* Уменьшаем размер шрифта таблиц */
-    .table-responsive {
-        font-size: 0.85rem;
-    }
-
-    /* Компактные кнопки */
-    .btn-group-sm .btn {
-        padding: 4px 8px;
-        font-size: 0.75rem;
-    }
-
-    /* Отключаем sticky на мобильных */
+    .table-responsive { font-size: 0.85rem; }
+    .btn-group-sm .btn { padding: 4px 8px; font-size: 0.75rem; }
     .journal-table .student-name,
-    .journal-table thead th {
-        position: static !important;
-    }
-
-    /* Модальные окна на всю ширину */
+    .journal-table thead th { position: static !important; }
     .modal-dialog {
         margin: 0.5rem;
         max-width: calc(100% - 1rem);
     }
 }
 
-/* Маленькие телефоны (до 576px) */
 @media (max-width: 576px) {
-    /* Меньше отступы */
-    .container,
-    .container-fluid {
+    .container, .container-fluid {
         padding-left: 10px;
         padding-right: 10px;
     }
-
-    /* Размер шрифта */
-    body {
-        font-size: 14px;
-    }
-
-    h2 {
-        font-size: 1.25rem;
-    }
-
-    h3 {
-        font-size: 1.15rem;
-    }
-
-    h4 {
-        font-size: 1.05rem;
-    }
-
-    h5 {
-        font-size: 1rem;
-    }
-
-    h6 {
-        font-size: 0.9rem;
-    }
-
-    /* Кнопки */
-    .btn-lg {
-        font-size: 0.9rem;
-        padding: 8px 12px;
-    }
-
-    .btn-sm {
-        font-size: 0.75rem;
-        padding: 4px 8px;
-    }
-
-    /* Навигация */
-    .navbar-brand {
-        font-size: 1rem;
-    }
-
-    .nav-link {
-        padding: 0.5rem 0.75rem;
-    }
-
-    /* Карточки */
-    .card-body {
-        padding: 12px;
-    }
-
-    .card-header {
-        padding: 8px 12px;
-    }
-
-    /* Модальные окна на весь экран */
+    body { font-size: 14px; }
+    h2 { font-size: 1.25rem; }
+    h3 { font-size: 1.15rem; }
+    h4 { font-size: 1.05rem; }
+    h5 { font-size: 1rem; }
+    h6 { font-size: 0.9rem; }
+    .btn-lg { font-size: 0.9rem; padding: 8px 12px; }
+    .btn-sm { font-size: 0.75rem; padding: 4px 8px; }
+    .navbar-brand { font-size: 1rem; }
+    .nav-link { padding: 0.5rem 0.75rem; }
+    .card-body { padding: 12px; }
+    .card-header { padding: 8px 12px; }
     .modal-dialog {
         margin: 0;
         max-width: 100%;
         min-height: 100vh;
     }
-
     .modal-content {
         border-radius: 0;
         min-height: 100vh;
     }
-
-    .modal-dialog.modal-sm {
-        max-width: 100%;
-    }
-
-    /* Скрываем лишние элементы */
-    .hide-mobile {
-        display: none !important;
-    }
-
-    /* Прогресс-бары */
-    .progress {
-        height: 16px;
-    }
-
-    .progress-bar {
-        font-size: 0.7rem;
-        line-height: 16px;
-    }
-
-    /* Бейджи */
-    .badge {
-        font-size: 0.75rem;
-    }
-
-    /* Таблицы */
-    .table th,
-    .table td {
-        padding: 6px 4px;
-        font-size: 0.8rem;
-    }
+    .modal-dialog.modal-sm { max-width: 100%; }
+    .hide-mobile { display: none !important; }
+    .progress { height: 16px; }
+    .progress-bar { font-size: 0.7rem; line-height: 16px; }
+    .badge { font-size: 0.75rem; }
+    .table th, .table td { padding: 6px 4px; font-size: 0.8rem; }
 }
 
-/* iPhone 12 mini и подобные (до 400px) */
 @media (max-width: 400px) {
-    /* Кнопки быстрой отметки */
     .attendance-quick-btn {
         min-width: 35px;
         padding: 5px 8px;
         font-size: 0.8rem;
     }
-
-    /* Строки занятий */
-    .lesson-row {
-        padding: 8px !important;
-    }
-
-    /* Карточки */
-    .card-header {
-        padding: 8px 10px;
-    }
-
-    .card-body {
-        padding: 8px !important;
-    }
-
-    /* Заголовки */
-    h2 {
-        font-size: 1.1rem;
-    }
-
-    /* Кнопки */
-    .btn-lg {
-        font-size: 0.85rem;
-        padding: 6px 10px;
-    }
-
-    /* Скрываем дополнительный текст */
-    .d-none.d-xs-inline {
-        display: none !important;
-    }
+    .lesson-row { padding: 8px !important; }
+    .card-header { padding: 8px 10px; }
+    .card-body { padding: 8px !important; }
+    h2 { font-size: 1.1rem; }
+    .btn-lg { font-size: 0.85rem; padding: 6px 10px; }
+    .d-none.d-xs-inline { display: none !important; }
 }
 
 /* ============================================================
@@ -453,7 +372,12 @@ footer {
    ============================================================ */
 
 @media print {
-    /* Скрываем лишние элементы */
+    /* Скрываем фоновые слои */
+    body::before,
+    body::after {
+        display: none !important;
+    }
+
     .navbar,
     .btn,
     .no-print,
@@ -467,68 +391,41 @@ footer {
         display: none !important;
     }
 
-    /* Показываем таблицу при печати даже на мобильных */
-    .d-none.d-md-block {
-        display: block !important;
-    }
+    .d-none.d-md-block { display: block !important; }
 
-    /* Убираем тени и рамки */
     .card {
         border: 1px solid #ddd !important;
         box-shadow: none !important;
         break-inside: avoid;
     }
 
-    /* Размер шрифта таблицы */
-    .journal-table {
-        font-size: 10px;
-    }
-
+    .journal-table { font-size: 10px; }
     .journal-table th,
-    .journal-table td {
-        padding: 4px;
-    }
+    .journal-table td { padding: 4px; }
 
-    /* Фон */
     body {
-        background: #fff;
-    }
-
-    .student-name {
         background: #fff !important;
+        background-image: none !important;
     }
 
-    .exam-column {
-        background-color: #fff5f5 !important;
-    }
+    .student-name { background: #fff !important; }
+    .exam-column { background-color: #fff5f5 !important; }
 
-    /* Отступы страницы */
-    @page {
-        margin: 1cm;
-    }
+    @page { margin: 1cm; }
 
-    /* Прогресс-бары */
-    .progress {
-        border: 1px solid #ddd;
-    }
+    .progress { border: 1px solid #ddd; }
 }
 
 /* ============================================================
    КАСТОМНЫЕ УТИЛИТЫ
    ============================================================ */
 
-/* Скрыть на мобильном */
 @media (max-width: 767px) {
-    .d-md-only {
-        display: none !important;
-    }
+    .d-md-only { display: none !important; }
 }
 
-/* Показать только на мобильном */
 @media (min-width: 768px) {
-    .d-mobile-only {
-        display: none !important;
-    }
+    .d-mobile-only { display: none !important; }
 }
 
 /* ============================================================
@@ -537,8 +434,8 @@ footer {
 
 .form-control:focus,
 .form-select:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    border-color: #2E9BE8;
+    box-shadow: 0 0 0 0.2rem rgba(46, 155, 232, 0.25);
 }
 
 .form-label {
@@ -559,27 +456,9 @@ footer {
 }
 
 /* ============================================================
-   ПЛАВНОЕ ПОЯВЛЕНИЕ
-   ============================================================ */
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.7;
-    }
-}
-
-.loading {
-    animation: pulse 1.5s infinite;
-}
-
-/* ============================================================
    СПЕЦИАЛЬНЫЕ СТИЛИ
    ============================================================ */
 
-/* Стили для ячеек, где можно редактировать */
 .cell-hover {
     position: relative;
     transition: background-color 0.15s;
@@ -589,7 +468,6 @@ footer {
     background-color: #f0f8ff;
 }
 
-/* Стили для сводных карточек статистики */
 .stat-card {
     transition: transform 0.2s;
 }
@@ -598,7 +476,6 @@ footer {
     transform: translateY(-2px);
 }
 
-/* Стили для быстрых ссылок */
 .quick-link {
     transition: all 0.15s;
 }
@@ -608,7 +485,7 @@ footer {
 }
 
 /* ============================================================
-   SCROLLBAR (для десктопа)
+   SCROLLBAR
    ============================================================ */
 
 ::-webkit-scrollbar {
@@ -634,33 +511,16 @@ footer {
    ЦВЕТОВЫЕ АКЦЕНТЫ
    ============================================================ */
 
-/* Отличные оценки */
-.grade-excellent {
-    color: #198754;
-}
-
-/* Хорошие оценки */
-.grade-good {
-    color: #0d6efd;
-}
-
-/* Удовлетворительные */
-.grade-satisfactory {
-    color: #ffc107;
-}
-
-/* Неудовлетворительные */
-.grade-poor {
-    color: #dc3545;
-}
+.grade-excellent { color: #198754; }
+.grade-good { color: #0d6efd; }
+.grade-satisfactory { color: #ffc107; }
+.grade-poor { color: #dc3545; }
 
 /* ============================================================
    УТИЛИТЫ
    ============================================================ */
 
-.cursor-pointer {
-    cursor: pointer;
-}
+.cursor-pointer { cursor: pointer; }
 
 .text-truncate-2 {
     overflow: hidden;
@@ -670,10 +530,5 @@ footer {
     -webkit-box-orient: vertical;
 }
 
-.min-width-200 {
-    min-width: 200px;
-}
-
-.min-width-130 {
-    min-width: 130px;
-}
+.min-width-200 { min-width: 200px; }
+.min-width-130 { min-width: 130px; }

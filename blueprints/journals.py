@@ -345,6 +345,60 @@ def update_entry(gsid):
     return jsonify({'success': s, 'message': m})
 
 
+@journals_bp.route('/journal/<int:gsid>/update-grades-batch', methods=['POST'])
+@permission_required('view_journals')
+def update_grades_batch(gsid):
+    """
+    Массовое обновление оценок в журнале.
+
+    Ожидает JSON:
+    {
+        "updates": [
+            {"entry_id": 1, "attendance": "present", "grade": "5"},
+            {"entry_id": 2, "attendance": "absent", "grade": null}
+        ]
+    }
+    """
+    uid = session['user_id']
+
+    resp = _require_journal_access_json(uid, gsid)
+    if resp:
+        return resp
+
+    data = request.get_json(silent=True) or {}
+    updates = data.get('updates') or []
+
+    if not isinstance(updates, list):
+        return jsonify({'success': False, 'message': 'Некорректный формат'}), 400
+
+    # Проверяем, что все entry_id принадлежат этому журналу
+    for item in updates:
+        entry_id = item.get('entry_id')
+        if not entry_id:
+            continue
+        entry = JournalManager.get_entry(gsid, entry_id)
+        if not entry:
+            return jsonify({
+                'success': False,
+                'message': f'Запись #{entry_id} не найдена в этом журнале'
+            }), 404
+
+    ok, msg, count = JournalManager.update_grades_batch(gsid, updates)
+
+    if ok:
+        log_activity(
+            uid, 'edit_entry',
+            f'Массовая оценка: журнал #{gsid}, обновлено {count} записей',
+            'journal', gsid,
+        )
+
+    return jsonify({
+        'success': ok,
+        'message': msg,
+        'updated': count,
+    })
+
+
 @journals_bp.route('/journal/update-lesson-type', methods=['POST'])
 @permission_required('view_journals')
 def update_lesson_type():

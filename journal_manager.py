@@ -426,3 +426,54 @@ class JournalManager:
                 'lecture': 0, 'practice': 0, 'independent': 0,
                 'exam': 0, 'dictation': 0, 'diff_credit': 0, 'total': 0
             }
+
+    @staticmethod
+    def update_grades_batch(gs_id, updates):
+        """
+        Массовое обновление записей журнала.
+
+        updates = [
+            {'entry_id': 1, 'attendance': 'present', 'grade': '5'},
+            {'entry_id': 2, 'attendance': 'absent', 'grade': None},
+            ...
+        ]
+
+        Возвращает (ok, message, updated_count).
+        """
+        if not updates:
+            return False, "Нет изменений", 0
+
+        conn = get_db()
+        table_name = JournalManager.get_table_name(gs_id)
+        updated = 0
+
+        try:
+            for item in updates:
+                entry_id = item.get('entry_id')
+                if not entry_id:
+                    continue
+
+                attendance = item.get('attendance', 'present')
+                if attendance not in ('present', 'absent'):
+                    continue
+
+                grade = item.get('grade') or None
+                if grade not in (None, '', '2', '3', '4', '5', 'passed'):
+                    continue
+
+                cur = conn.execute(f'''
+                    UPDATE {table_name}
+                    SET attendance = ?, grade = ?
+                    WHERE id = ?
+                ''', (attendance, grade, entry_id))
+
+                if cur.rowcount:
+                    updated += 1
+
+            conn.commit()
+            return True, f"Обновлено записей: {updated}", updated
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка: {e}", 0
+        finally:
+            conn.close()
