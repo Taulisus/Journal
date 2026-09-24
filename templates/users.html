@@ -21,7 +21,7 @@
                 <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Добавить пользователя</h5>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('main.add_user') }}" id="addUserForm">
+                <form method="POST" action="{{ url_for('users.add') }}" id="addUserForm">
                     <div class="mb-3">
                         <label class="form-label fw-bold">Логин *</label>
                         <input type="text" class="form-control no-emoji" name="username"
@@ -182,7 +182,7 @@
                                             <i class="bi bi-pencil"></i>
                                         </button>
 
-                                        <a href="{{ url_for('main.assign_journals', uid=user.id) }}"
+                                        <a href="{{ url_for('users.assign_journals', uid=user.id) }}"
                                            class="btn btn-outline-info"
                                            title="Назначить журналы и часы">
                                             <i class="bi bi-journal-bookmark"></i> Журналы
@@ -190,7 +190,7 @@
 
                                         {% if user.id != session.user_id %}
                                         <form method="POST"
-                                              action="{{ url_for('main.delete_user', uid=user.id) }}"
+                                              action="{{ url_for('users.delete', uid=user.id) }}"
                                               style="display:inline;"
                                               onsubmit="return confirm('Удалить пользователя {{ user.username }}?\nЭто действие нельзя отменить!')">
                                             <button type="submit" class="btn btn-outline-danger"

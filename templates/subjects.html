@@ -26,7 +26,7 @@
                 </h6>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('main.add_subject') }}">
+                <form method="POST" action="{{ url_for('subjects.add') }}">
                     <div class="input-group">
                         <input type="text" name="name" class="form-control no-emoji"
                                placeholder="Например, Математика" required>
@@ -55,7 +55,7 @@
                         <tr>
                             <td class="text-muted small">#{{ s.id }}</td>
                             <td>
-                                <form method="POST" action="{{ url_for('main.edit_subject', sid=s.id) }}"
+                                <form method="POST" action="{{ url_for('subjects.edit', sid=s.id) }}"
                                       class="d-flex gap-2 align-items-center">
                                     <input type="text" name="name" class="form-control form-control-sm no-emoji"
                                            value="{{ s.name }}" required>
@@ -65,7 +65,7 @@
                                 </form>
                             </td>
                             <td class="text-end">
-                                <a href="{{ url_for('main.delete_subject', sid=s.id) }}"
+                                <a href="{{ url_for('subjects.delete', sid=s.id) }}"
                                    class="btn btn-sm btn-outline-danger"
                                    onclick="return confirm('Удалить предмет «{{ s.name }}»?');">
                                     <i class="bi bi-trash"></i>

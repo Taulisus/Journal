@@ -5,7 +5,7 @@
 {% block breadcrumbs %}
     {{ breadcrumbs([
         ('Главная', url_for('main.dashboard')),
-        ('Студенты', url_for('main.students')),
+        ('Студенты', url_for('students.index')),
         (student.full_name, None),
     ]) }}
 {% endblock %}
@@ -17,7 +17,7 @@
         <i class="bi bi-person-badge"></i>
         {{ student.full_name }}
     </h2>
-    <a href="{{ url_for('main.students') }}" class="btn btn-outline-secondary btn-sm">
+    <a href="{{ url_for('students.index') }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> К списку
     </a>
 </div>

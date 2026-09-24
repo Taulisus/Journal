@@ -5,7 +5,7 @@
 {% block breadcrumbs %}
     {{ breadcrumbs([
         ('Главная', url_for('main.dashboard')),
-        ('Журналы', url_for('main.group_subjects')),
+        ('Журналы', url_for('journals.index')),
         ('Мои часы', None),
     ]) }}
 {% endblock %}
@@ -105,7 +105,7 @@
                 <tr>
                     <td class="fw-semibold">{{ st.group_name }}</td>
                     <td>
-                        <a href="{{ url_for('main.journal', gsid=st.gs_id, semester=st.semester) }}"
+                        <a href="{{ url_for('journals.journal', gsid=st.gs_id, semester=st.semester) }}"
                            class="text-decoration-none">
                             {{ st.subject_name }}
                         </a>

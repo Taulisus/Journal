@@ -93,7 +93,7 @@
                 {% if info %}
                     <tr>
                         <td>
-                            <a href="{{ url_for('main.student_card', sid=s.student_id) }}"
+                            <a href="{{ url_for('student_card.card', sid=s.student_id) }}"
                                class="text-decoration-none">
                                 {{ info.name }}
                             </a>

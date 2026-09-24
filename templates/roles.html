@@ -48,7 +48,7 @@
                 {% endif %}
 
                 <form method="POST"
-                      action="{{ url_for('main.update_role_permissions', role_id=role.id) }}">
+                      action="{{ url_for('roles.save_role', role_id=role.id) }}">
 
                     <div class="row">
                         {% for perm in permissions %}

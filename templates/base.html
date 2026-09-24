@@ -53,7 +53,7 @@
 
                     {% if has_permission('view_journals') %}
                     <li class="nav-item dropdown dropdown-lg-only">
-                        <a class="nav-link dropdown-toggle {% if request.endpoint in ['main.group_subjects', 'main.teacher_hours_stats', 'main.journal'] %}active{% endif %}"
+                        <a class="nav-link dropdown-toggle {% if request.endpoint in ['journals.index', 'main.teacher_hours_stats', 'journals.journal'] %}active{% endif %}"
                            href="#"
                            role="button"
                            data-bs-toggle="dropdown"
@@ -63,8 +63,8 @@
                         </a>
                         <ul class="dropdown-menu">
                             <li>
-                                <a class="dropdown-item {% if request.endpoint == 'main.group_subjects' %}active{% endif %}"
-                                   href="{{ url_for('main.group_subjects') }}">
+                                <a class="dropdown-item {% if request.endpoint == 'journals.index' %}active{% endif %}"
+                                   href="{{ url_for('journals.index') }}">
                                     <i class="bi bi-folder2-open"></i>
                                     Все журналы
                                 </a>
@@ -100,8 +100,8 @@
                             <i class="bi bi-chevron-down mobile-chevron"></i>
                         </a>
                         <div class="collapse mobile-submenu" id="mobileJournalsMenu">
-                            <a class="mobile-submenu-item {% if request.endpoint == 'main.group_subjects' %}active{% endif %}"
-                               href="{{ url_for('main.group_subjects') }}">
+                            <a class="mobile-submenu-item {% if request.endpoint == 'journals.index' %}active{% endif %}"
+                               href="{{ url_for('journals.index') }}">
                                 <i class="bi bi-folder2-open"></i>
                                 Все журналы
                             </a>
@@ -121,8 +121,8 @@
 
                     {% if has_permission('view_student_card') %}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint in ['main.students', 'main.student_card'] %}active{% endif %}"
-                           href="{{ url_for('main.students') }}">
+                        <a class="nav-link {% if request.endpoint in ['students.index', 'student_card.card'] %}active{% endif %}"
+                           href="{{ url_for('students.index') }}">
                             <i class="bi bi-person-lines-fill"></i>
                             <span>Студенты</span>
                         </a>
@@ -140,7 +140,7 @@
                     {% endif %}
 
                     <li class="nav-item dropdown dropdown-lg-only">
-                        <a class="nav-link dropdown-toggle {% if request.endpoint in ['main.groups', 'main.subjects'] %}active{% endif %}"
+                        <a class="nav-link dropdown-toggle {% if request.endpoint in ['groups.index', 'subjects.index', 'students.index'] %}active{% endif %}"
                            href="#"
                            role="button"
                            data-bs-toggle="dropdown"
@@ -150,22 +150,22 @@
                         </a>
                         <ul class="dropdown-menu">
                             <li>
-                                <a class="dropdown-item {% if request.endpoint == 'main.groups' %}active{% endif %}"
-                                   href="{{ url_for('main.groups') }}">
+                                <a class="dropdown-item {% if request.endpoint == 'groups.index' %}active{% endif %}"
+                                   href="{{ url_for('groups.index') }}">
                                     <i class="bi bi-people"></i>
                                     Группы
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item {% if request.endpoint == 'main.subjects' %}active{% endif %}"
-                                   href="{{ url_for('main.subjects') }}">
+                                <a class="dropdown-item {% if request.endpoint == 'subjects.index' %}active{% endif %}"
+                                   href="{{ url_for('subjects.index') }}">
                                     <i class="bi bi-book"></i>
                                     Предметы
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item {% if request.endpoint == 'main.students' %}active{% endif %}"
-                                   href="{{ url_for('main.students') }}">
+                                <a class="dropdown-item {% if request.endpoint == 'students.index' %}active{% endif %}"
+                                   href="{{ url_for('students.index') }}">
                                     <i class="bi bi-person-plus"></i>
                                     Студенты
                                 </a>
@@ -173,7 +173,7 @@
                             {% if has_permission('add_journal') %}
                             <li><hr class="dropdown-divider"></li>
                             <li>
-                                <a class="dropdown-item" href="{{ url_for('main.group_subjects') }}">
+                                <a class="dropdown-item" href="{{ url_for('journals.index') }}">
                                     <i class="bi bi-plus-circle"></i>
                                     Создать журнал
                                 </a>
@@ -195,23 +195,23 @@
                             <i class="bi bi-chevron-down mobile-chevron"></i>
                         </a>
                         <div class="collapse mobile-submenu" id="mobileDictionariesMenu">
-                            <a class="mobile-submenu-item {% if request.endpoint == 'main.groups' %}active{% endif %}"
-                               href="{{ url_for('main.groups') }}">
+                            <a class="mobile-submenu-item {% if request.endpoint == 'groups.index' %}active{% endif %}"
+                               href="{{ url_for('groups.index') }}">
                                 <i class="bi bi-people"></i>
                                 Группы
                             </a>
-                            <a class="mobile-submenu-item {% if request.endpoint == 'main.subjects' %}active{% endif %}"
-                               href="{{ url_for('main.subjects') }}">
+                            <a class="mobile-submenu-item {% if request.endpoint == 'subjects.index' %}active{% endif %}"
+                               href="{{ url_for('subjects.index') }}">
                                 <i class="bi bi-book"></i>
                                 Предметы
                             </a>
-                            <a class="mobile-submenu-item {% if request.endpoint == 'main.students' %}active{% endif %}"
-                               href="{{ url_for('main.students') }}">
+                            <a class="mobile-submenu-item {% if request.endpoint == 'students.index' %}active{% endif %}"
+                               href="{{ url_for('students.index') }}">
                                 <i class="bi bi-person-plus"></i>
                                 Студенты
                             </a>
                             {% if has_permission('add_journal') %}
-                            <a class="mobile-submenu-item" href="{{ url_for('main.group_subjects') }}">
+                            <a class="mobile-submenu-item" href="{{ url_for('journals.index') }}">
                                 <i class="bi bi-plus-circle"></i>
                                 Создать журнал
                             </a>
@@ -221,8 +221,8 @@
 
                     {% if has_permission('manage_users') %}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint in ['main.users', 'main.assign_journals'] %}active{% endif %}"
-                           href="{{ url_for('main.users') }}">
+                        <a class="nav-link {% if request.endpoint in ['users.index', 'users.assign_journals'] %}active{% endif %}"
+                           href="{{ url_for('users.index') }}">
                             <i class="bi bi-shield-lock"></i>
                             <span>Пользователи</span>
                         </a>
@@ -238,8 +238,8 @@
 
                     {% if has_permission('manage_permissions') %}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'main.roles' %}active{% endif %}"
-                           href="{{ url_for('main.roles') }}">
+                        <a class="nav-link {% if request.endpoint == 'roles.index' %}active{% endif %}"
+                           href="{{ url_for('roles.index') }}">
                             <i class="bi bi-shield-check"></i>
                             <span>Роли</span>
                         </a>
@@ -486,17 +486,11 @@
         /* ============================================================
            МОБИЛЬНОЕ МЕНЮ
            ============================================================ */
-        .mobile-only {
-            display: none;
-        }
+        .mobile-only { display: none; }
 
         @media (max-width: 991.98px) {
-            .mobile-only {
-                display: block;
-            }
-            .dropdown-lg-only {
-                display: none !important;
-            }
+            .mobile-only { display: block; }
+            .dropdown-lg-only { display: none !important; }
         }
 
         .mobile-profile-header {
@@ -571,9 +565,7 @@
             color: #fff;
         }
 
-        .mobile-logout-btn i {
-            margin-right: 10px;
-        }
+        .mobile-logout-btn i { margin-right: 10px; }
 
         @media (max-width: 991.98px) {
             #navbarNav .nav-link {
@@ -617,21 +609,9 @@
         }
 
         @media (max-width: 400px) {
-            .user-avatar-circle {
-                width: 32px;
-                height: 32px;
-                font-size: 0.9rem;
-            }
-
-            #navbarNav .nav-link {
-                padding: 12px 14px;
-                font-size: 0.95rem;
-            }
-
-            .mobile-submenu-item {
-                padding: 10px 18px 10px 32px;
-                font-size: 0.9rem;
-            }
+            .user-avatar-circle { width: 32px; height: 32px; font-size: 0.9rem; }
+            #navbarNav .nav-link { padding: 12px 14px; font-size: 0.95rem; }
+            .mobile-submenu-item { padding: 10px 18px 10px 32px; font-size: 0.9rem; }
         }
 
         /* ============================================================
@@ -674,164 +654,70 @@
         /* ============================================================
            ОБЩИЕ УЛУЧШЕНИЯ
            ============================================================ */
-        .navbar.sticky-top {
-            transition: box-shadow 0.2s;
-        }
-
-        html {
-            scroll-behavior: smooth;
-        }
-
-        body {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        body > .container-fluid,
-        body > .container {
-            flex: 1;
-        }
-
-        .container-xl {
-            max-width: 1320px;
-        }
+        .navbar.sticky-top { transition: box-shadow 0.2s; }
+        html { scroll-behavior: smooth; }
+        body { min-height: 100vh; display: flex; flex-direction: column; }
+        body > .container-fluid, body > .container { flex: 1; }
+        .container-xl { max-width: 1320px; }
 
         /* ============================================================
-           МОБИЛЬНАЯ ОПТИМИЗАЦИЯ (iPhone 12 mini = 375px)
+           МОБИЛЬНАЯ ОПТИМИЗАЦИЯ
            ============================================================ */
         @media (max-width: 575.98px) {
-            /* Уменьшаем отступы контейнера */
-            .container-xl {
-                padding-left: 8px;
-                padding-right: 8px;
-            }
+            .container-xl { padding-left: 8px; padding-right: 8px; }
+            h2 { font-size: 1.35rem; margin-bottom: 0.9rem !important; }
+            h5 { font-size: 1.05rem; }
+            h6 { font-size: 0.95rem; }
+            .card-body { padding: 0.75rem; }
+            .card-header { padding: 0.6rem 0.75rem; }
+            .fs-3 { font-size: 1.35rem !important; }
+            .fs-4 { font-size: 1.15rem !important; }
 
-            /* Уменьшаем заголовки */
-            h2 {
-                font-size: 1.35rem;
-                margin-bottom: 0.9rem !important;
-            }
-            h5 {
-                font-size: 1.05rem;
-            }
-            h6 {
-                font-size: 0.95rem;
-            }
-
-            /* Уменьшаем карточки */
-            .card-body {
-                padding: 0.75rem;
-            }
-            .card-header {
-                padding: 0.6rem 0.75rem;
-            }
-
-            /* Уменьшаем display-классы */
-            .fs-3 {
-                font-size: 1.35rem !important;
-            }
-            .fs-4 {
-                font-size: 1.15rem !important;
-            }
-
-            /* Иконки в карточках дашборда */
             .card-body > i[style*="font-size:2.2rem"],
             .card-body > i[style*="font-size:2rem"] {
                 font-size: 1.6rem !important;
             }
 
-            /* Кнопки внутри карточек — на всю ширину */
             .card-body .btn-light.btn-sm {
                 width: 100%;
                 padding: 0.35rem 0.5rem;
                 font-size: 0.85rem;
             }
 
-            /* Alert-ы компактнее */
-            .alert {
-                padding: 0.65rem 0.85rem;
-                font-size: 0.9rem;
-            }
+            .alert { padding: 0.65rem 0.85rem; font-size: 0.9rem; }
+            .breadcrumbs { font-size: 0.82rem; gap: 4px; margin-bottom: 12px; }
+            .breadcrumbs li + li::before { font-size: 0.65rem; }
+            .card-header .btn { padding: 0.3rem 0.65rem; font-size: 0.85rem; }
 
-            /* Крошки компактнее */
-            .breadcrumbs {
-                font-size: 0.82rem;
-                gap: 4px;
-                margin-bottom: 12px;
-            }
-            .breadcrumbs li + li::before {
-                font-size: 0.65rem;
-            }
+            .table-responsive { -webkit-overflow-scrolling: touch; }
+            .table-responsive table { min-width: 100%; }
+            .table .btn-sm { min-width: 36px; min-height: 36px; padding: 0.3rem 0.5rem; }
 
-            /* Кнопки в шапках карточек — на всю ширину */
-            .card-header .btn {
-                padding: 0.3rem 0.65rem;
-                font-size: 0.85rem;
-            }
+            .modal-dialog { margin: 0.5rem; }
 
-            /* Таблицы: скролл по горизонтали */
-            .table-responsive {
-                -webkit-overflow-scrolling: touch;
-            }
-            .table-responsive table {
-                min-width: 100%;
-            }
-
-            /* Улучшаем touch-target для иконок-кнопок в таблицах */
-            .table .btn-sm {
-                min-width: 36px;
-                min-height: 36px;
-                padding: 0.3rem 0.5rem;
-            }
-
-            /* Модалки почти на всю ширину */
-            .modal-dialog {
-                margin: 0.5rem;
-            }
-
-            /* Убираем rounded-иконки в дашборде размером 56px */
             .rounded-circle[style*="width:56px"] {
                 width: 44px !important;
                 height: 44px !important;
                 font-size: 1.15rem !important;
             }
 
-            /* Прогресс-бары */
-            .progress {
-                min-width: 60px;
-            }
+            .progress { min-width: 60px; }
         }
 
         @media (max-width: 400px) {
-            h2 {
-                font-size: 1.2rem;
-            }
-
-            .card-body {
-                padding: 0.65rem;
-            }
-
-            .mobile-submenu-item {
-                font-size: 0.88rem;
-            }
+            h2 { font-size: 1.2rem; }
+            .card-body { padding: 0.65rem; }
+            .mobile-submenu-item { font-size: 0.88rem; }
         }
 
         /* ============================================================
            ПЕЧАТЬ
            ============================================================ */
         @media print {
-            .navbar,
-            .btn,
-            .alert,
-            footer,
-            .breadcrumbs {
+            .navbar, .btn, .alert, footer, .breadcrumbs {
                 display: none !important;
             }
-
-            body {
-                background: #fff;
-            }
+            body { background: #fff; }
         }
     </style>
 </body>

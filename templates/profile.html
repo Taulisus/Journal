@@ -12,7 +12,7 @@
         {% endif %}
     </h2>
     {% if not is_self %}
-        <a href="{{ url_for('main.users') }}" class="btn btn-outline-secondary btn-sm">
+        <a href="{{ url_for('users.index') }}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left"></i> Назад к пользователям
         </a>
     {% endif %}
@@ -241,7 +241,7 @@
                         <i class="bi bi-clock-history"></i>
                         Мои часы
                     </a>
-                    <a href="{{ url_for('main.group_subjects') }}" class="btn btn-outline-secondary btn-sm">
+                    <a href="{{ url_for('journals.index') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="bi bi-journal-text"></i>
                         Мои журналы
                     </a>

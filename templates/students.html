@@ -33,7 +33,7 @@
                 </h6>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('main.add_student') }}">
+                <form method="POST" action="{{ url_for('students.add') }}">
                     <div class="mb-3">
                         <label class="form-label small mb-1">Группа</label>
                         <select name="group_id" class="form-select" required>
@@ -63,7 +63,7 @@
                 </h6>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('main.import_students') }}" enctype="multipart/form-data">
+                <form method="POST" action="{{ url_for('students.import_students') }}" enctype="multipart/form-data">
                     <div class="mb-3">
                         <label class="form-label small mb-1">Группа</label>
                         <select name="group_id" class="form-select" required>
@@ -91,7 +91,7 @@
 
             <!-- Фильтр по группе -->
             <div class="card-header bg-white">
-                <form method="get" action="{{ url_for('main.students') }}"
+                <form method="get" action="{{ url_for('students.index') }}"
                       class="row g-2 align-items-center">
                     <div class="col-12 col-md-6">
                         <label class="form-label small mb-1">Фильтр по группе:</label>
@@ -108,7 +108,7 @@
                     </div>
                     <div class="col-12 col-md-6 d-flex align-items-end">
                         {% if current_group_id %}
-                            <a href="{{ url_for('main.students') }}"
+                            <a href="{{ url_for('students.index') }}"
                                class="btn btn-outline-secondary btn-sm">
                                 <i class="bi bi-x-circle"></i> Сбросить фильтр
                             </a>
@@ -117,7 +117,7 @@
                 </form>
             </div>
 
-            <!-- Панель массовых действий (появляется при выборе) -->
+            <!-- Панель массовых действий -->
             {% if has_permission('manage_users') %}
             <div class="card-body py-2 bg-light border-bottom"
                  id="bulkPanel" style="display:none;">
@@ -165,7 +165,7 @@
                             </td>
                             {% endif %}
                             <td>
-                                <a href="{{ url_for('main.student_card', sid=s.id) }}"
+                                <a href="{{ url_for('student_card.card', sid=s.id) }}"
                                    class="text-decoration-none fw-semibold">
                                     {{ s.full_name }}
                                 </a>
@@ -180,7 +180,7 @@
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 {% if has_permission('delete_student') %}
-                                    <a href="{{ url_for('main.delete_student', sid=s.id) }}"
+                                    <a href="{{ url_for('students.delete', sid=s.id) }}"
                                        class="btn btn-sm btn-outline-danger"
                                        onclick="return confirm('Удалить студента «{{ s.full_name }}»?');">
                                         <i class="bi bi-trash"></i>
@@ -209,7 +209,7 @@
 <div class="modal fade" id="editStudent{{ s.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('main.edit_student', sid=s.id) }}">
+            <form method="POST" action="{{ url_for('students.edit', sid=s.id) }}">
                 <div class="modal-header">
                     <h5 class="modal-title">Редактировать студента</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -246,7 +246,7 @@
 <div class="modal fade" id="massTransferModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('main.mass_transfer_students') }}"
+            <form method="POST" action="{{ url_for('students.mass_transfer') }}"
                   id="massTransferForm">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
@@ -257,7 +257,6 @@
                 </div>
 
                 <div class="modal-body">
-                    <!-- Скрытые поля со списком выбранных ID -->
                     <div id="hiddenStudentIds"></div>
 
                     <div class="alert alert-info mb-3">
@@ -285,7 +284,6 @@
                         </small>
                     </div>
 
-                    <!-- Предпросмотр -->
                     <div id="previewBox" class="alert alert-secondary small" style="display:none;">
                         <div><strong>Предпросмотр:</strong></div>
                         <div id="previewContent"></div>
@@ -331,7 +329,7 @@
     var transferDate = document.getElementById('transferDate');
     var submitBtn = document.getElementById('submitTransferBtn');
 
-    if (!selectAll) return;  // не админ — выходим
+    if (!selectAll) return;
 
     var checkboxes = document.querySelectorAll('.student-checkbox');
 
@@ -359,7 +357,6 @@
             submitBtn.disabled = true;
         }
 
-        // Обновляем скрытые input'ы для формы
         hiddenIds.innerHTML = '';
         selected.forEach(function(id) {
             var inp = document.createElement('input');
@@ -369,7 +366,6 @@
             hiddenIds.appendChild(inp);
         });
 
-        // Проверка "все выбраны" для selectAll
         if (selectAll) {
             selectAll.checked = (n > 0 && n === checkboxes.length);
             selectAll.indeterminate = (n > 0 && n < checkboxes.length);
@@ -403,7 +399,7 @@
             return;
         }
 
-        fetch("{{ url_for('main.transfer_info', new_group_id=0) }}".replace('/0', '/' + gid) + '?ids=' + ids.join(','))
+        fetch("{{ url_for('students.transfer_info', new_group_id=0) }}".replace('/0', '/' + gid) + '?ids=' + ids.join(','))
             .then(function(r) { return r.json(); })
             .then(function(resp) {
                 if (!resp.success) {
@@ -432,7 +428,6 @@
 
     newGroupSelect.addEventListener('change', updatePreview);
 
-    // При открытии модалки — сбросить предпросмотр
     var modalEl = document.getElementById('massTransferModal');
     if (modalEl) {
         modalEl.addEventListener('show.bs.modal', function () {
@@ -443,7 +438,6 @@
         });
     }
 
-    // Инициализация даты — сегодня
     if (transferDate && !transferDate.value) {
         var today = new Date();
         var y = today.getFullYear();

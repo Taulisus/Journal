@@ -7,6 +7,11 @@ from config import Config, FLASK_HOST, FLASK_PORT, FLASK_DEBUG
 from models import init_db, GroupSubject, Permission
 from auth import auth_bp
 from routes import main_bp
+from blueprints.groups import groups_bp
+from blueprints.subjects import subjects_bp
+from blueprints.students import students_bp, student_card_bp
+from blueprints.journals import journals_bp
+from blueprints.users import users_bp, roles_bp
 from routes_schedule import schedule_bp
 from utils import format_time_interval, get_grade_color, get_attendance_color
 
@@ -65,7 +70,13 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(schedule_bp)
-
+    app.register_blueprint(groups_bp)
+    app.register_blueprint(subjects_bp)
+    app.register_blueprint(students_bp)
+    app.register_blueprint(student_card_bp)
+    app.register_blueprint(journals_bp)
+    app.register_blueprint(users_bp)
+    app.register_blueprint(roles_bp)
     return app
 
 

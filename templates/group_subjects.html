@@ -59,7 +59,6 @@
                  data-group="{{ pair.group_name }}">
 
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <!-- Информация о журнале -->
                     <div class="flex-grow-1" style="min-width: 0;">
                         <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
                             <span class="badge bg-secondary">{{ pair.group_name }}</span>
@@ -67,7 +66,6 @@
                             <span class="badge bg-info">{{ pair.subject_name }}</span>
                         </div>
 
-                        <!-- Часы по семестрам (компактно) -->
                         <div class="small">
                             {% set pair_semesters = get_semesters(pair.id) %}
                             {% if pair_semesters %}
@@ -87,15 +85,13 @@
                         </div>
                     </div>
 
-                    <!-- Кнопки действий -->
                     <div class="d-flex gap-1">
-                        <a href="{{ url_for('main.journal', gsid=pair.id) }}"
+                        <a href="{{ url_for('journals.journal', gsid=pair.id) }}"
                            class="btn btn-sm btn-primary">
                             <i class="bi bi-journal-bookmark-fill"></i>
                             Открыть
                         </a>
 
-                        <!-- Меню "..." -->
                         <div class="dropdown">
                             <button class="btn btn-sm btn-outline-secondary"
                                     type="button"
@@ -120,7 +116,7 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <a class="dropdown-item text-danger"
-                                       href="{{ url_for('main.delete_group_subject', gsid=pair.id) }}"
+                                       href="{{ url_for('journals.delete_group_subject', gsid=pair.id) }}"
                                        onclick="return confirm('Удалить журнал {{ pair.group_name }} - {{ pair.subject_name }}?\n\nВНИМАНИЕ: Все данные журнала будут безвозвратно потеряны!')">
                                         <i class="bi bi-trash"></i> Удалить журнал
                                     </a>
@@ -167,7 +163,7 @@
 <div class="modal fade" id="createJournalModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('main.add_group_subject') }}" id="createJournalForm">
+            <form method="POST" action="{{ url_for('journals.add_group_subject') }}" id="createJournalForm">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
                         <i class="bi bi-plus-circle"></i>
@@ -238,7 +234,6 @@
 
                     <!-- Часы по семестрам -->
                     <div id="semestersContainer">
-                        <!-- Семестр 1 -->
                         <div class="card mb-2 border-primary semester-card" id="semester_1_card">
                             <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
                                 <strong>Семестр 1</strong>
@@ -249,32 +244,27 @@
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Лекции</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="1"
-                                               name="semester_1_lecture" value="0" min="0">
+                                               data-semester="1" name="semester_1_lecture" value="0" min="0">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Практические</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="1"
-                                               name="semester_1_practice" value="0" min="0">
+                                               data-semester="1" name="semester_1_practice" value="0" min="0">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Самостоятельные</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="1"
-                                               name="semester_1_independent" value="0" min="0">
+                                               data-semester="1" name="semester_1_independent" value="0" min="0">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Экзамен</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="1"
-                                               name="semester_1_exam" value="0" min="0">
+                                               data-semester="1" name="semester_1_exam" value="0" min="0">
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Семестр 2 -->
                         <div class="card mb-2 border-success semester-card" id="semester_2_card">
                             <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
                                 <strong>Семестр 2</strong>
@@ -285,32 +275,27 @@
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Лекции</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="2"
-                                               name="semester_2_lecture" value="0" min="0">
+                                               data-semester="2" name="semester_2_lecture" value="0" min="0">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Практические</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="2"
-                                               name="semester_2_practice" value="0" min="0">
+                                               data-semester="2" name="semester_2_practice" value="0" min="0">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Самостоятельные</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="2"
-                                               name="semester_2_independent" value="0" min="0">
+                                               data-semester="2" name="semester_2_independent" value="0" min="0">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Экзамен</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="2"
-                                               name="semester_2_exam" value="0" min="0">
+                                               data-semester="2" name="semester_2_exam" value="0" min="0">
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Семестр 3 -->
                         <div class="card mb-2 border-warning semester-card" id="semester_3_card" style="display:none;">
                             <div class="card-header bg-warning text-dark py-2 d-flex justify-content-between align-items-center">
                                 <strong>Семестр 3</strong>
@@ -321,26 +306,22 @@
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Лекции</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="3"
-                                               name="semester_3_lecture" value="0" min="0">
+                                               data-semester="3" name="semester_3_lecture" value="0" min="0">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Практические</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="3"
-                                               name="semester_3_practice" value="0" min="0">
+                                               data-semester="3" name="semester_3_practice" value="0" min="0">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Самостоятельные</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="3"
-                                               name="semester_3_independent" value="0" min="0">
+                                               data-semester="3" name="semester_3_independent" value="0" min="0">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small mb-1">Экзамен</label>
                                         <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="3"
-                                               name="semester_3_exam" value="0" min="0">
+                                               data-semester="3" name="semester_3_exam" value="0" min="0">
                                     </div>
                                 </div>
                             </div>
@@ -371,7 +352,7 @@
 <div class="modal fade" id="editHoursModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <form method="POST" id="editHoursForm" action="{{ url_for('main.edit_group_subject_hours') }}">
+            <form method="POST" id="editHoursForm" action="{{ url_for('journals.edit_group_subject_hours') }}">
                 <div class="modal-header bg-warning">
                     <h5 class="modal-title">
                         <i class="bi bi-clock"></i>
@@ -403,35 +384,17 @@
 </div>
 
 <style>
-    /* ============ КАРТОЧКИ ЖУРНАЛОВ ============ */
-    #journalsList {
-        overflow: visible !important;
-    }
-
+    #journalsList { overflow: visible !important; }
     .journal-item {
         transition: all 0.15s ease;
         padding: 12px 16px;
         position: relative;
         overflow: visible !important;
     }
+    .journal-item:hover { background-color: #f8f9fa; }
+    .journal-item.hidden { display: none; }
+    .list-group, .list-group-item, .card, .card-body { overflow: visible !important; }
 
-    .journal-item:hover {
-        background-color: #f8f9fa;
-    }
-
-    .journal-item.hidden {
-        display: none;
-    }
-
-    /* Bootstrap-контейнеры не должны обрезать dropdown */
-    .list-group,
-    .list-group-item,
-    .card,
-    .card-body {
-        overflow: visible !important;
-    }
-
-    /* ============ FLOATING ACTION BUTTON ============ */
     .fab-create-journal {
         position: fixed;
         bottom: 24px;
@@ -450,16 +413,11 @@
         z-index: 1030;
         transition: all 0.2s ease;
     }
-
     .fab-create-journal:hover {
         background-color: #146c43;
         transform: scale(1.05);
-        box-shadow: 0 6px 16px rgba(25, 135, 84, 0.5);
     }
-
-    .fab-create-journal:active {
-        transform: scale(0.95);
-    }
+    .fab-create-journal:active { transform: scale(0.95); }
 
     @media (min-width: 768px) {
         .fab-create-journal {
@@ -469,17 +427,9 @@
             height: 60px;
         }
     }
-
-    /* ============ МОБИЛЬНЫЕ СТИЛИ ============ */
     @media (max-width: 767px) {
-        .journal-item {
-            padding: 10px 12px;
-        }
-
-        body {
-            padding-bottom: 90px;
-        }
-
+        .journal-item { padding: 10px 12px; }
+        body { padding-bottom: 90px; }
         .fab-create-journal {
             bottom: 16px;
             right: 16px;
@@ -487,33 +437,13 @@
             height: 52px;
         }
     }
-
-    /* ============ МОДАЛЬНОЕ ОКНО ============ */
     @media (max-width: 576px) {
-        .modal-dialog {
-            margin: 0.5rem;
-            max-width: calc(100% - 1rem);
-        }
-
-        .modal-body {
-            padding: 12px;
-        }
-
-        .modal-header,
-        .modal-footer {
-            padding: 10px 12px;
-        }
+        .modal-dialog { margin: 0.5rem; max-width: calc(100% - 1rem); }
+        .modal-body { padding: 12px; }
+        .modal-header, .modal-footer { padding: 10px 12px; }
     }
-
-    /* ============ ПЕЧАТЬ ============ */
     @media print {
-        .fab-create-journal,
-        .dropdown,
-        .card-header .btn,
-        .btn,
-        .modal {
-            display: none !important;
-        }
+        .fab-create-journal, .dropdown, .card-header .btn, .btn, .modal { display: none !important; }
     }
 </style>
 
@@ -521,27 +451,17 @@
 
 {% block scripts %}
 <script>
-// ==================== ИСПРАВЛЕНИЕ DROPDOWN ====================
-// Bootstrap автоматически использует Popper.js с strategy="fixed",
-// если указан data-bs-strategy="fixed".
-// Но для надёжности добавим дополнительную логику через JS.
 document.querySelectorAll('.journal-item .dropdown').forEach(function(dropdown) {
     dropdown.addEventListener('show.bs.dropdown', function() {
         var item = this.closest('.journal-item');
-        if (item) {
-            item.style.zIndex = '200';
-        }
+        if (item) { item.style.zIndex = '200'; }
     });
-
     dropdown.addEventListener('hidden.bs.dropdown', function() {
         var item = this.closest('.journal-item');
-        if (item) {
-            item.style.zIndex = '';
-        }
+        if (item) { item.style.zIndex = ''; }
     });
 });
 
-// ==================== ПОИСК И ФИЛЬТР ====================
 function filterJournals() {
     var searchText = document.getElementById('journalSearch').value.toLowerCase().trim();
     var filterGroup = document.getElementById('filterGroup').value;
@@ -551,7 +471,6 @@ function filterJournals() {
     items.forEach(function(item) {
         var searchData = item.dataset.search.toLowerCase();
         var group = item.dataset.group;
-
         var matchesSearch = !searchText || searchData.includes(searchText);
         var matchesGroup = !filterGroup || group === filterGroup;
 
@@ -563,7 +482,6 @@ function filterJournals() {
         }
     });
 
-    // Обновляем счётчики
     document.getElementById('visibleCount').textContent = visibleCount;
     var badge = document.getElementById('totalBadge');
 
@@ -575,7 +493,6 @@ function filterJournals() {
         badge.textContent = items.length;
     }
 
-    // Показываем/скрываем кнопку очистки
     var clearBtn = document.getElementById('clearSearchBtn');
     clearBtn.style.display = searchText ? 'block' : 'none';
 }
@@ -585,12 +502,9 @@ function clearSearch() {
     filterJournals();
 }
 
-// Обработчик поиска
 document.getElementById('journalSearch').addEventListener('input', filterJournals);
 
-// ==================== ФОРМА СОЗДАНИЯ ЖУРНАЛА ====================
-
-// Обновление видимости семестров
+// ==================== СОЗДАНИЕ ЖУРНАЛА ====================
 function updateSemesterVisibility() {
     var check1 = document.getElementById('semester_1_check').checked;
     var check2 = document.getElementById('semester_2_check').checked;
@@ -614,17 +528,12 @@ function updateSemesterVisibility() {
     validateForm();
 }
 
-// Подсчёт часов по семестру
 function updateSemesterTotal(semesterNum) {
     var inputs = document.querySelectorAll('[data-semester="' + semesterNum + '"]');
     var total = 0;
-    inputs.forEach(function(inp) {
-        total += parseInt(inp.value) || 0;
-    });
+    inputs.forEach(function(inp) { total += parseInt(inp.value) || 0; });
     var badge = document.getElementById('semester_' + semesterNum + '_total_badge');
-    if (badge) {
-        badge.textContent = total + ' ч.';
-    }
+    if (badge) { badge.textContent = total + ' ч.'; }
 }
 
 function updateAllTotals() {
@@ -633,21 +542,17 @@ function updateAllTotals() {
     updateSemesterTotal(3);
 }
 
-// Валидация формы
 function validateForm() {
     var submitBtn = document.getElementById('submitBtn');
     if (!submitBtn) return;
-
     var hasHours = false;
     document.querySelectorAll('.semester-hour').forEach(function(inp) {
         if (parseInt(inp.value) > 0) hasHours = true;
     });
-
     submitBtn.disabled = !hasHours;
     return hasHours;
 }
 
-// Обработчики изменения часов
 document.querySelectorAll('.semester-hour').forEach(function(inp) {
     inp.addEventListener('input', function() {
         updateAllTotals();
@@ -655,7 +560,6 @@ document.querySelectorAll('.semester-hour').forEach(function(inp) {
     });
 });
 
-// Валидация перед отправкой
 var createForm = document.getElementById('createJournalForm');
 if (createForm) {
     createForm.addEventListener('submit', function(e) {
@@ -671,7 +575,6 @@ function openEditHoursModal(gsid, groupName, subjectName) {
     document.getElementById('editHoursGsid').value = gsid;
     document.getElementById('editHoursTitle').textContent = groupName + ' — ' + subjectName;
 
-    // Загружаем часы через AJAX
     fetch('/group-subjects/get-hours/' + gsid)
         .then(function(response) { return response.json(); })
         .then(function(data) {
@@ -685,10 +588,8 @@ function openEditHoursModal(gsid, groupName, subjectName) {
 
             data.semesters.forEach(function(sem) {
                 var h = data.hours[sem] || {
-                    lecture_hours: 0,
-                    practice_hours: 0,
-                    independent_hours: 0,
-                    exam_hours: 0
+                    lecture_hours: 0, practice_hours: 0,
+                    independent_hours: 0, exam_hours: 0
                 };
 
                 html += '<div class="card mb-2 border-primary">';
@@ -718,14 +619,11 @@ function openEditHoursModal(gsid, groupName, subjectName) {
                 html += '<input type="number" class="form-control form-control-sm" name="hours_' + sem + '_exam" value="' + h.exam_hours + '" min="0">';
                 html += '</div>';
 
-                html += '</div>';
-                html += '</div>';
-                html += '</div>';
+                html += '</div></div></div>';
             });
 
             container.innerHTML = html;
 
-            // Открываем модальное окно
             var modal = new bootstrap.Modal(document.getElementById('editHoursModal'));
             modal.show();
         })
@@ -735,31 +633,21 @@ function openEditHoursModal(gsid, groupName, subjectName) {
         });
 }
 
-// ==================== СБРОС ФОРМЫ ПРИ ЗАКРЫТИИ ====================
 document.getElementById('createJournalModal').addEventListener('hidden.bs.modal', function() {
     var form = document.getElementById('createJournalForm');
     form.reset();
-
-    // Возвращаем чекбоксы в исходное состояние
     document.getElementById('semester_1_check').checked = true;
     document.getElementById('semester_2_check').checked = true;
     document.getElementById('semester_3_check').checked = false;
-
-    // Показываем/скрываем семестры
     document.getElementById('semester_1_card').style.display = 'block';
     document.getElementById('semester_2_card').style.display = 'block';
     document.getElementById('semester_3_card').style.display = 'none';
 
-    // Сбрасываем часы
-    document.querySelectorAll('.semester-hour').forEach(function(inp) {
-        inp.value = 0;
-    });
-
+    document.querySelectorAll('.semester-hour').forEach(function(inp) { inp.value = 0; });
     updateAllTotals();
     validateForm();
 });
 
-// ==================== ИНИЦИАЛИЗАЦИЯ ====================
 document.addEventListener('DOMContentLoaded', function() {
     updateAllTotals();
     validateForm();

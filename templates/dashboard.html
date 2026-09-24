@@ -17,7 +17,7 @@
                 <i class="bi bi-people-fill stat-icon"></i>
                 <h6 class="mt-2 mb-1">Группы</h6>
                 <div class="fs-3 fw-bold mb-2">{{ groups_count }}</div>
-                <a href="{{ url_for('main.groups') }}" class="btn btn-light btn-sm">
+                <a href="{{ url_for('groups.index') }}" class="btn btn-light btn-sm">
                     Управление
                 </a>
             </div>
@@ -30,7 +30,7 @@
                 <i class="bi bi-book-fill stat-icon"></i>
                 <h6 class="mt-2 mb-1">Предметы</h6>
                 <div class="fs-3 fw-bold mb-2">{{ subjects_count }}</div>
-                <a href="{{ url_for('main.subjects') }}" class="btn btn-light btn-sm">
+                <a href="{{ url_for('subjects.index') }}" class="btn btn-light btn-sm">
                     Управление
                 </a>
             </div>
@@ -43,7 +43,7 @@
                 <i class="bi bi-person-lines-fill stat-icon"></i>
                 <h6 class="mt-2 mb-1">Студенты</h6>
                 <div class="fs-3 fw-bold mb-2">{{ students_count }}</div>
-                <a href="{{ url_for('main.students') }}" class="btn btn-light btn-sm">
+                <a href="{{ url_for('students.index') }}" class="btn btn-light btn-sm">
                     Управление
                 </a>
             </div>
@@ -56,7 +56,7 @@
                 <i class="bi bi-journal-text stat-icon"></i>
                 <h6 class="mt-2 mb-1">Журналы</h6>
                 <div class="fs-3 fw-bold mb-2">{{ pairs_count }}</div>
-                <a href="{{ url_for('main.group_subjects') }}" class="btn btn-light btn-sm">
+                <a href="{{ url_for('journals.index') }}" class="btn btn-light btn-sm">
                     Открыть
                 </a>
             </div>
@@ -250,7 +250,7 @@
                         <tr>
                             <td class="fw-semibold">{{ item.group_name }}</td>
                             <td>
-                                <a href="{{ url_for('main.journal', gsid=item.gs_id, semester=item.semester) }}"
+                                <a href="{{ url_for('journals.journal', gsid=item.gs_id, semester=item.semester) }}"
                                    class="text-decoration-none">
                                     {{ item.subject_name }}
                                 </a>
@@ -393,19 +393,9 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <style>
-/* Стандартные размеры (десктоп) */
-.stat-icon {
-    font-size: 2.2rem;
-}
-.stat-circle {
-    width: 56px;
-    height: 56px;
-    font-size: 1.5rem;
-}
+.stat-icon { font-size: 2.2rem; }
+.stat-circle { width: 56px; height: 56px; font-size: 1.5rem; }
 
-/* ============================================================
-   СКРОЛЛ ДЛЯ БЛОКА «ПОСЛЕДНИЕ ДЕЙСТВИЯ»
-   ============================================================ */
 .activity-scroll {
     max-height: 420px;
     overflow-y: auto;
@@ -415,28 +405,11 @@ document.addEventListener('DOMContentLoaded', function () {
     border-bottom-left-radius: 8px;
     border-bottom-right-radius: 8px;
 }
+.activity-scroll::-webkit-scrollbar { width: 8px; }
+.activity-scroll::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+.activity-scroll::-webkit-scrollbar-thumb { background: #c0c0c0; border-radius: 4px; }
+.activity-scroll::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
 
-.activity-scroll::-webkit-scrollbar {
-    width: 8px;
-}
-
-.activity-scroll::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.activity-scroll::-webkit-scrollbar-thumb {
-    background: #c0c0c0;
-    border-radius: 4px;
-}
-
-.activity-scroll::-webkit-scrollbar-thumb:hover {
-    background: #a0a0a0;
-}
-
-/* ============================================================
-   РАСПИСАНИЕ НА НЕДЕЛЮ
-   ============================================================ */
 .schedule-grid {
     display: grid;
     grid-template-columns: repeat(6, minmax(160px, 1fr));
@@ -446,15 +419,8 @@ document.addEventListener('DOMContentLoaded', function () {
     scrollbar-width: thin;
     scrollbar-color: #c0c0c0 #f1f1f1;
 }
-
-.schedule-grid::-webkit-scrollbar {
-    height: 8px;
-}
-
-.schedule-grid::-webkit-scrollbar-thumb {
-    background: #c0c0c0;
-    border-radius: 4px;
-}
+.schedule-grid::-webkit-scrollbar { height: 8px; }
+.schedule-grid::-webkit-scrollbar-thumb { background: #c0c0c0; border-radius: 4px; }
 
 .schedule-day {
     background-color: #f8f9fa;
@@ -464,13 +430,11 @@ document.addEventListener('DOMContentLoaded', function () {
     flex-direction: column;
     min-height: 160px;
 }
-
 .schedule-day.is-today {
     background-color: #fff8e1;
     border-color: #ffc107;
     box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.25);
 }
-
 .schedule-day-header {
     text-align: center;
     padding: 6px 4px;
@@ -479,22 +443,9 @@ document.addEventListener('DOMContentLoaded', function () {
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
 }
-
-.schedule-day.is-today .schedule-day-header {
-    background-color: #ffecb3;
-}
-
-.schedule-day-name {
-    font-weight: 700;
-    font-size: 0.9rem;
-    line-height: 1.1;
-}
-
-.schedule-day-date {
-    font-size: 0.75rem;
-    color: #6c757d;
-}
-
+.schedule-day.is-today .schedule-day-header { background-color: #ffecb3; }
+.schedule-day-name { font-weight: 700; font-size: 0.9rem; line-height: 1.1; }
+.schedule-day-date { font-size: 0.75rem; color: #6c757d; }
 .schedule-day-body {
     padding: 4px;
     display: flex;
@@ -502,7 +453,6 @@ document.addEventListener('DOMContentLoaded', function () {
     gap: 4px;
     flex-grow: 1;
 }
-
 .schedule-lesson {
     display: flex;
     align-items: flex-start;
@@ -518,14 +468,12 @@ document.addEventListener('DOMContentLoaded', function () {
     transition: all 0.15s;
     min-width: 0;
 }
-
 .schedule-lesson:hover {
     background-color: #f0f8ff;
     border-left-color: #0a58ca;
     transform: translateX(2px);
     color: #212529;
 }
-
 .schedule-lesson-pair {
     flex-shrink: 0;
     width: 22px;
@@ -539,13 +487,7 @@ document.addEventListener('DOMContentLoaded', function () {
     align-items: center;
     justify-content: center;
 }
-
-.schedule-lesson-info {
-    flex-grow: 1;
-    min-width: 0;
-    overflow: hidden;
-}
-
+.schedule-lesson-info { flex-grow: 1; min-width: 0; overflow: hidden; }
 .schedule-lesson-group {
     font-weight: 600;
     font-size: 0.78rem;
@@ -554,13 +496,7 @@ document.addEventListener('DOMContentLoaded', function () {
     text-overflow: ellipsis;
     line-height: 1.15;
 }
-
-.schedule-lesson-time {
-    font-size: 0.7rem;
-    color: #6c757d;
-    white-space: nowrap;
-}
-
+.schedule-lesson-time { font-size: 0.7rem; color: #6c757d; white-space: nowrap; }
 .schedule-lesson-room {
     font-size: 0.7rem;
     color: #198754;
@@ -568,7 +504,6 @@ document.addEventListener('DOMContentLoaded', function () {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-
 .schedule-empty {
     display: flex;
     align-items: center;
@@ -578,58 +513,19 @@ document.addEventListener('DOMContentLoaded', function () {
     flex-grow: 1;
 }
 
-/* ============================================================
-   iPHONE 12 MINI И ПОДОБНЫЕ (375px)
-   ============================================================ */
 @media (max-width: 575.98px) {
-    .stat-icon {
-        font-size: 1.6rem;
-    }
-    .stat-circle {
-        width: 44px;
-        height: 44px;
-        font-size: 1.15rem;
-    }
-
-    .card-body .btn-light.btn-sm {
-        width: 100%;
-        padding: 0.4rem 0.5rem;
-        font-size: 0.85rem;
-    }
-
-    .fs-3 {
-        font-size: 1.4rem !important;
-    }
-    .fs-4 {
-        font-size: 1.15rem !important;
-    }
-
-    #btn-refresh-stats {
-        width: 100%;
-    }
-
-    .col-progress {
-        min-width: 120px;
-    }
-
-    .card-header .small.text-muted {
-        font-size: 0.8rem;
-        width: 100%;
-    }
-
-    .activity-scroll {
-        max-height: 340px;
-    }
-
-    .schedule-grid {
-        grid-template-columns: repeat(6, 140px);
-    }
-    .schedule-day-name {
-        font-size: 0.85rem;
-    }
-    .schedule-lesson-group {
-        font-size: 0.72rem;
-    }
+    .stat-icon { font-size: 1.6rem; }
+    .stat-circle { width: 44px; height: 44px; font-size: 1.15rem; }
+    .card-body .btn-light.btn-sm { width: 100%; padding: 0.4rem 0.5rem; font-size: 0.85rem; }
+    .fs-3 { font-size: 1.4rem !important; }
+    .fs-4 { font-size: 1.15rem !important; }
+    #btn-refresh-stats { width: 100%; }
+    .col-progress { min-width: 120px; }
+    .card-header .small.text-muted { font-size: 0.8rem; width: 100%; }
+    .activity-scroll { max-height: 340px; }
+    .schedule-grid { grid-template-columns: repeat(6, 140px); }
+    .schedule-day-name { font-size: 0.85rem; }
+    .schedule-lesson-group { font-size: 0.72rem; }
 }
 </style>
 {% endblock %}

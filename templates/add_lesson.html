@@ -5,8 +5,8 @@
 {% block breadcrumbs %}
     {{ breadcrumbs([
         ('Главная', url_for('main.dashboard')),
-        ('Журналы', url_for('main.group_subjects')),
-        (pair.group_name, url_for('main.journal', gsid=pair.id, semester=current_semester)),
+        ('Журналы', url_for('journals.index')),
+        (pair.group_name, url_for('journals.journal', gsid=pair.id, semester=current_semester)),
         (pair.subject_name, None),
         ('Новое занятие', None),
     ]) }}

@@ -5,7 +5,7 @@
 {% block breadcrumbs %}
     {{ breadcrumbs([
         ('Главная', url_for('main.dashboard')),
-        ('Журналы', url_for('main.group_subjects')),
+        ('Журналы', url_for('journals.index')),
         (pair.group_name, None),
         (pair.subject_name, None),
     ]) }}
@@ -41,7 +41,7 @@
 
     <div class="d-flex gap-2 flex-wrap">
         {% if has_permission('create_report') %}
-        <a href="{{ url_for('main.export_journal', gsid=pair.id, semester=current_semester) }}"
+        <a href="{{ url_for('journals.export_journal', gsid=pair.id, semester=current_semester) }}"
            class="btn btn-outline-success"
            title="Экспорт в Excel">
             <i class="bi bi-file-earmark-excel"></i>
@@ -72,7 +72,7 @@
 <div class="mb-3 d-flex flex-wrap align-items-center gap-2">
     <div class="btn-group btn-group-sm">
         {% for sem in semesters %}
-        <a href="{{ url_for('main.journal', gsid=pair.id, semester=sem) }}"
+        <a href="{{ url_for('journals.journal', gsid=pair.id, semester=sem) }}"
            class="btn btn-outline-primary {% if sem == current_semester %}active{% endif %}">
             {{ sem }} сем.
         </a>
@@ -169,7 +169,7 @@
                             </div>
                             {% endif %}
 
-                            <a href="{{ url_for('main.delete_lesson', gsid=pair.id, date=lesson.date, ti=lesson.time_interval, semester=current_semester) }}"
+                            <a href="{{ url_for('journals.delete_lesson', gsid=pair.id, date=lesson.date, ti=lesson.time_interval, semester=current_semester) }}"
                                class="btn btn-sm btn-outline-danger mt-2"
                                onclick="return confirm('Удалить занятие от {{ lesson.date_formatted }} {{ format_time(lesson.time_interval) }}?')"
                                title="Удалить занятие">
@@ -183,7 +183,7 @@
                     {% for student in students %}
                     <tr>
                         <td class="student-name fixed-left-col">
-                            <a href="{{ url_for('main.student_card', sid=student.id) }}"
+                            <a href="{{ url_for('student_card.card', sid=student.id) }}"
                                class="text-decoration-none text-dark fw-bold">
                                 {{ student.full_name }}
                             </a>
@@ -413,7 +413,7 @@
         <i class="bi bi-calendar-x" style="font-size: 4rem; color: #ccc;"></i>
         <h4 class="text-muted mt-3">Занятия еще не добавлены в этом семестре</h4>
         <p class="text-muted">Начните вести журнал, добавив первое занятие</p>
-        <a href="{{ url_for('main.add_lesson', gsid=pair.id, semester=current_semester) }}"
+        <a href="{{ url_for('journals.add_lesson', gsid=pair.id, semester=current_semester) }}"
            class="btn btn-success btn-lg">
             <i class="bi bi-plus-circle"></i> Добавить первое занятие
         </a>
