@@ -47,6 +47,24 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-person-badge"></i> Преподаватель (справочник)
+                        </label>
+                        <select name="teacher_id" class="form-select">
+                            <option value="">— Не связан —</option>
+                            {% for t in teachers %}
+                                <option value="{{ t.id }}">
+                                    {{ t.short_name or t.full_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">
+                            Свяжите пользователя с преподавателем, чтобы он мог
+                            добавлять свои занятия в расписание и видеть только свои пары.
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label fw-bold">Должности</label>
                         <div class="border rounded p-3">
                             {% for pos in positions %}
@@ -108,8 +126,8 @@
                         <thead class="table-light">
                             <tr>
                                 <th style="width: 40%;">Пользователь</th>
-                                <th style="width: 30%;">Должности</th>
-                                <th style="width: 30%;">Действия</th>
+                                <th style="width: 25%;">Должности</th>
+                                <th style="width: 35%;">Действия</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -132,6 +150,14 @@
                                         <i class="bi bi-phone"></i> {{ user.phone }}
                                     </div>
                                     {% endif %}
+                                    {% if user.teacher_full_name %}
+                                    <div class="small mt-1">
+                                        <span class="badge bg-secondary" title="Связан с преподавателем">
+                                            <i class="bi bi-person-badge"></i>
+                                            {{ user.teacher_short_name or user.teacher_full_name }}
+                                        </span>
+                                    </div>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% for pos in user.positions %}
@@ -142,12 +168,12 @@
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        <!-- Кнопка редактирования -->
                                         <button class="btn btn-outline-primary edit-user-btn"
                                                 data-user-id="{{ user.id }}"
                                                 data-username="{{ user.username }}"
                                                 data-fullname="{{ user.full_name or '' }}"
                                                 data-phone="{{ user.phone or '' }}"
+                                                data-teacher-id="{{ user.teacher_id or '' }}"
                                                 data-positions='{{ user.position_ids|tojson }}'
                                                 data-permissions='{{ user.perm_ids|tojson }}'
                                                 data-bs-toggle="modal"
@@ -156,14 +182,12 @@
                                             <i class="bi bi-pencil"></i>
                                         </button>
 
-                                        <!-- Кнопка назначения журналов -->
                                         <a href="{{ url_for('main.assign_journals', uid=user.id) }}"
                                            class="btn btn-outline-info"
                                            title="Назначить журналы и часы">
                                             <i class="bi bi-journal-bookmark"></i> Журналы
                                         </a>
 
-                                        <!-- Кнопка удаления -->
                                         {% if user.id != session.user_id %}
                                         <form method="POST"
                                               action="{{ url_for('main.delete_user', uid=user.id) }}"
@@ -237,6 +261,23 @@
                                        name="password" minlength="6"
                                        placeholder="Оставьте пустым, чтобы не менять">
                                 <small class="text-muted">Минимум 6 символов</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-person-badge"></i> Преподаватель (справочник)
+                                </label>
+                                <select name="teacher_id" id="edit_teacher_id" class="form-select">
+                                    <option value="">— Не связан —</option>
+                                    {% for t in teachers %}
+                                        <option value="{{ t.id }}">
+                                            {{ t.short_name or t.full_name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">
+                                    Связь позволяет пользователю редактировать свои занятия в расписании.
+                                </small>
                             </div>
                         </div>
 
@@ -326,7 +367,6 @@
             padding: 0.4rem;
             font-size: 0.85rem;
         }
-        /* Кнопка «Журналы» с текстом — компактнее */
         .btn-group .btn-outline-info {
             padding: 0.4rem 0.5rem;
         }
@@ -372,13 +412,11 @@
 document.getElementById('userSearch').addEventListener('input', function() {
     const searchText = this.value.toLowerCase().trim();
     const rows = document.querySelectorAll('#usersTable tbody tr');
-    let visibleCount = 0;
 
     rows.forEach(row => {
         const searchData = row.dataset.search.toLowerCase();
         if (searchText === '' || searchData.includes(searchText)) {
             row.style.display = '';
-            visibleCount++;
         } else {
             row.style.display = 'none';
         }
@@ -392,6 +430,13 @@ document.querySelectorAll('.edit-user-btn').forEach(btn => {
         document.getElementById('edit_username_display').textContent = this.dataset.username;
         document.getElementById('edit_full_name').value = this.dataset.fullname;
         document.getElementById('edit_phone').value = this.dataset.phone;
+
+        // Преподаватель
+        const teacherId = this.dataset.teacherId;
+        const teacherSelect = document.getElementById('edit_teacher_id');
+        if (teacherSelect) {
+            teacherSelect.value = teacherId || '';
+        }
 
         // Сбрасываем все чекбоксы
         document.querySelectorAll('.edit-position, .edit-permission').forEach(cb => {

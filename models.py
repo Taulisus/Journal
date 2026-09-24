@@ -315,7 +315,8 @@ def init_db():
             ('assign_teacher', 'Назначение преподавателя', 'Назначение преподавателя на журнал'),
             ('edit_profile', 'Редактирование профиля', 'Изменение своего профиля'),
             ('set_semester_grade', 'Выставление оценки за семестр', 'Итоговая оценка за семестр'),
-            ('edit_schedule', 'Редактирование расписания', 'Добавление и изменение занятий в расписании'),
+            ('edit_schedule', 'Редактирование расписания',
+             'Добавление и изменение занятий в расписании'),
         ]
         for code, name, desc in perms:
             cursor.execute(
@@ -369,7 +370,7 @@ class User:
     def get_teacher_id(user_id):
         """
         Возвращает teachers.id, если пользователь связан с преподавателем.
-        Иначе None (тогда в расписании показываем все занятия).
+        Иначе None (тогда показываем все занятия).
         """
         if not user_id:
             return None
@@ -381,8 +382,27 @@ class User:
             ).fetchone()
             return row['teacher_id'] if row and row['teacher_id'] else None
         except sqlite3.OperationalError:
-            # На случай если колонки teacher_id вдруг нет
             return None
+        finally:
+            conn.close()
+
+    @staticmethod
+    def set_teacher_id(user_id, teacher_id):
+        """
+        Привязывает пользователя к преподавателю.
+        teacher_id=None — отвязать.
+        """
+        conn = get_db()
+        try:
+            conn.execute(
+                "UPDATE users SET teacher_id = ? WHERE id = ?",
+                (teacher_id, user_id)
+            )
+            conn.commit()
+            return True, "Связь с преподавателем обновлена"
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка: {e}"
         finally:
             conn.close()
 
@@ -396,6 +416,30 @@ class User:
         ''').fetchall()
         conn.close()
         return users
+
+    @staticmethod
+    def get_all_with_teacher():
+        """
+        Все пользователи + привязка к преподавателю (если есть).
+        Возвращает Row с полями: id, username, full_name, phone,
+        teacher_id, teacher_full_name, teacher_short_name.
+        """
+        conn = get_db()
+        try:
+            rows = conn.execute('''
+                SELECT u.id, u.username,
+                       up.full_name, up.phone,
+                       u.teacher_id,
+                       t.full_name AS teacher_full_name,
+                       t.short_name AS teacher_short_name
+                FROM users u
+                LEFT JOIN user_profiles up ON u.id = up.user_id
+                LEFT JOIN teachers t ON u.teacher_id = t.id
+                ORDER BY u.id
+            ''').fetchall()
+            return rows
+        finally:
+            conn.close()
 
     @staticmethod
     def create(username, password, full_name='', phone='', position_ids=None, permission_ids=None):

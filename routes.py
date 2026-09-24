@@ -14,6 +14,9 @@ from models import (
     Group, Subject, Student, GroupSubject, get_db, UserProfile, Permission, Position,
     TeacherJournal, Curator, TeacherHours, User, SemesterGrade, PositionPermission,
 )
+from models_schedule import (
+    ScheduleLesson, Teacher, Room, AcademicYear, GroupAlias,
+)
 from journal_manager import JournalManager
 from utils import (
     import_students_from_xlsx,
@@ -1653,9 +1656,10 @@ def teacher_hours_stats():
 @main_bp.route('/users')
 @permission_required('manage_users')
 def users():
-    users_raw = User.get_all()
+    users_raw = User.get_all_with_teacher()
     positions = Position.get_all()
     permissions = Permission.get_all()
+    teachers = Teacher.get_all(active_only=False)
 
     users_list = []
     for u in users_raw:
@@ -1667,7 +1671,13 @@ def users():
         user['perm_ids'] = [p['id'] for p in permissions if p['code'] in user['personal_perms']]
         users_list.append(user)
 
-    return render_template('users.html', users=users_list, positions=positions, permissions=permissions)
+    return render_template(
+        'users.html',
+        users=users_list,
+        positions=positions,
+        permissions=permissions,
+        teachers=teachers,
+    )
 
 
 @main_bp.route('/users/add', methods=['POST'])
@@ -1679,6 +1689,7 @@ def add_user():
     phone = request.form.get('phone', '').strip()
     position_ids = request.form.getlist('positions')
     permission_ids = request.form.getlist('permissions')
+    teacher_id = request.form.get('teacher_id', type=int) or None
 
     if not username or not password:
         flash('Введите логин и пароль', 'danger')
@@ -1695,6 +1706,10 @@ def add_user():
     s, m, new_id = User.create(username, password, full_name, phone, position_ids, permission_ids)
 
     if s:
+        # Привязка к преподавателю
+        if teacher_id:
+            User.set_teacher_id(new_id, teacher_id)
+
         log_activity(session['user_id'], 'add_user',
                      f'Создан пользователь «{username}» ({full_name})',
                      'user', new_id)
@@ -1711,6 +1726,7 @@ def edit_user(uid):
     password = request.form.get('password', '').strip()
     position_ids = request.form.getlist('positions')
     permission_ids = request.form.getlist('permissions')
+    teacher_id = request.form.get('teacher_id', type=int) or None
 
     if has_emoji(full_name):
         flash('Эмодзи запрещены', 'danger')
@@ -1738,6 +1754,7 @@ def edit_user(uid):
 
     Position.save(uid, position_ids)
     Permission.save(uid, permission_ids)
+    User.set_teacher_id(uid, teacher_id)
 
     log_activity(session['user_id'], 'edit_user',
                  f'Изменён пользователь #{uid} ({full_name})', 'user', uid)

@@ -125,83 +125,90 @@
 <!-- ТАБЛИЦА -->
 {% if data['items'] %}
 <div class="card shadow-sm mb-4">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 activity-table">
-            <thead class="table-light">
-                <tr>
-                    <th class="col-id">ID</th>
-                    <th class="col-when">Когда</th>
-                    <th>Пользователь</th>
-                    <th>Действие</th>
-                    <th class="col-desc">Описание</th>
-                    <th class="text-center col-target">Объект</th>
-                    <th class="text-muted small col-ip">IP</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for a in data['items'] %}
-                <tr>
-                    <td class="text-muted small">#{{ a.id }}</td>
-                    <td class="text-nowrap small">
-                        <i class="bi bi-clock"></i>
-                        {{ a.created_at_human }}
-                    </td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0"
-                                 style="width:28px; height:28px; font-size:0.8rem; font-weight:700;">
-                                {{ a.display_name[0]|upper if a.display_name else '?' }}
+    <a id="table-top"></a>
+    <div class="activity-table-scroll">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 activity-table">
+                <thead class="table-light">
+                    <tr>
+                        <th class="col-id">ID</th>
+                        <th class="col-when">Когда</th>
+                        <th>Пользователь</th>
+                        <th>Действие</th>
+                        <th class="col-desc">Описание</th>
+                        <th class="text-center col-target">Объект</th>
+                        <th class="text-muted small col-ip">IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for a in data['items'] %}
+                    <tr>
+                        <td class="text-muted small">#{{ a.id }}</td>
+                        <td class="text-nowrap small">
+                            <i class="bi bi-clock"></i>
+                            {{ a.created_at_human }}
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0"
+                                     style="width:28px; height:28px; font-size:0.8rem; font-weight:700;">
+                                    {{ a.display_name[0]|upper if a.display_name else '?' }}
+                                </div>
+                                <div>
+                                    <div class="fw-semibold small">{{ a.display_name }}</div>
+                                    {% if a.username and a.username != a.display_name %}
+                                        <div class="text-muted" style="font-size:0.75rem;">{{ a.username }}</div>
+                                    {% endif %}
+                                </div>
                             </div>
-                            <div>
-                                <div class="fw-semibold small">{{ a.display_name }}</div>
-                                {% if a.username and a.username != a.display_name %}
-                                    <div class="text-muted" style="font-size:0.75rem;">{{ a.username }}</div>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border small">
+                                {% if a.action == 'login' %}
+                                    <i class="bi bi-box-arrow-in-right text-success"></i>
+                                {% elif a.action == 'logout' %}
+                                    <i class="bi bi-box-arrow-right text-secondary"></i>
+                                {% elif a.action.startswith('add_') %}
+                                    <i class="bi bi-plus-circle text-primary"></i>
+                                {% elif a.action.startswith('edit_') or a.action.startswith('set_') or a.action == 'assign_journals' %}
+                                    <i class="bi bi-pencil-square text-warning"></i>
+                                {% elif a.action.startswith('delete_') %}
+                                    <i class="bi bi-x-circle text-danger"></i>
+                                {% elif a.action == 'profile_edit' or a.action == 'password_change' %}
+                                    <i class="bi bi-person-badge text-info"></i>
+                                {% elif a.action == 'import_students' %}
+                                    <i class="bi bi-upload text-primary"></i>
+                                {% elif a.action == 'activity_export' %}
+                                    <i class="bi bi-download text-success"></i>
+                                {% elif a.action == 'activity_cleanup' %}
+                                    <i class="bi bi-trash text-danger"></i>
+                                {% elif a.action == 'import_schedule' %}
+                                    <i class="bi bi-file-earmark-pdf text-danger"></i>
+                                {% elif a.action == 'create_backup' %}
+                                    <i class="bi bi-shield-check text-info"></i>
+                                {% else %}
+                                    <i class="bi bi-dot text-muted"></i>
                                 {% endif %}
-                            </div>
-                        </div>
-                    </td>
-                    <td>
-                        <span class="badge bg-light text-dark border small">
-                            {% if a.action == 'login' %}
-                                <i class="bi bi-box-arrow-in-right text-success"></i>
-                            {% elif a.action == 'logout' %}
-                                <i class="bi bi-box-arrow-right text-secondary"></i>
-                            {% elif a.action.startswith('add_') %}
-                                <i class="bi bi-plus-circle text-primary"></i>
-                            {% elif a.action.startswith('edit_') or a.action.startswith('set_') or a.action == 'assign_journals' %}
-                                <i class="bi bi-pencil-square text-warning"></i>
-                            {% elif a.action.startswith('delete_') %}
-                                <i class="bi bi-x-circle text-danger"></i>
-                            {% elif a.action == 'profile_edit' or a.action == 'password_change' %}
-                                <i class="bi bi-person-badge text-info"></i>
-                            {% elif a.action == 'import_students' %}
-                                <i class="bi bi-upload text-primary"></i>
-                            {% elif a.action == 'activity_export' %}
-                                <i class="bi bi-download text-success"></i>
-                            {% elif a.action == 'activity_cleanup' %}
-                                <i class="bi bi-trash text-danger"></i>
+                                {{ action_labels.get(a.action, a.action) }}
+                            </span>
+                        </td>
+                        <td class="small">{{ a.description or '—' }}</td>
+                        <td class="text-center">
+                            {% if a.target_url %}
+                                <a href="{{ a.target_url }}" class="btn btn-sm btn-outline-primary py-0 px-2"
+                                   title="Перейти к объекту">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
                             {% else %}
-                                <i class="bi bi-dot text-muted"></i>
+                                <span class="text-muted small">—</span>
                             {% endif %}
-                            {{ action_labels.get(a.action, a.action) }}
-                        </span>
-                    </td>
-                    <td class="small">{{ a.description or '—' }}</td>
-                    <td class="text-center">
-                        {% if a.target_url %}
-                            <a href="{{ a.target_url }}" class="btn btn-sm btn-outline-primary py-0 px-2"
-                               title="Перейти к объекту">
-                                <i class="bi bi-box-arrow-up-right"></i>
-                            </a>
-                        {% else %}
-                            <span class="text-muted small">—</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-muted small">{{ a.ip or '—' }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+                        </td>
+                        <td class="text-muted small">{{ a.ip or '—' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -211,7 +218,7 @@
     <ul class="pagination pagination-sm justify-content-center flex-wrap">
         <li class="page-item {% if data.page <= 1 %}disabled{% endif %}">
             <a class="page-link"
-               href="{{ url_for('main.activity_log_page', page=data.page-1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">
+               href="{{ url_for('main.activity_log_page', page=data.page-1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">
                 &laquo;
             </a>
         </li>
@@ -222,7 +229,7 @@
         {% if start_page > 1 %}
             <li class="page-item">
                 <a class="page-link"
-                   href="{{ url_for('main.activity_log_page', page=1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">1</a>
+                   href="{{ url_for('main.activity_log_page', page=1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">1</a>
             </li>
             {% if start_page > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
         {% endif %}
@@ -230,7 +237,7 @@
         {% for p in range(start_page, end_page + 1) %}
             <li class="page-item {% if p == data.page %}active{% endif %}">
                 <a class="page-link"
-                   href="{{ url_for('main.activity_log_page', page=p, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">{{ p }}</a>
+                   href="{{ url_for('main.activity_log_page', page=p, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">{{ p }}</a>
             </li>
         {% endfor %}
 
@@ -238,13 +245,13 @@
             {% if end_page < data.total_pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
             <li class="page-item">
                 <a class="page-link"
-                   href="{{ url_for('main.activity_log_page', page=data.total_pages, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">{{ data.total_pages }}</a>
+                   href="{{ url_for('main.activity_log_page', page=data.total_pages, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">{{ data.total_pages }}</a>
             </li>
         {% endif %}
 
         <li class="page-item {% if data.page >= data.total_pages %}disabled{% endif %}">
             <a class="page-link"
-               href="{{ url_for('main.activity_log_page', page=data.page+1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}">
+               href="{{ url_for('main.activity_log_page', page=data.page+1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">
                 &raquo;
             </a>
         </li>
@@ -290,7 +297,6 @@
         </div>
     </div>
 </div>
-
 
 <!-- ОЧИСТКА СТАРОГО ЛОГА -->
 <div class="card shadow-sm mt-4 border-warning">
@@ -343,6 +349,46 @@
 .col-target { width: 80px; }
 .col-ip { width: 120px; }
 
+/* ============================================================
+   СКРОЛЛ ДЛЯ ТАБЛИЦЫ ДЕЙСТВИЙ
+   ============================================================ */
+.activity-table-scroll {
+    max-height: 70vh;         /* ~70% высоты экрана */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #c0c0c0 #f1f1f1;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.activity-table-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.activity-table-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.activity-table-scroll::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 4px;
+}
+
+.activity-table-scroll::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
+}
+
+/* Закреплённая шапка таблицы при скролле */
+.activity-table-scroll .activity-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: #f8f9fa;
+    box-shadow: 0 1px 0 #dee2e6;
+}
+
 /* iPhone 12 mini и подобные (375px) */
 @media (max-width: 575.98px) {
     /* Таблица: горизонтальный скролл, чтобы не сжималась */
@@ -366,6 +412,11 @@
         min-width: 40px;
         min-height: 40px;
         padding: 0.4rem;
+    }
+
+    /* Скролл действий — меньше высота на мобильных */
+    .activity-table-scroll {
+        max-height: 60vh;
     }
 }
 </style>
