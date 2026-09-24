@@ -1,6 +1,5 @@
-from datetime import datetime
-
 from models import get_db
+from datetime import datetime
 
 
 class JournalManager:
@@ -17,7 +16,7 @@ class JournalManager:
             parts = date_str.split('-')
             if len(parts) == 3:
                 return f"{parts[2]}.{parts[1]}.{parts[0]}"
-        except Exception:
+        except:
             pass
         return date_str
 
@@ -36,7 +35,7 @@ class JournalManager:
                 day = int(parts[2])
                 month = int(parts[1]) - 1
                 return f"{day} {months[month]}"
-        except Exception:
+        except:
             pass
         return date_str
 
@@ -51,27 +50,8 @@ class JournalManager:
         try:
             dt = datetime.strptime(date_str, '%Y-%m-%d')
             return days[dt.weekday()]
-        except Exception:
+        except:
             return ''
-
-    @staticmethod
-    def get_entry(gs_id, entry_id):
-        """
-        Возвращает запись journal_<gs_id> по entry_id или None.
-        Используется для проверки, что entry_id принадлежит этому журналу.
-        """
-        conn = get_db()
-        table_name = JournalManager.get_table_name(gs_id)
-        try:
-            row = conn.execute(
-                f"SELECT * FROM {table_name} WHERE id = ?",
-                (entry_id,),
-            ).fetchone()
-            return dict(row) if row else None
-        except Exception:
-            return None
-        finally:
-            conn.close()
 
     @staticmethod
     def add_lesson(gs_id, date, time_interval, topic, lesson_type, semester, students_data):
@@ -84,6 +64,7 @@ class JournalManager:
         conn = get_db()
         table_name = JournalManager.get_table_name(gs_id)
 
+        # Проверяем, не пытаются ли добавить занятие после экзамена
         if lesson_type != 'exam':
             exam_exists = conn.execute(
                 f"SELECT COUNT(*) as c FROM {table_name} WHERE semester=? AND type='exam'",
@@ -93,6 +74,7 @@ class JournalManager:
                 conn.close()
                 return False, "Нельзя добавить занятие после экзамена! Экзамен уже проведен в этом семестре."
 
+        # Проверяем, не пытаются ли добавить второй экзамен
         if lesson_type == 'exam':
             exam_exists = conn.execute(
                 f"SELECT COUNT(*) as c FROM {table_name} WHERE semester=? AND type='exam'",
@@ -127,7 +109,7 @@ class JournalManager:
             try:
                 para_num = int(''.join(filter(str.isdigit, time_str)))
                 return (para_num, 0)
-            except Exception:
+            except:
                 return (99, 99)
 
         parts = time_str.split('-')[0].strip().split(':')
@@ -135,7 +117,7 @@ class JournalManager:
             hours = int(parts[0])
             minutes = int(parts[1]) if len(parts) > 1 else 0
             return (hours, minutes)
-        except Exception:
+        except:
             return (99, 99)
 
     @staticmethod
@@ -215,6 +197,7 @@ class JournalManager:
         table_name = JournalManager.get_table_name(gs_id)
 
         try:
+            # Если меняем на exam - проверяем, нет ли уже экзамена
             if new_type == 'exam':
                 exam_exists = conn.execute(
                     f"SELECT COUNT(*) as c FROM {table_name} WHERE semester=? AND type='exam' AND NOT (date=? AND time_interval=?)",
@@ -224,6 +207,7 @@ class JournalManager:
                     conn.close()
                     return False, "Экзамен в этом семестре уже существует!"
 
+            # Обновляем тип для всех записей с этой датой и временем
             conn.execute(f'''
                 UPDATE {table_name} 
                 SET type = ?
@@ -320,6 +304,7 @@ class JournalManager:
         excluded_types = "('independent', 'dictation')"
 
         try:
+            # Статистика ТОЛЬКО по учитываемым типам
             stats = conn.execute(f'''
                 SELECT 
                     COUNT(*) as total_lessons,
@@ -330,6 +315,7 @@ class JournalManager:
                 WHERE student_id = ? AND type NOT IN {excluded_types}
             ''', (student_id,)).fetchone()
 
+            # Полный список ВСЕХ занятий для отображения
             grades = conn.execute(f'''
                 SELECT date, time_interval, type, topic, grade, attendance, semester
                 FROM {table_name}
@@ -339,9 +325,11 @@ class JournalManager:
 
             conn.close()
 
+            # Если нет ни одной записи
             if len(grades) == 0:
                 return None
 
+            # Считаем процент пропусков от учитываемых занятий
             considered = (stats['absences'] or 0) + (stats['attendances'] or 0)
 
             return {
@@ -421,12 +409,13 @@ class JournalManager:
                     result[h['type']] = count
                 result['total'] += count
 
+            # Экзамен
             if exam_count and exam_count['cnt'] > 0:
                 if exam_hours_from_db:
                     result['exam'] = exam_hours_from_db['exam_hours']
                     result['total'] += exam_hours_from_db['exam_hours']
                 else:
-                    result['exam'] = exam_cnt['cnt'] * 2 if False else exam_count['cnt'] * 2
+                    result['exam'] = exam_count['cnt'] * 2
                     result['total'] += exam_count['cnt'] * 2
 
             return result
