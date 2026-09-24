@@ -105,6 +105,71 @@ def _require_journal_access_json(uid, gsid):
 # ============================================================
 #                 ГЛАВНАЯ
 # ============================================================
+def _get_week_schedule(uid, monday_str=None):
+    """
+    Возвращает расписание недели для дашборда.
+    Если у пользователя есть teacher_id — только его занятия.
+    Иначе — все занятия недели.
+    """
+    from datetime import datetime, timedelta
+    from models_schedule import ScheduleLesson
+    from models import User
+
+    # Определяем понедельник
+    if monday_str:
+        try:
+            monday = datetime.strptime(monday_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            monday = datetime.now().date()
+    else:
+        monday = datetime.now().date()
+
+    # Сдвигаем к понедельнику
+    monday = monday - timedelta(days=monday.weekday())
+
+    # Фильтр по преподавателю
+    teacher_id = None
+    try:
+        teacher_id = User.get_teacher_id(uid)
+    except Exception:
+        teacher_id = None
+
+    # Берём занятия за неделю
+    week, start, end = ScheduleLesson.get_week(monday)
+
+    # Фильтруем по teacher_id, если есть
+    if teacher_id:
+        filtered = {}
+        for d, lessons in week.items():
+            filtered[d] = [l for l in lessons if l['teacher_id'] == teacher_id]
+        week = filtered
+
+    # Формируем структуру для шаблона: 6 дней (Пн–Сб)
+    days = []
+    day_names = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+    for i in range(6):
+        d = monday + timedelta(days=i)
+        ds = d.isoformat()
+        lessons = week.get(ds, [])
+        # Сортируем по паре
+        lessons = sorted(lessons, key=lambda l: (l['pair_number'], l['time_start']))
+
+        days.append({
+            'date': ds,
+            'date_label': f"{d.day:02d}.{d.month:02d}",
+            'day_short': day_names[i],
+            'day_full': ScheduleLesson.DAY_NAMES_FULL[i],
+            'is_today': d == datetime.now().date(),
+            'lessons': lessons,
+        })
+
+    return {
+        'days': days,
+        'week_start': monday.isoformat(),
+        'prev_week': (monday - timedelta(days=7)).isoformat(),
+        'next_week': (monday + timedelta(days=7)).isoformat(),
+        'has_any': any(d['lessons'] for d in days),
+    }
 
 @main_bp.route('/')
 @login_required
@@ -127,6 +192,21 @@ def dashboard():
     if has_journals:
         teacher_stats = get_teacher_stats(uid)
 
+    # Расписание на неделю
+    week_param = request.args.get('week')  # 'YYYY-MM-DD' — любой день недели
+    schedule_week = None
+    try:
+        schedule_week = _get_week_schedule(uid, week_param)
+    except Exception as e:
+        print(f"[dashboard] Не удалось получить расписание: {e}")
+
+    # Есть ли у пользователя привязка к преподавателю
+    current_user_teacher_id = None
+    try:
+        current_user_teacher_id = User.get_teacher_id(uid)
+    except Exception:
+        pass
+
     return render_template(
         'dashboard.html',
         groups_count=groups_count,
@@ -136,6 +216,8 @@ def dashboard():
         weekly_avg=weekly_avg,
         activity=activity,
         teacher_stats=teacher_stats,
+        schedule_week=schedule_week,
+        current_user_teacher_id=current_user_teacher_id,
     )
 
 
@@ -190,6 +272,10 @@ ACTION_LABELS = {
     'export_journal': 'Экспорт журнала в Excel',
     'create_backup': 'Создание бэкапа БД',
     'edit_lesson_time': 'Изменение времени занятия',
+    'edit_lesson_time': 'Изменение времени занятия',
+    'export_journal': 'Экспорт журнала в Excel',
+    'create_backup': 'Создание бэкапа БД',
+    'import_schedule': 'Импорт расписания из PDF',
 }
 
 TARGET_TYPE_LABELS = {

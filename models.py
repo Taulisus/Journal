@@ -1,6 +1,10 @@
+import os
+import secrets
 import sqlite3
-from config import Config
+
 from werkzeug.security import generate_password_hash, check_password_hash
+
+from config import Config
 
 
 def get_db():
@@ -149,6 +153,14 @@ def init_db():
             UNIQUE(user_id, group_subject_id, semester)
         );
 
+        CREATE TABLE IF NOT EXISTS academic_years (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            is_current INTEGER DEFAULT 0
+        );
+
         CREATE TABLE IF NOT EXISTS student_group_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_id INTEGER NOT NULL,
@@ -160,15 +172,121 @@ def init_db():
             FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
             FOREIGN KEY (academic_year_id) REFERENCES academic_years(id)
         );
+
+        CREATE TABLE IF NOT EXISTS teachers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT UNIQUE NOT NULL,
+            short_name TEXT,
+            is_active INTEGER DEFAULT 1
+        );
+
+        CREATE TABLE IF NOT EXISTS rooms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            building TEXT,
+            capacity INTEGER,
+            room_type TEXT DEFAULT 'classroom'
+        );
+
+        CREATE TABLE IF NOT EXISTS schedule_lessons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            academic_year_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            day_of_week INTEGER NOT NULL,
+            pair_number INTEGER NOT NULL,
+            time_start TEXT NOT NULL,
+            time_end TEXT NOT NULL,
+            group_id INTEGER NOT NULL,
+            subject_id INTEGER NOT NULL,
+            teacher_id INTEGER,
+            teacher_name_raw TEXT,
+            room_id INTEGER,
+            room_name_raw TEXT,
+            lesson_type TEXT DEFAULT 'lecture',
+            original_group_name TEXT,
+            source_file TEXT,
+            imported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (academic_year_id) REFERENCES academic_years(id),
+            FOREIGN KEY (group_id) REFERENCES groups(id),
+            FOREIGN KEY (subject_id) REFERENCES subjects(id),
+            FOREIGN KEY (teacher_id) REFERENCES teachers(id),
+            FOREIGN KEY (room_id) REFERENCES rooms(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS group_aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            alias TEXT UNIQUE NOT NULL,
+            FOREIGN KEY (group_id) REFERENCES groups(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            action TEXT NOT NULL,
+            description TEXT,
+            target_type TEXT,
+            target_id INTEGER,
+            ip TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS stats_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            stat_key TEXT NOT NULL,
+            stat_value TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE(user_id, stat_key),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_schedule_date ON schedule_lessons(date);
+        CREATE INDEX IF NOT EXISTS idx_schedule_group ON schedule_lessons(group_id);
+        CREATE INDEX IF NOT EXISTS idx_schedule_teacher ON schedule_lessons(teacher_id);
+        CREATE INDEX IF NOT EXISTS idx_schedule_room ON schedule_lessons(room_id);
+        CREATE INDEX IF NOT EXISTS idx_schedule_academic_year ON schedule_lessons(academic_year_id);
+        CREATE INDEX IF NOT EXISTS idx_history_student ON student_group_history(student_id);
+        CREATE INDEX IF NOT EXISTS idx_history_group ON student_group_history(group_id);
+        CREATE INDEX IF NOT EXISTS idx_alias_alias ON group_aliases(alias);
+        CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id);
+        CREATE INDEX IF NOT EXISTS idx_activity_action ON activity_log(action);
+        CREATE INDEX IF NOT EXISTS idx_stats_user_key ON stats_cache(user_id, stat_key);
+        CREATE INDEX IF NOT EXISTS idx_pos_perm_position ON position_permissions(position_id);
+        CREATE INDEX IF NOT EXISTS idx_pos_perm_permission ON position_permissions(permission_id);
     ''')
 
+    # --- Сид: пользователь admin ---
     user = cursor.execute("SELECT COUNT(*) as count FROM users").fetchone()
     if user['count'] == 0:
-        cursor.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                       ('admin', generate_password_hash('admin123')))
-        cursor.execute("INSERT INTO user_profiles (user_id, full_name, phone) VALUES (?, ?, ?)",
-                       (1, 'Администратор', ''))
+        initial_password = os.environ.get('ADMIN_INITIAL_PASSWORD')
+        generated = False
+        if not initial_password:
+            initial_password = secrets.token_urlsafe(12)
+            generated = True
 
+        cursor.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+            ('admin', generate_password_hash(initial_password)),
+        )
+        cursor.execute(
+            "INSERT INTO user_profiles (user_id, full_name, phone) VALUES (?, ?, ?)",
+            (1, 'Администратор', ''),
+        )
+
+        if generated:
+            print("=" * 60)
+            print("Создан пользователь admin")
+            print("  Логин:  admin")
+            print(f"  Пароль: {initial_password}")
+            print("Смените пароль сразу после первого входа!")
+            print("=" * 60)
+        else:
+            print("Создан пользователь admin с паролем из ADMIN_INITIAL_PASSWORD")
+
+    # --- Сид: должности ---
     pos_count = cursor.execute("SELECT COUNT(*) as count FROM positions").fetchone()
     if pos_count['count'] == 0:
         positions = [
@@ -182,6 +300,7 @@ def init_db():
             cursor.execute("INSERT INTO positions (code, name) VALUES (?, ?)", (code, name))
         cursor.execute("INSERT INTO user_positions (user_id, position_id) VALUES (1, 1)")
 
+    # --- Сид: права ---
     perm_count = cursor.execute("SELECT COUNT(*) as count FROM permissions").fetchone()
     if perm_count['count'] == 0:
         perms = [
@@ -196,17 +315,36 @@ def init_db():
             ('assign_teacher', 'Назначение преподавателя', 'Назначение преподавателя на журнал'),
             ('edit_profile', 'Редактирование профиля', 'Изменение своего профиля'),
             ('set_semester_grade', 'Выставление оценки за семестр', 'Итоговая оценка за семестр'),
+            ('edit_schedule', 'Редактирование расписания', 'Добавление и изменение занятий в расписании'),
         ]
         for code, name, desc in perms:
-            cursor.execute("INSERT INTO permissions (code, name, description) VALUES (?, ?, ?)", (code, name, desc))
+            cursor.execute(
+                "INSERT INTO permissions (code, name, description) VALUES (?, ?, ?)",
+                (code, name, desc),
+            )
         all_perms = cursor.execute("SELECT id FROM permissions").fetchall()
         for perm in all_perms:
-            cursor.execute("INSERT INTO user_permissions (user_id, permission_id) VALUES (1, ?)", (perm['id'],))
+            cursor.execute(
+                "INSERT INTO user_permissions (user_id, permission_id) VALUES (1, ?)",
+                (perm['id'],),
+            )
+
+    # --- Сид: текущий учебный год ---
+    year_count = cursor.execute("SELECT COUNT(*) as c FROM academic_years").fetchone()
+    if year_count['c'] == 0:
+        cursor.execute(
+            "INSERT INTO academic_years (name, start_date, end_date, is_current) "
+            "VALUES (?, ?, ?, 1)",
+            ('2025/2026', '2025-09-01', '2026-06-30'),
+        )
 
     conn.commit()
     conn.close()
-    print("База данных инициализирована. Логин: admin, Пароль: admin123")
 
+
+# ============================================================
+#                 USER
+# ============================================================
 
 class User:
     @staticmethod
@@ -226,6 +364,27 @@ class User:
     @staticmethod
     def check_password(user, password):
         return check_password_hash(user['password_hash'], password)
+
+    @staticmethod
+    def get_teacher_id(user_id):
+        """
+        Возвращает teachers.id, если пользователь связан с преподавателем.
+        Иначе None (тогда в расписании показываем все занятия).
+        """
+        if not user_id:
+            return None
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT teacher_id FROM users WHERE id = ?",
+                (user_id,)
+            ).fetchone()
+            return row['teacher_id'] if row and row['teacher_id'] else None
+        except sqlite3.OperationalError:
+            # На случай если колонки teacher_id вдруг нет
+            return None
+        finally:
+            conn.close()
 
     @staticmethod
     def get_all():
@@ -251,14 +410,14 @@ class User:
                 for pid in position_ids:
                     try:
                         conn.execute("INSERT INTO user_positions (user_id, position_id) VALUES (?, ?)", (uid, int(pid)))
-                    except:
+                    except Exception:
                         pass
             if permission_ids:
                 for pid in permission_ids:
                     try:
                         conn.execute("INSERT INTO user_permissions (user_id, permission_id) VALUES (?, ?)",
                                      (uid, int(pid)))
-                    except:
+                    except Exception:
                         pass
             conn.commit()
             conn.close()
@@ -346,6 +505,10 @@ class User:
             conn.close()
 
 
+# ============================================================
+#                 GROUP
+# ============================================================
+
 class Group:
     @staticmethod
     def get_all():
@@ -360,6 +523,21 @@ class Group:
         group = conn.execute("SELECT * FROM groups WHERE id = ?", (gid,)).fetchone()
         conn.close()
         return group
+
+    @staticmethod
+    def get_by_name(name):
+        """Ищет группу по точному имени (без учёта регистра)."""
+        if not name:
+            return None
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT * FROM groups WHERE LOWER(name) = LOWER(?)",
+                (name.strip(),)
+            ).fetchone()
+            return row
+        finally:
+            conn.close()
 
     @staticmethod
     def create(name):
@@ -388,12 +566,56 @@ class Group:
 
     @staticmethod
     def delete(gid):
+        """
+        Удаляет группу. Если есть связанные данные в таблицах без CASCADE
+        (расписание, история переводов, алиасы) — возвращает (False, message).
+        """
         conn = get_db()
-        conn.execute("DELETE FROM groups WHERE id = ?", (gid,))
-        conn.commit()
-        conn.close()
-        return True, "Группа удалена"
+        try:
+            blocking = []
 
+            cnt = conn.execute(
+                "SELECT COUNT(*) AS c FROM schedule_lessons WHERE group_id = ?",
+                (gid,)
+            ).fetchone()['c']
+            if cnt:
+                blocking.append(f"занятий в расписании — {cnt}")
+
+            cnt = conn.execute(
+                "SELECT COUNT(*) AS c FROM student_group_history WHERE group_id = ?",
+                (gid,)
+            ).fetchone()['c']
+            if cnt:
+                blocking.append(f"записей в истории переводов — {cnt}")
+
+            cnt = conn.execute(
+                "SELECT COUNT(*) AS c FROM group_aliases WHERE group_id = ?",
+                (gid,)
+            ).fetchone()['c']
+            if cnt:
+                blocking.append(f"алиасов — {cnt}")
+
+            if blocking:
+                return False, (
+                    "Нельзя удалить группу: есть связанные данные "
+                    f"({'; '.join(blocking)}). "
+                    "Сначала удалите их или перепривяжите к другой группе."
+                )
+
+            conn.execute("DELETE FROM groups WHERE id = ?", (gid,))
+            conn.commit()
+            return True, "Группа удалена"
+
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка удаления: {e}"
+        finally:
+            conn.close()
+
+
+# ============================================================
+#                 SUBJECT
+# ============================================================
 
 class Subject:
     @staticmethod
@@ -409,6 +631,21 @@ class Subject:
         subject = conn.execute("SELECT * FROM subjects WHERE id = ?", (sid,)).fetchone()
         conn.close()
         return subject
+
+    @staticmethod
+    def get_by_name(name):
+        """Ищет предмет по точному имени (без учёта регистра)."""
+        if not name:
+            return None
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT * FROM subjects WHERE LOWER(name) = LOWER(?)",
+                (name.strip(),)
+            ).fetchone()
+            return row
+        finally:
+            conn.close()
 
     @staticmethod
     def create(name):
@@ -435,6 +672,10 @@ class Subject:
         conn.close()
         return True, "Предмет удален"
 
+
+# ============================================================
+#                 STUDENT
+# ============================================================
 
 class Student:
     @staticmethod
@@ -537,24 +778,6 @@ class Student:
 
     @staticmethod
     def mass_transfer(student_ids, new_group_id, transfer_date, academic_year_id):
-        """
-        Массовый перевод студентов в другую группу.
-
-        Параметры:
-          student_ids      — список id студентов
-          new_group_id     — id группы-приёмника
-          transfer_date    — дата перевода (YYYY-MM-DD)
-          academic_year_id — id учебного года
-
-        Возвращает dict:
-          {
-            'transferred': N,      — сколько успешно переведено
-            'skipped_same': N,     — пропущено (уже в этой группе)
-            'skipped_dup': N,      — пропущено (однофамилец уже в новой группе)
-            'errors': [str, ...]   — описания ошибок
-            'details': [ {...} ]   — информация по каждому студенту
-          }
-        """
         if not student_ids:
             return {
                 'transferred': 0,
@@ -574,7 +797,6 @@ class Student:
         }
 
         try:
-            # 1. Информация о новой группе
             new_group = conn.execute(
                 "SELECT id, name FROM groups WHERE id = ?", (new_group_id,)
             ).fetchone()
@@ -587,7 +809,6 @@ class Student:
                     'details': [],
                 }
 
-            # 2. Список студентов, которых переводим (только существующие)
             placeholders = ','.join('?' for _ in student_ids)
             students_rows = conn.execute(f'''
                 SELECT s.id, s.full_name, s.group_id, g.name AS group_name
@@ -606,28 +827,24 @@ class Student:
                     'message': 'Не найден',
                 })
 
-            # 3. Собираем ФИО уже присутствующих в новой группе (для проверки дублей)
             existing_in_new = conn.execute(
                 "SELECT LOWER(full_name) AS lname FROM students WHERE group_id = ?",
                 (new_group_id,)
             ).fetchall()
             existing_names = {r['lname'] for r in existing_in_new}
 
-            # 4. Журналы новой группы (для последующего заполнения)
             new_journals = conn.execute(
                 "SELECT id FROM group_subjects WHERE group_id = ?",
                 (new_group_id,)
             ).fetchall()
             new_journal_ids = [j['id'] for j in new_journals]
 
-            # 5. Проходим по каждому студенту
             for row in students_rows:
                 sid = row['id']
                 sname = row['full_name']
                 old_gid = row['group_id']
                 old_gname = row['group_name']
 
-                # 5.1. Уже в новой группе?
                 if old_gid == new_group_id:
                     stats['skipped_same'] += 1
                     stats['details'].append({
@@ -638,7 +855,6 @@ class Student:
                     })
                     continue
 
-                # 5.2. Однофамилец в новой группе?
                 if sname.lower() in existing_names:
                     stats['skipped_dup'] += 1
                     stats['details'].append({
@@ -649,14 +865,11 @@ class Student:
                     })
                     continue
 
-                # 5.3. Всё ок — переводим
-                # 5.3.1. Меняем group_id
                 conn.execute(
                     "UPDATE students SET group_id = ? WHERE id = ?",
                     (new_group_id, sid)
                 )
 
-                # 5.3.2. Заполняем записи в журналах новой группы
                 for gsid in new_journal_ids:
                     table_name = f"journal_{gsid}"
 
@@ -667,14 +880,12 @@ class Student:
                     if not table_exists:
                         continue
 
-                    # Уникальные занятия
                     lessons = conn.execute(f'''
                         SELECT DISTINCT date, time_interval, semester, topic, type
                         FROM {table_name}
                     ''').fetchall()
 
                     for lesson in lessons:
-                        # Проверим, нет ли уже такой записи (на всякий случай)
                         existing_entry = conn.execute(f'''
                             SELECT id FROM {table_name}
                             WHERE student_id = ? AND date = ? AND time_interval = ?
@@ -697,14 +908,12 @@ class Student:
                             lesson['type']
                         ))
 
-                # 5.3.3. Закрываем текущую запись в истории (если есть)
                 conn.execute('''
                     UPDATE student_group_history
                     SET end_date = ?
                     WHERE student_id = ? AND end_date IS NULL
                 ''', (transfer_date, sid))
 
-                # 5.3.4. Создаём новую запись в истории
                 conn.execute('''
                     INSERT INTO student_group_history
                     (student_id, group_id, academic_year_id, start_date, end_date)
@@ -730,10 +939,13 @@ class Student:
         return stats
 
 
+# ============================================================
+#                 STUDENT GROUP HISTORY
+# ============================================================
+
 class StudentGroupHistory:
     @staticmethod
     def get_for_student(sid):
-        """История переводов конкретного студента (новые сверху)."""
         conn = get_db()
         rows = conn.execute('''
             SELECT sgh.*, g.name AS group_name, ay.name AS academic_year_name
@@ -782,6 +994,10 @@ class StudentGroupHistory:
         finally:
             conn.close()
 
+
+# ============================================================
+#                 GROUP SUBJECT
+# ============================================================
 
 class GroupSubject:
     @staticmethod
@@ -898,6 +1114,10 @@ class GroupSubject:
         return True, "Пара удалена"
 
 
+# ============================================================
+#                 SEMESTER GRADE
+# ============================================================
+
 class SemesterGrade:
     @staticmethod
     def set_grade(student_id, gsid, semester, grade):
@@ -940,6 +1160,10 @@ class SemesterGrade:
         return grade['grade'] if grade else None
 
 
+# ============================================================
+#                 USER PROFILE
+# ============================================================
+
 class UserProfile:
     @staticmethod
     def get_by_user_id(uid):
@@ -960,6 +1184,10 @@ class UserProfile:
         conn.commit()
         conn.close()
 
+
+# ============================================================
+#                 POSITION
+# ============================================================
 
 class Position:
     @staticmethod
@@ -1001,7 +1229,7 @@ class Position:
         for pid in pids:
             try:
                 conn.execute("INSERT INTO user_positions (user_id, position_id) VALUES (?,?)", (uid, int(pid)))
-            except:
+            except Exception:
                 pass
         conn.commit()
         conn.close()
@@ -1016,6 +1244,10 @@ class Position:
         conn.close()
         return cnt
 
+
+# ============================================================
+#                 POSITION PERMISSION
+# ============================================================
 
 class PositionPermission:
     @staticmethod
@@ -1039,7 +1271,7 @@ class PositionPermission:
                         "INSERT INTO position_permissions (position_id, permission_id) VALUES (?, ?)",
                         (position_id, int(pid))
                     )
-                except:
+                except Exception:
                     pass
             conn.commit()
             return True, "Права роли сохранены"
@@ -1062,6 +1294,10 @@ class PositionPermission:
         conn.close()
         return [r['code'] for r in rows]
 
+
+# ============================================================
+#                 PERMISSION
+# ============================================================
 
 class Permission:
     @staticmethod
@@ -1100,11 +1336,15 @@ class Permission:
         for pid in pids:
             try:
                 conn.execute("INSERT INTO user_permissions (user_id, permission_id) VALUES (?,?)", (uid, int(pid)))
-            except:
+            except Exception:
                 pass
         conn.commit()
         conn.close()
 
+
+# ============================================================
+#                 TEACHER JOURNAL
+# ============================================================
 
 class TeacherJournal:
     @staticmethod
@@ -1141,6 +1381,10 @@ class TeacherJournal:
         conn.close()
         return journals
 
+
+# ============================================================
+#                 CURATOR
+# ============================================================
 
 class Curator:
     @staticmethod
@@ -1180,6 +1424,10 @@ class Curator:
         conn.close()
         return count['c'] > 0
 
+
+# ============================================================
+#                 TEACHER HOURS
+# ============================================================
 
 class TeacherHours:
     @staticmethod

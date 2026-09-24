@@ -115,7 +115,109 @@
 </div>
 
 <!-- ============================================================
-     РЯД 3. Мои часы
+     РЯД 3. Расписание на неделю
+     ============================================================ -->
+{% if schedule_week %}
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="mb-0">
+                    <i class="bi bi-calendar-week text-primary"></i>
+                    Расписание на неделю
+                </h5>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{ url_for('main.dashboard', week=schedule_week.prev_week) }}"
+                       class="btn btn-sm btn-outline-primary"
+                       title="Предыдущая неделя">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                    <a href="{{ url_for('main.dashboard') }}"
+                       class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-calendar-event"></i> Сегодня
+                    </a>
+                    <a href="{{ url_for('main.dashboard', week=schedule_week.next_week) }}"
+                       class="btn btn-sm btn-outline-primary"
+                       title="Следующая неделя">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </div>
+            </div>
+
+            {% if schedule_week.has_any %}
+            <div class="card-body p-2">
+                <div class="schedule-grid">
+                    {% for day in schedule_week.days %}
+                    <div class="schedule-day {% if day.is_today %}is-today{% endif %}">
+                        <div class="schedule-day-header">
+                            <div class="schedule-day-name">{{ day.day_short }}</div>
+                            <div class="schedule-day-date">{{ day.date_label }}</div>
+                        </div>
+
+                        <div class="schedule-day-body">
+                            {% if day.lessons %}
+                                {% for l in day.lessons %}
+                                <a href="{{ url_for('schedule.index', view='day', date=day.date, group_id=l.group_id) }}"
+                                   class="schedule-lesson"
+                                   title="{{ l.subject_name or '—' }}{% if l.teacher_short_name %} — {{ l.teacher_short_name }}{% endif %}">
+                                    <div class="schedule-lesson-pair">
+                                        {{ l.pair_number }}
+                                    </div>
+                                    <div class="schedule-lesson-info">
+                                        <div class="schedule-lesson-group">
+                                            {{ l.group_name or '—' }}
+                                        </div>
+                                        <div class="schedule-lesson-time">
+                                            {{ l.time_start }}–{{ l.time_end }}
+                                        </div>
+                                        {% if l.room_resolved_name %}
+                                        <div class="schedule-lesson-room">
+                                            <i class="bi bi-door-open"></i>
+                                            {{ l.room_resolved_name }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            {% else %}
+                                <div class="schedule-empty">
+                                    <i class="bi bi-dash-circle"></i>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card-footer bg-white small text-muted d-flex justify-content-between flex-wrap gap-2">
+                <div>
+                    <i class="bi bi-info-circle"></i>
+                    Показаны занятия
+                    {% if current_user_teacher_id %}
+                        только ваши
+                    {% else %}
+                        всех преподавателей
+                    {% endif %}
+                    на неделю с {{ schedule_week.week_start }}
+                </div>
+                <a href="{{ url_for('schedule.index', view='week', date=schedule_week.week_start) }}"
+                   class="text-decoration-none">
+                    Открыть в полном виде <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            {% else %}
+            <div class="card-body text-center text-muted py-4">
+                <i class="bi bi-calendar-x" style="font-size:2rem;"></i>
+                <p class="mt-2 mb-0">На этой неделе занятий нет</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ============================================================
+     РЯД 4. Мои часы
      ============================================================ -->
 {% if teacher_stats and teacher_stats.has_data %}
 <div class="row g-3 mb-4">
@@ -202,7 +304,7 @@
 {% endif %}
 
 <!-- ============================================================
-     РЯД 4. Последние действия (со скроллом)
+     РЯД 5. Последние действия
      ============================================================ -->
 {% if activity %}
 <div class="row g-3 mb-4">
@@ -333,29 +435,168 @@ document.addEventListener('DOMContentLoaded', function () {
 }
 
 /* ============================================================
+   РАСПИСАНИЕ НА НЕДЕЛЮ
+   ============================================================ */
+.schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(160px, 1fr));
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: #c0c0c0 #f1f1f1;
+}
+
+.schedule-grid::-webkit-scrollbar {
+    height: 8px;
+}
+
+.schedule-grid::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 4px;
+}
+
+.schedule-day {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    min-height: 160px;
+}
+
+.schedule-day.is-today {
+    background-color: #fff8e1;
+    border-color: #ffc107;
+    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.25);
+}
+
+.schedule-day-header {
+    text-align: center;
+    padding: 6px 4px;
+    border-bottom: 1px solid #e9ecef;
+    background-color: #f1f3f5;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.schedule-day.is-today .schedule-day-header {
+    background-color: #ffecb3;
+}
+
+.schedule-day-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    line-height: 1.1;
+}
+
+.schedule-day-date {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+.schedule-day-body {
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-grow: 1;
+}
+
+.schedule-lesson {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 5px 6px;
+    background-color: #fff;
+    border: 1px solid #e9ecef;
+    border-left: 3px solid #0d6efd;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #212529;
+    font-size: 0.75rem;
+    transition: all 0.15s;
+    min-width: 0;
+}
+
+.schedule-lesson:hover {
+    background-color: #f0f8ff;
+    border-left-color: #0a58ca;
+    transform: translateX(2px);
+    color: #212529;
+}
+
+.schedule-lesson-pair {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background-color: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.schedule-lesson-info {
+    flex-grow: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.schedule-lesson-group {
+    font-weight: 600;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.15;
+}
+
+.schedule-lesson-time {
+    font-size: 0.7rem;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+.schedule-lesson-room {
+    font-size: 0.7rem;
+    color: #198754;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.schedule-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ced4da;
+    font-size: 1.2rem;
+    flex-grow: 1;
+}
+
+/* ============================================================
    iPHONE 12 MINI И ПОДОБНЫЕ (375px)
    ============================================================ */
 @media (max-width: 575.98px) {
-    /* Иконки в карточках счётчиков меньше */
     .stat-icon {
         font-size: 1.6rem;
     }
-
-    /* Круглая иконка рядом с «пар в неделю» меньше */
     .stat-circle {
         width: 44px;
         height: 44px;
         font-size: 1.15rem;
     }
 
-    /* Кнопки в карточках — на всю ширину */
     .card-body .btn-light.btn-sm {
         width: 100%;
         padding: 0.4rem 0.5rem;
         font-size: 0.85rem;
     }
 
-    /* Заголовки и цифры компактнее */
     .fs-3 {
         font-size: 1.4rem !important;
     }
@@ -363,25 +604,31 @@ document.addEventListener('DOMContentLoaded', function () {
         font-size: 1.15rem !important;
     }
 
-    /* Кнопка «Обновить» на всю ширину */
     #btn-refresh-stats {
         width: 100%;
     }
 
-    /* Таблица «Мои часы» — прогресс-колонка уже */
     .col-progress {
         min-width: 120px;
     }
 
-    /* Карточка «Мои часы» — заголовок и итоги в столбик */
     .card-header .small.text-muted {
         font-size: 0.8rem;
         width: 100%;
     }
 
-    /* Скролл «Последние действия» — меньше высота */
     .activity-scroll {
         max-height: 340px;
+    }
+
+    .schedule-grid {
+        grid-template-columns: repeat(6, 140px);
+    }
+    .schedule-day-name {
+        font-size: 0.85rem;
+    }
+    .schedule-lesson-group {
+        font-size: 0.72rem;
     }
 }
 </style>

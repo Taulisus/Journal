@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Расписание', url_for('schedule.index')),
+        ('Импорт из PDF', None),
+    ]) }}
+{% endblock %}
+
+{% block content %}
+
+<h2 class="mb-4">
+    <i class="bi bi-file-earmark-pdf"></i>
+    Импорт расписания из PDF
+</h2>
+
+{% if step == 'upload' %}
+
+<div class="row">
+    <div class="col-12 col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">PDF-файл расписания</label>
+                        <input type="file" name="file" class="form-control"
+                               accept=".pdf" required>
+                        <div class="form-text">
+                            Поддерживаются только файлы PDF. Файл обрабатывается
+                            локально на сервере.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            Шаблон ФИО преподавателя (regex)
+                        </label>
+                        <input type="text" name="teacher_pattern" class="form-control"
+                               value=".+"
+                               placeholder="Например: За[лд]яев или .+">
+                        <div class="form-text">
+                            <code>.+</code> — все преподаватели.
+                            <code>За[лд]яев</code> — только Заляев или Задяев.
+                            <code>Ваганов</code> — только Ваганов.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Учебный год</label>
+                        <input type="number" name="year" class="form-control"
+                               value="{{ current_year or 2026 }}" min="2020" max="2100">
+                    </div>
+
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle"></i>
+                        Парсер ищет в PDF преподавателей по шаблону, для каждого
+                        находит: день, дату, номер пары, время, группу, предмет и
+                        аудиторию. Затем на следующем шаге вы сможете проверить
+                        и импортировать.
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Загрузить и распарсить
+                    </button>
+                    <a href="{{ url_for('schedule.index') }}"
+                       class="btn btn-outline-secondary">
+                        Отмена
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle text-primary"></i>
+                    Что произойдёт
+                </h6>
+            </div>
+            <div class="card-body small">
+                <ol class="mb-0 ps-3">
+                    <li>PDF сохранится в <code>uploads/schedules/</code></li>
+                    <li>Парсер извлечёт все занятия</li>
+                    <li>Вы увидите предпросмотр с чекбоксами</li>
+                    <li>Нажмёте «Импортировать» — данные сохранятся в БД</li>
+                </ol>
+                <hr>
+                <div class="text-muted">
+                    <strong>Автосоздание:</strong><br>
+                    Группы, предметы, преподаватели и аудитории, которых нет
+                    в БД, будут созданы автоматически. Преподаватели
+                    сопоставляются через fuzzy-матчинг — если в БД уже есть
+                    «Ваганов М.А.», то «Ваганов М. А.» найдётся и не задублируется.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% elif step == 'preview' %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+        <h3 class="mb-0">
+            <i class="bi bi-list-check"></i>
+            Предпросмотр: {{ filename }}
+        </h3>
+        <div class="text-muted small mt-1">
+            Найдено <strong>{{ lessons|length }}</strong> занятий
+            {% if teacher_pattern and teacher_pattern != '.+' %}
+                • шаблон: <code>{{ teacher_pattern }}</code>
+            {% endif %}
+            • год: <strong>{{ year }}</strong>
+        </div>
+    </div>
+    <a href="{{ url_for('schedule.upload_pdf') }}"
+       class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Загрузить другой
+    </a>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body text-center py-2">
+                <div class="fs-5 fw-bold">{{ lessons|length }}</div>
+                <small>занятий</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body text-center py-2">
+                <div class="fs-5 fw-bold">{{ groups|length }}</div>
+                <small>групп</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body text-center py-2">
+                <div class="fs-5 fw-bold">{{ teachers|length }}</div>
+                <small>преподавателей</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body text-center py-2">
+                <div class="fs-5 fw-bold">{{ subjects|length }}</div>
+                <small>предметов</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="post" action="{{ url_for('schedule.import_commit') }}" id="importForm">
+    <input type="hidden" name="preview_id" value="{{ preview_id }}">
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h6 class="mb-0">
+                <i class="bi bi-table"></i>
+                Занятия
+            </h6>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="toggleAll(true)">
+                    <i class="bi bi-check-all"></i> Выбрать все
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="toggleAll(false)">
+                    <i class="bi bi-x"></i> Снять все
+                </button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 40px;" class="text-center">
+                            <i class="bi bi-check2-square"></i>
+                        </th>
+                        <th>День</th>
+                        <th>Дата</th>
+                        <th>Пара</th>
+                        <th>Время</th>
+                        <th>Группа</th>
+                        <th>Предмет</th>
+                        <th>Преподаватель</th>
+                        <th>Ауд.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for l in lessons %}
+                    <tr>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input lesson-check"
+                                   name="lesson_{{ loop.index0 }}" value="1" checked>
+                        </td>
+                        <td class="small">{{ l.day or '—' }}</td>
+                        <td class="small">{{ l.date or '—' }}</td>
+                        <td class="text-center small">{{ l.pair or '—' }}</td>
+                        <td class="small text-nowrap">{{ l.time or '—' }}</td>
+                        <td class="fw-semibold small">
+                            {% if l.group %}
+                                {{ l.group }}
+                            {% else %}
+                                <span class="text-danger">— нет —</span>
+                            {% endif %}
+                        </td>
+                        <td class="small">{{ l.subject or '—' }}</td>
+                        <td class="small">{{ l.teacher or '—' }}</td>
+                        <td class="small">{{ l.room or '—' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="submit" class="btn btn-success btn-lg">
+            <i class="bi bi-download"></i> Импортировать выбранные
+        </button>
+        <a href="{{ url_for('schedule.upload_pdf') }}"
+           class="btn btn-outline-secondary btn-lg">
+            Отмена
+        </a>
+        <span class="ms-auto text-muted small align-self-center">
+            Выбрано: <strong id="selectedCount">{{ lessons|length }}</strong>
+            из {{ lessons|length }}
+        </span>
+    </div>
+</form>
+
+{% endif %}
+
+{% endblock %}
+
+
+{% block scripts %}
+{% if step == 'preview' %}
+<script>
+function toggleAll(state) {
+    document.querySelectorAll('.lesson-check').forEach(function (cb) {
+        cb.checked = state;
+    });
+    updateCount();
+}
+
+function updateCount() {
+    var n = document.querySelectorAll('.lesson-check:checked').length;
+    document.getElementById('selectedCount').textContent = n;
+}
+
+document.querySelectorAll('.lesson-check').forEach(function (cb) {
+    cb.addEventListener('change', updateCount);
+});
+
+updateCount();
+</script>
+{% endif %}
+{% endblock %}

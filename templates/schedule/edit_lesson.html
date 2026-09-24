@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Расписание', url_for('schedule.index')),
+        ('Изменить занятие' if lesson else 'Новое занятие', None),
+    ]) }}
+{% endblock %}
+
+{% block content %}
+
+<h2 class="mb-4">
+    <i class="bi bi-pencil-square"></i>
+    {% if lesson %}Изменить занятие{% else %}Новое занятие{% endif %}
+</h2>
+
+{% if not is_admin and not my_teacher_id %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    Ваш профиль не связан с преподавателем. Обратитесь к администратору —
+    без этой связи нельзя добавлять и редактировать занятия.
+</div>
+{% endif %}
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <form method="POST" id="lessonForm">
+
+            <div class="row g-3">
+                <div class="col-12 col-md-4">
+                    <label class="form-label small">Дата</label>
+                    <input type="date" name="date" class="form-control" required
+                           id="lessonDate"
+                           value="{{ lesson.date if lesson else default_date }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small">Пара №</label>
+                    <input type="number" name="pair_number" class="form-control" min="1" max="8" required
+                           id="lessonPair"
+                           value="{{ lesson.pair_number if lesson else 1 }}">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small">Начало</label>
+                    <input type="time" name="time_start" class="form-control" required
+                           id="lessonTimeStart"
+                           value="{{ lesson.time_start if lesson else '' }}">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small">Конец</label>
+                    <input type="time" name="time_end" class="form-control" required
+                           id="lessonTimeEnd"
+                           value="{{ lesson.time_end if lesson else '' }}">
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small text-muted mb-1">
+                        <i class="bi bi-lightning-charge"></i>
+                        Быстрый выбор времени
+                        (<span id="quickTimeDayLabel">—</span>):
+                    </label>
+                    <div class="d-flex flex-wrap gap-1" id="quickTimeButtons">
+                        {# Заполняется JS #}
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label small">Группа</label>
+                    <select name="group_id" class="form-select" required>
+                        <option value="">— Выберите —</option>
+                        {% for g in groups %}
+                            <option value="{{ g.id }}"
+                                    {% if lesson and lesson.group_id == g.id %}selected{% endif %}>
+                                {{ g.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label small">Предмет</label>
+                    <select name="subject_id" class="form-select" required>
+                        <option value="">— Выберите —</option>
+                        {% for s in subjects %}
+                            <option value="{{ s.id }}"
+                                    {% if lesson and lesson.subject_id == s.id %}selected{% endif %}>
+                                {{ s.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label small">Преподаватель</label>
+                    {% if is_admin %}
+                        <select name="teacher_id" class="form-select">
+                            <option value="">— Не указан —</option>
+                            {% for t in teachers %}
+                                <option value="{{ t.id }}"
+                                        {% if lesson and lesson.teacher_id == t.id %}selected{% endif %}>
+                                    {{ t.short_name or t.full_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    {% else %}
+                        {# Преподаватель — только он сам #}
+                        <input type="text"
+                               class="form-control"
+                               value="{{ (teachers | selectattr('id', 'equalto', my_teacher_id) | first).short_name
+                                         or (teachers | selectattr('id', 'equalto', my_teacher_id) | first).full_name
+                                         or 'Я' }}"
+                               disabled>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Вы добавляете занятие от своего имени.
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label small">Аудитория</label>
+                    <select name="room_id" class="form-select">
+                        <option value="">— Не указана —</option>
+                        {% for r in rooms %}
+                            <option value="{{ r.id }}"
+                                    {% if lesson and lesson.room_id == r.id %}selected{% endif %}>
+                                {{ r.name }}{% if r.building %} ({{ r.building }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label small">Тип занятия</label>
+                    <select name="lesson_type" class="form-select">
+                        {% for code, name in lesson_types %}
+                            <option value="{{ code }}"
+                                    {% if lesson and lesson.lesson_type == code %}selected{% endif %}>
+                                {{ name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mt-4 flex-wrap">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save"></i> Сохранить
+                </button>
+                <a href="{{ url_for('schedule.index', view='day', date=(lesson.date if lesson else default_date)) }}"
+                   class="btn btn-outline-secondary">
+                    Отмена
+                </a>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+
+{# Прокидываем интервалы по дням недели #}
+<script id="timeIntervalsData" type="application/json">
+{{ all_time_intervals | tojson }}
+</script>
+
+<script id="dayNamesData" type="application/json">
+{{ day_names_short | tojson }}
+</script>
+
+<script>
+var TIME_INTERVALS = JSON.parse(document.getElementById('timeIntervalsData').textContent);
+var DAY_NAMES = JSON.parse(document.getElementById('dayNamesData').textContent);
+var DEFAULT_DAY = '1'; // Вт
+
+// ==================== УТИЛИТЫ ====================
+
+function getWeekdayFromDate(dateStr) {
+    if (!dateStr) return null;
+    var parts = dateStr.split('-');
+    if (parts.length !== 3) return null;
+    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    if (isNaN(d.getTime())) return null;
+    var wd = d.getDay(); // 0=Вс, 1=Пн, ..., 6=Сб
+    return wd === 0 ? '6' : String(wd - 1);
+}
+
+function splitInterval(v) {
+    // '0830-0930' → ['08:30', '09:30']
+    var m = v.match(/^(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+    if (!m) return [null, null];
+    return [m[1] + ':' + m[2], m[3] + ':' + m[4]];
+}
+
+function formatInterval(v) {
+    var p = splitInterval(v);
+    return p[0] && p[1] ? p[0] + '–' + p[1] : v;
+}
+
+// ==================== ЗАПОЛНЕНИЕ КНОПОК ВРЕМЕНИ ====================
+
+function rebuildTimeOptions(dateStr) {
+    if (!dateStr) return;
+
+    var wd = getWeekdayFromDate(dateStr);
+    if (wd === null || !TIME_INTERVALS[wd]) {
+        wd = DEFAULT_DAY;
+    }
+
+    var intervals = TIME_INTERVALS[wd] || TIME_INTERVALS[DEFAULT_DAY];
+    var buttons = document.getElementById('quickTimeButtons');
+    if (!buttons) return;
+
+    buttons.innerHTML = '';
+
+    // Метка дня
+    var label = document.getElementById('quickTimeDayLabel');
+    if (label) {
+        var wdInt = parseInt(wd);
+        label.textContent = DAY_NAMES[wdInt] || '—';
+    }
+
+    intervals.forEach(function (pair, idx) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-secondary quick-time';
+        btn.setAttribute('data-time', pair[0]);
+        btn.setAttribute('data-start', splitInterval(pair[0])[0] || '');
+        btn.setAttribute('data-end', splitInterval(pair[0])[1] || '');
+        btn.textContent = (idx + 1) + ' пара';
+        btn.title = formatInterval(pair[0]);
+        buttons.appendChild(btn);
+    });
+
+    buttons.querySelectorAll('.quick-time').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var start = this.getAttribute('data-start');
+            var end = this.getAttribute('data-end');
+
+            var ts = document.getElementById('lessonTimeStart');
+            var te = document.getElementById('lessonTimeEnd');
+            var lp = document.getElementById('lessonPair');
+
+            if (ts) ts.value = start;
+            if (te) te.value = end;
+
+            // Номер пары = индекс + 1
+            if (lp) {
+                var idx = Array.from(buttons.querySelectorAll('.quick-time')).indexOf(this);
+                lp.value = idx + 1;
+            }
+
+            buttons.querySelectorAll('.quick-time').forEach(function (x) {
+                x.classList.remove('btn-primary');
+                x.classList.add('btn-outline-secondary');
+            });
+            this.classList.remove('btn-outline-secondary');
+            this.classList.add('btn-primary');
+        });
+    });
+}
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+
+document.addEventListener('DOMContentLoaded', function () {
+    var dateInput = document.getElementById('lessonDate');
+
+    // Если дата пуста — сегодня
+    if (dateInput && !dateInput.value) {
+        var today = new Date();
+        var y = today.getFullYear();
+        var m = String(today.getMonth() + 1).padStart(2, '0');
+        var d = String(today.getDate()).padStart(2, '0');
+        dateInput.value = y + '-' + m + '-' + d;
+    }
+
+    if (dateInput) {
+        rebuildTimeOptions(dateInput.value);
+        dateInput.addEventListener('change', function () {
+            rebuildTimeOptions(this.value);
+        });
+    }
+});
+</script>
+
+{% endblock %}
