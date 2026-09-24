@@ -306,20 +306,6 @@ MIT — см. [LICENSE](./LICENSE).
 
 ---
 
-## 📸 Скриншоты
-
-> 💡 Добавьте свои скриншоты в папку `docs/screenshots/` и вставьте сюда.
-
-| Главная | Журнал |
-|---|---|
-| _screenshots/dashboard.png_ | _screenshots/journal.png_ |
-
-| Расписание | Карточка студента |
-|---|---|
-| _screenshots/schedule.png_ | _screenshots/student_card.png_ |
-
----
-
 ## 👤 Автор
 
 - GitHub: [@Taulisus](https://github.com/Taulisus)
