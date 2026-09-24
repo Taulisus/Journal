@@ -79,6 +79,14 @@
                         </ul>
                     </li>
 
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and request.endpoint.startswith('schedule.') %}active{% endif %}"
+                           href="{{ url_for('schedule.index') }}">
+                            <i class="bi bi-calendar-week"></i>
+                            <span>Расписание</span>
+                        </a>
+                    </li>
+
                     <li class="nav-item mobile-only">
                         <a class="nav-link d-flex justify-content-between align-items-center"
                            data-bs-toggle="collapse"
@@ -101,6 +109,11 @@
                                href="{{ url_for('main.teacher_hours_stats') }}">
                                 <i class="bi bi-clock-history"></i>
                                 Мои часы
+                            </a>
+                            <a class="mobile-submenu-item {% if request.endpoint and request.endpoint.startswith('schedule.') %}active{% endif %}"
+                               href="{{ url_for('schedule.index') }}">
+                                <i class="bi bi-calendar-week"></i>
+                                Расписание
                             </a>
                         </div>
                     </li>

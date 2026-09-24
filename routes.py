@@ -1,11 +1,20 @@
+from datetime import datetime
+import os
+import re
+import shutil
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response
-from decorators import login_required
-from models import Group, Subject, Student, GroupSubject, get_db, UserProfile, Permission, Position, TeacherJournal, \
-    Curator, TeacherHours, User, SemesterGrade, PositionPermission, StudentGroupHistory
+from werkzeug.security import generate_password_hash
+
+from decorators import login_required, permission_required
+from models import (
+    Group, Subject, Student, GroupSubject, get_db, UserProfile, Permission, Position,
+    TeacherJournal, Curator, TeacherHours, User, SemesterGrade, PositionPermission,
+    StudentGroupHistory,
+)
 from journal_manager import JournalManager
 from utils import import_students_from_xlsx, generate_report_chart, generate_student_chart
 from config import Config
-from werkzeug.security import generate_password_hash
 from stats import get_user_weekly_avg, refresh_user_weekly_avg, get_teacher_stats
 from activity import (
     log_activity,
@@ -19,33 +28,14 @@ from activity import (
     get_old_activity_stats,
     clear_old_activity,
 )
-from datetime import datetime
-import os
-import re
-import shutil
+
 
 main_bp = Blueprint('main', __name__)
 
 
-@main_bp.context_processor
-def utility_processor():
-    def has_permission(permission_code):
-        if 'user_id' in session:
-            return Permission.has_permission(session['user_id'], permission_code)
-        return False
-
-    def get_semesters(gsid):
-        return GroupSubject.get_semesters(gsid)
-
-    def get_hours(gsid, semester):
-        return GroupSubject.get_hours(gsid, semester)
-
-    return dict(
-        has_permission=has_permission,
-        get_semesters=get_semesters,
-        get_hours=get_hours
-    )
-
+# ============================================================
+#                 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ============================================================
 
 def has_emoji(text):
     if not text:
@@ -76,6 +66,40 @@ def _make_db_backup(prefix='mass_transfer'):
     except Exception as e:
         print(f"[backup] Ошибка: {e}")
         return None
+
+
+def _user_owns_journal(uid, gsid):
+    """True, если у пользователя есть manage_users ИЛИ журнал ему назначен."""
+    if Permission.has_permission(uid, 'manage_users'):
+        return True
+    return any(j['id'] == gsid for j in TeacherJournal.get_user_journals(uid))
+
+
+def _require_journal_access(uid, gsid):
+    """
+    Возвращает None, если доступ есть, иначе Response.
+    Для HTML-роутов — redirect с flash.
+    """
+    pair = GroupSubject.get_by_id(gsid)
+    if not pair:
+        flash('Журнал не найден', 'danger')
+        return redirect(url_for('main.group_subjects'))
+    if not _user_owns_journal(uid, gsid):
+        flash('Журнал вам не назначен', 'danger')
+        return redirect(url_for('main.group_subjects'))
+    return None
+
+
+def _require_journal_access_json(uid, gsid):
+    """
+    Для JSON-эндпоинтов. Возвращает None или (jsonify, status_code).
+    """
+    pair = GroupSubject.get_by_id(gsid)
+    if not pair:
+        return jsonify({'success': False, 'message': 'Журнал не найден'}), 404
+    if not _user_owns_journal(uid, gsid):
+        return jsonify({'success': False, 'message': 'Журнал вам не назначен'}), 403
+    return None
 
 
 # ============================================================
@@ -147,6 +171,7 @@ ACTION_LABELS = {
     'add_lesson': 'Добавление занятия',
     'delete_lesson': 'Удаление занятия',
     'edit_lesson_type': 'Изменение типа занятия',
+    'edit_entry': 'Изменение записи',
     'set_semester_grade': 'Оценка за семестр',
     'add_user': 'Создание пользователя',
     'edit_user': 'Редактирование пользователя',
@@ -157,6 +182,9 @@ ACTION_LABELS = {
     'activity_export': 'Экспорт лога',
     'activity_cleanup': 'Очистка лога',
     'edit_role': 'Изменение прав роли',
+    'add_schedule_lesson': 'Добавление занятия в расписание',
+    'edit_schedule_lesson': 'Изменение занятия в расписании',
+    'delete_schedule_lesson': 'Удаление занятия из расписания',
 }
 
 TARGET_TYPE_LABELS = {
@@ -167,6 +195,7 @@ TARGET_TYPE_LABELS = {
     'journal': 'Журнал',
     'lesson': 'Занятие',
     'position': 'Роль',
+    'schedule_lesson': 'Занятие расписания',
 }
 
 
@@ -456,6 +485,7 @@ def profile_change_password():
 
 
 # ============ Группы ============
+
 @main_bp.route('/groups')
 @login_required
 def groups():
@@ -463,7 +493,7 @@ def groups():
 
 
 @main_bp.route('/groups/add', methods=['POST'])
-@login_required
+@permission_required('manage_users')
 def add_group():
     name = request.form['name'].strip()
     if not name:
@@ -485,7 +515,7 @@ def add_group():
 
 
 @main_bp.route('/groups/edit/<int:gid>', methods=['POST'])
-@login_required
+@permission_required('manage_users')
 def edit_group(gid):
     name = request.form['name'].strip()
     if not name:
@@ -503,7 +533,7 @@ def edit_group(gid):
 
 
 @main_bp.route('/groups/delete/<int:gid>')
-@login_required
+@permission_required('manage_users')
 def delete_group(gid):
     grp = Group.get_by_id(gid)
     grp_name = grp['name'] if grp else f'#{gid}'
@@ -516,6 +546,7 @@ def delete_group(gid):
 
 
 # ============ Предметы ============
+
 @main_bp.route('/subjects')
 @login_required
 def subjects():
@@ -523,7 +554,7 @@ def subjects():
 
 
 @main_bp.route('/subjects/add', methods=['POST'])
-@login_required
+@permission_required('manage_users')
 def add_subject():
     name = request.form['name'].strip()
     if not name:
@@ -545,7 +576,7 @@ def add_subject():
 
 
 @main_bp.route('/subjects/edit/<int:sid>', methods=['POST'])
-@login_required
+@permission_required('manage_users')
 def edit_subject(sid):
     name = request.form['name'].strip()
     if not name:
@@ -563,7 +594,7 @@ def edit_subject(sid):
 
 
 @main_bp.route('/subjects/delete/<int:sid>')
-@login_required
+@permission_required('manage_users')
 def delete_subject(sid):
     subj = Subject.get_by_id(sid)
     subj_name = subj['name'] if subj else f'#{sid}'
@@ -576,6 +607,7 @@ def delete_subject(sid):
 
 
 # ============ Студенты ============
+
 @main_bp.route('/students')
 @login_required
 def students():
@@ -596,7 +628,7 @@ def students():
 
 
 @main_bp.route('/students/add', methods=['POST'])
-@login_required
+@permission_required('add_students')
 def add_student():
     gid = request.form['group_id']
     name = request.form['full_name'].strip()
@@ -619,7 +651,7 @@ def add_student():
 
 
 @main_bp.route('/students/edit/<int:sid>', methods=['POST'])
-@login_required
+@permission_required('add_students')
 def edit_student(sid):
     gid = request.form['group_id']
     name = request.form['full_name'].strip()
@@ -638,11 +670,8 @@ def edit_student(sid):
 
 
 @main_bp.route('/students/delete/<int:sid>')
-@login_required
+@permission_required('delete_student')
 def delete_student(sid):
-    if not Permission.has_permission(session['user_id'], 'delete_student'):
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('main.students'))
     st = Student.get_by_id(sid)
     st_name = st['full_name'] if st else f'#{sid}'
     s, m = Student.delete(sid)
@@ -654,11 +683,8 @@ def delete_student(sid):
 
 
 @main_bp.route('/students/import', methods=['POST'])
-@login_required
+@permission_required('add_students')
 def import_students():
-    if not Permission.has_permission(session['user_id'], 'add_students'):
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('main.students'))
     if 'file' not in request.files:
         flash('Файл не выбран', 'danger')
         return redirect(url_for('main.students'))
@@ -679,14 +705,10 @@ def import_students():
 
 
 @main_bp.route('/students/mass-transfer', methods=['POST'])
-@login_required
+@permission_required('manage_users')
 def mass_transfer_students():
     """Массовый перевод студентов в другую группу."""
     uid = session['user_id']
-
-    if not Permission.has_permission(uid, 'manage_users'):
-        flash('Недостаточно прав для массового перевода', 'danger')
-        return redirect(url_for('main.students'))
 
     student_ids = request.form.getlist('student_ids')
     student_ids = [int(s) for s in student_ids if s.isdigit()]
@@ -760,12 +782,10 @@ def mass_transfer_students():
 
 
 @main_bp.route('/students/transfer-info/<int:new_group_id>')
-@login_required
+@permission_required('manage_users')
 def transfer_info(new_group_id):
     """API для предпросмотра массового перевода."""
     uid = session['user_id']
-    if not Permission.has_permission(uid, 'manage_users'):
-        return jsonify({'success': False, 'message': 'Недостаточно прав'})
 
     ids_param = request.args.get('ids', '')
     student_ids = [int(s) for s in ids_param.split(',') if s.strip().isdigit()]
@@ -820,6 +840,7 @@ def transfer_info(new_group_id):
 
 
 # ============ Пары Группа-Предмет ============
+
 @main_bp.route('/group-subjects')
 @login_required
 def group_subjects():
@@ -832,12 +853,8 @@ def group_subjects():
 
 
 @main_bp.route('/group-subjects/add', methods=['POST'])
-@login_required
+@permission_required('add_journal')
 def add_group_subject():
-    if not Permission.has_permission(session['user_id'], 'add_journal'):
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('main.group_subjects'))
-
     gid = request.form['group_id']
     sid = request.form['subject_id']
 
@@ -876,19 +893,36 @@ def add_group_subject():
 
 
 @main_bp.route('/group-subjects/delete/<int:gsid>')
-@login_required
+@permission_required('add_journal')
 def delete_group_subject(gsid):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
     pair = GroupSubject.get_by_id(gsid)
     pair_name = f'{pair["group_name"]} / {pair["subject_name"]}' if pair else f'#{gsid}'
+
+    backup_path = _make_db_backup(prefix=f'del_journal_{gsid}')
+
     s, m = GroupSubject.delete(gsid)
+
     if s:
-        log_activity(session['user_id'], 'delete_journal',
+        log_activity(uid, 'delete_journal',
                      f'Удалён журнал «{pair_name}»', 'journal', gsid)
-    flash(m, 'success' if s else 'danger')
+        if backup_path:
+            flash(f'{m}. Бекап: {os.path.basename(backup_path)}', 'success')
+        else:
+            flash(f'{m} (бэкап не создан — проверьте права на backups/)', 'warning')
+    else:
+        flash(m, 'danger')
+
     return redirect(url_for('main.group_subjects'))
 
 
 # ============ API: Получение часов пары ============
+
 @main_bp.route('/group-subjects/get-hours/<int:gsid>')
 @login_required
 def get_group_subject_hours(gsid):
@@ -906,14 +940,21 @@ def get_group_subject_hours(gsid):
 
 
 # ============ Сохранение часов пары ============
+
 @main_bp.route('/group-subjects/edit-hours', methods=['POST'])
-@login_required
+@permission_required('add_journal')
 def edit_group_subject_hours():
-    if not Permission.has_permission(session['user_id'], 'add_journal'):
-        flash('Недостаточно прав', 'danger')
+    uid = session['user_id']
+    gsid = request.form['gsid']
+
+    pair = GroupSubject.get_by_id(gsid)
+    if not pair:
+        flash('Журнал не найден', 'danger')
+        return redirect(url_for('main.group_subjects'))
+    if not _user_owns_journal(uid, int(gsid)):
+        flash('Журнал вам не назначен', 'danger')
         return redirect(url_for('main.group_subjects'))
 
-    gsid = request.form['gsid']
     semesters = GroupSubject.get_semesters(gsid)
 
     conn = get_db()
@@ -931,7 +972,7 @@ def edit_group_subject_hours():
             ''', (lecture, practice, independent, exam, gsid, sem))
 
         conn.commit()
-        log_activity(session['user_id'], 'edit_hours',
+        log_activity(uid, 'edit_hours',
                      f'Изменены часы журнала #{gsid}', 'journal', int(gsid))
         flash('Часы обновлены', 'success')
     except Exception as e:
@@ -944,9 +985,16 @@ def edit_group_subject_hours():
 
 
 # ============ Журнал ============
+
 @main_bp.route('/journal/<int:gsid>')
-@login_required
+@permission_required('view_journals')
 def journal(gsid):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
     pair = GroupSubject.get_by_id(gsid)
     if not pair:
         flash('Пара не найдена', 'danger')
@@ -976,8 +1024,14 @@ def journal(gsid):
 
 
 @main_bp.route('/journal/<int:gsid>/add-lesson', methods=['GET', 'POST'])
-@login_required
+@permission_required('view_journals')
 def add_lesson(gsid):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
     pair = GroupSubject.get_by_id(gsid)
     if not pair:
         flash('Пара не найдена', 'danger')
@@ -1017,7 +1071,7 @@ def add_lesson(gsid):
 
         s, m = JournalManager.add_lesson(gsid, date, ti, topic, ltype, semester, students_data)
         if s:
-            log_activity(session['user_id'], 'add_lesson',
+            log_activity(uid, 'add_lesson',
                          f'Добавлено занятие: {pair["group_name"]} / {pair["subject_name"]} '
                          f'({date}, {ti})',
                          'journal', gsid)
@@ -1030,26 +1084,61 @@ def add_lesson(gsid):
 
 
 @main_bp.route('/journal/<int:gsid>/update-entry', methods=['POST'])
-@login_required
+@permission_required('view_journals')
 def update_entry(gsid):
-    entry_id = request.form['entry_id']
-    attendance = request.form['attendance']
-    grade = request.form.get('grade', None)
+    uid = session['user_id']
+
+    resp = _require_journal_access_json(uid, gsid)
+    if resp:
+        return resp
+
+    entry_id_raw = request.form.get('entry_id')
+    if not entry_id_raw or not str(entry_id_raw).isdigit():
+        return jsonify({'success': False, 'message': 'Некорректный entry_id'}), 400
+
+    entry_id = int(entry_id_raw)
+
+    entry = JournalManager.get_entry(gsid, entry_id)
+    if not entry:
+        return jsonify({'success': False, 'message': 'Запись не найдена в этом журнале'}), 404
+
+    attendance = request.form.get('attendance', 'present')
+    if attendance not in ('present', 'absent'):
+        return jsonify({'success': False, 'message': 'Некорректное посещение'}), 400
+
+    grade = request.form.get('grade') or None
+    if grade not in (None, '', '2', '3', '4', '5', 'passed'):
+        return jsonify({'success': False, 'message': 'Некорректная оценка'}), 400
+
     s, m = JournalManager.update_entry(gsid, entry_id, attendance, grade)
+
+    if s:
+        log_activity(uid, 'edit_entry',
+                     f'Изменена запись #{entry_id} (журнал #{gsid}): '
+                     f'{attendance}, оценка {grade or "—"}',
+                     'journal', gsid)
+
     return jsonify({'success': s, 'message': m})
 
 
 @main_bp.route('/journal/update-lesson-type', methods=['POST'])
-@login_required
+@permission_required('view_journals')
 def update_lesson_type():
-    gsid = request.form['gsid']
+    uid = session['user_id']
+
+    gsid_raw = request.form.get('gsid')
+    if not gsid_raw or not str(gsid_raw).isdigit():
+        return jsonify({'success': False, 'message': 'Некорректный gsid'}), 400
+    gsid = int(gsid_raw)
+
+    resp = _require_journal_access_json(uid, gsid)
+    if resp:
+        return resp
+
     date = request.form['date']
     time_interval = request.form['time_interval']
     semester = request.form['semester']
     new_type = request.form['type']
-
-    if not Permission.has_permission(session['user_id'], 'view_journals'):
-        return jsonify({'success': False, 'message': 'Недостаточно прав'})
 
     conn = get_db()
     table_name = JournalManager.get_table_name(gsid)
@@ -1073,9 +1162,9 @@ def update_lesson_type():
         conn.commit()
         conn.close()
 
-        log_activity(session['user_id'], 'edit_lesson_type',
+        log_activity(uid, 'edit_lesson_type',
                      f'Изменён тип занятия: журнал #{gsid}, {date} {time_interval} → {new_type}',
-                     'journal', int(gsid))
+                     'journal', gsid)
 
         return jsonify({'success': True, 'message': 'Тип занятия обновлен'})
     except Exception as e:
@@ -1085,12 +1174,18 @@ def update_lesson_type():
 
 
 @main_bp.route('/journal/<int:gsid>/delete-lesson/<date>/<ti>')
-@login_required
+@permission_required('view_journals')
 def delete_lesson(gsid, date, ti):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
     semester = request.args.get('semester', 1, type=int)
     s, m = JournalManager.delete_lesson(gsid, date, ti)
     if s:
-        log_activity(session['user_id'], 'delete_lesson',
+        log_activity(uid, 'delete_lesson',
                      f'Удалено занятие: журнал #{gsid}, {date} {ti}',
                      'journal', gsid)
     flash(m, 'success' if s else 'danger')
@@ -1098,11 +1193,15 @@ def delete_lesson(gsid, date, ti):
 
 
 # ============ Оценка за семестр ============
+
 @main_bp.route('/journal/<int:gsid>/set-semester-grade', methods=['POST'])
-@login_required
+@permission_required('set_semester_grade')
 def set_semester_grade(gsid):
-    if not Permission.has_permission(session['user_id'], 'set_semester_grade'):
-        return jsonify({'success': False, 'message': 'Недостаточно прав'})
+    uid = session['user_id']
+
+    resp = _require_journal_access_json(uid, gsid)
+    if resp:
+        return resp
 
     student_id = request.form['student_id']
     semester = int(request.form['semester'])
@@ -1110,17 +1209,18 @@ def set_semester_grade(gsid):
 
     SemesterGrade.set_grade(student_id, gsid, semester, grade)
 
-    log_activity(session['user_id'], 'set_semester_grade',
+    log_activity(uid, 'set_semester_grade',
                  f'Выставлена оценка за семестр: журнал #{gsid}, студент #{student_id}, '
                  f'семестр {semester}, оценка {grade or "—"}',
-                 'journal', int(gsid))
+                 'journal', gsid)
 
     return jsonify({'success': True})
 
 
 # ============ Карточка студента ============
+
 @main_bp.route('/student/<int:sid>')
-@login_required
+@permission_required('view_student_card')
 def student_card(sid):
     student = Student.get_by_id(sid)
     if not student:
@@ -1176,8 +1276,8 @@ def student_card(sid):
         'total_absences': total_absences,
         'total_attendances': total_attendances,
         'overall_absence_percent': round(
-            (total_absences / (total_absences + total_attendances) * 100) if (
-                                                                                         total_absences + total_attendances) > 0 else 0,
+            (total_absences / (total_absences + total_attendances) * 100)
+            if (total_absences + total_attendances) > 0 else 0,
             1
         ),
         'overall_avg_grade': round(sum(total_grades) / len(total_grades), 2) if total_grades else 0
@@ -1195,8 +1295,9 @@ def student_card(sid):
 
 
 # ============ Отчеты ============
+
 @main_bp.route('/reports')
-@login_required
+@permission_required('create_report')
 def reports():
     uid = session['user_id']
     if Permission.has_permission(uid, 'manage_users'):
@@ -1207,8 +1308,14 @@ def reports():
 
 
 @main_bp.route('/reports/<int:gsid>')
-@login_required
+@permission_required('create_report')
 def view_report(gsid):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
     pair = GroupSubject.get_by_id(gsid)
     if not pair:
         flash('Пара не найдена', 'danger')
@@ -1244,13 +1351,19 @@ def view_report(gsid):
     absences = [student_stats.get(s['id'], {}).get('absences', 0) for s in students]
     avg_grades = [student_stats.get(s['id'], {}).get('avg_grade', 0) for s in students]
 
-    generate_report_chart(names, absences, avg_grades, cp)
+    try:
+        generate_report_chart(names, absences, avg_grades, cp)
+        chart_filename = f'charts/{cf}'
+    except Exception as e:
+        print(f"[report] Ошибка генерации графика: {e}")
+        chart_filename = None
 
     return render_template('report_detail.html', pair=pair, stats=stats,
-                           student_stats=student_stats, chart_filename=f'charts/{cf}')
+                           student_stats=student_stats, chart_filename=chart_filename)
 
 
 # ============ Статистика часов преподавателя ============
+
 @main_bp.route('/teacher/hours-stats')
 @login_required
 def teacher_hours_stats():
@@ -1313,13 +1426,10 @@ def teacher_hours_stats():
 
 
 # ============ Пользователи ============
-@main_bp.route('/users')
-@login_required
-def users():
-    if not Permission.has_permission(session['user_id'], 'manage_users'):
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('main.dashboard'))
 
+@main_bp.route('/users')
+@permission_required('manage_users')
+def users():
     users_raw = User.get_all()
     positions = Position.get_all()
     permissions = Permission.get_all()
@@ -1338,12 +1448,8 @@ def users():
 
 
 @main_bp.route('/users/add', methods=['POST'])
-@login_required
+@permission_required('manage_users')
 def add_user():
-    if not Permission.has_permission(session['user_id'], 'manage_users'):
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('main.dashboard'))
-
     username = request.form['username'].strip()
     password = request.form['password'].strip()
     full_name = request.form.get('full_name', '').strip()
@@ -1375,12 +1481,8 @@ def add_user():
 
 
 @main_bp.route('/users/edit/<int:uid>', methods=['POST'])
-@login_required
+@permission_required('manage_users')
 def edit_user(uid):
-    if not Permission.has_permission(session['user_id'], 'manage_users'):
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('main.dashboard'))
-
     full_name = request.form.get('full_name', '').strip()
     phone = request.form.get('phone', '').strip()
     password = request.form.get('password', '').strip()
@@ -1422,12 +1524,8 @@ def edit_user(uid):
 
 
 @main_bp.route('/users/delete/<int:uid>', methods=['POST'])
-@login_required
+@permission_required('manage_users')
 def delete_user(uid):
-    if not Permission.has_permission(session['user_id'], 'manage_users'):
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('main.dashboard'))
-
     if uid == session.get('user_id'):
         flash('Нельзя удалить самого себя', 'danger')
         return redirect(url_for('main.users'))
@@ -1453,13 +1551,10 @@ def delete_user(uid):
 
 
 # ============ Назначение журналов ============
-@main_bp.route('/users/assign-journals/<int:uid>', methods=['GET', 'POST'])
-@login_required
-def assign_journals(uid):
-    if not Permission.has_permission(session['user_id'], 'assign_teacher'):
-        flash('Недостаточно прав', 'danger')
-        return redirect(url_for('main.dashboard'))
 
+@main_bp.route('/users/assign-journals/<int:uid>', methods=['GET', 'POST'])
+@permission_required('assign_teacher')
+def assign_journals(uid):
     if request.method == 'POST':
         gs_ids = request.form.getlist('journals')
         curator_gids = request.form.getlist('curator_groups')
@@ -1487,7 +1582,7 @@ def assign_journals(uid):
             for gsid in gs_ids:
                 try:
                     conn.execute("INSERT INTO teacher_journals (user_id, group_subject_id) VALUES (?,?)", (uid, gsid))
-                except:
+                except Exception:
                     pass
 
                 if gsid in hours_data:
@@ -1499,7 +1594,7 @@ def assign_journals(uid):
             for gid in curator_gids:
                 try:
                     conn.execute("INSERT INTO curators (user_id, group_id) VALUES (?,?)", (uid, gid))
-                except:
+                except Exception:
                     pass
 
             conn.commit()
