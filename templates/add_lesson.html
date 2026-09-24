@@ -20,27 +20,18 @@
 
 <div class="card shadow-sm">
     <div class="card-body">
-        <form method="POST" id="addLessonForm">
+        <form method="POST">
 
             <div class="row g-3">
                 <div class="col-12 col-md-4">
                     <label class="form-label small">Дата</label>
-                    <input type="date" name="date" id="lessonDate"
-                           class="form-control" required>
-                    <div class="form-text">
-                        День недели: <strong id="dayOfWeekLabel">—</strong>
-                    </div>
+                    <input type="date" name="date" class="form-control" required>
                 </div>
-
                 <div class="col-12 col-md-4">
-                    <label class="form-label small">Тип занятия</label>
-                    <select name="type" class="form-select">
-                        {% for code, name in lesson_types %}
-                            <option value="{{ code }}">{{ name }}</option>
-                        {% endfor %}
-                    </select>
+                    <label class="form-label small">Время (формат: 0900-1030)</label>
+                    <input type="text" name="time_interval" class="form-control"
+                           placeholder="0900-1030" pattern="\d{4}-\d{4}" required>
                 </div>
-
                 <div class="col-12 col-md-4">
                     <label class="form-label small">Семестр</label>
                     <select name="semester" class="form-select">
@@ -51,36 +42,18 @@
                         {% endfor %}
                     </select>
                 </div>
-
-                <div class="col-12">
+                <div class="col-12 col-md-8">
                     <label class="form-label small">Тема (не длиннее 50 символов)</label>
                     <input type="text" name="topic" class="form-control no-emoji" maxlength="50">
                 </div>
-            </div>
-
-            <hr class="my-4">
-
-            <div class="mb-2">
-                <label class="form-label small mb-1">
-                    Время занятия
-                </label>
-                <div class="text-muted small mb-2" id="timeHint">
-                    Выберите дату, чтобы увидеть доступные времена пар.
+                <div class="col-12 col-md-4">
+                    <label class="form-label small">Тип занятия</label>
+                    <select name="type" class="form-select">
+                        {% for code, name in lesson_types %}
+                            <option value="{{ code }}">{{ name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-            </div>
-
-            {# Скрытый input, куда попадёт выбранное значение (формат 0900-1030) #}
-            <input type="hidden" name="time_interval" id="timeIntervalInput" value="">
-
-            {# Панель кнопок — заполняется через JS #}
-            <div class="d-flex flex-wrap gap-2 mb-3" id="timeButtonsPanel">
-                {# JS заполнит #}
-            </div>
-
-            <div id="selectedTimeLabel" class="alert alert-secondary py-2 px-3 mb-3"
-                 style="display:none;">
-                <i class="bi bi-clock"></i>
-                Выбрано: <strong id="selectedTimeText">—</strong>
             </div>
 
             <hr class="my-4">
@@ -144,232 +117,4 @@
     </div>
 </div>
 
-{% endblock %}
-
-
-{% block scripts %}
-<script>
-// ============================================================
-// Времена пар по дням недели
-// ============================================================
-//
-// Ключи: 0 — воскресенье, 1 — понедельник, ..., 6 — суббота
-// (соответствует date.getDay())
-//
-// Каждая пара — { start: '0900', end: '1030' }
-// На кнопках показываем как '09:00-10:30'
-// В БД отправляем как '0900-1030'
-// ============================================================
-
-var TIMES_BY_DAY = {
-    // Понедельник
-    1: [
-        {start: '0830', end: '0930'},
-        {start: '1000', end: '1100'},
-        {start: '1110', end: '1210'},
-        {start: '1340', end: '1440'},
-        {start: '1510', end: '1610'},
-        {start: '1620', end: '1720'},
-        {start: '1730', end: '1830'},
-    ],
-    // Вторник
-    2: [
-        {start: '0830', end: '1000'},
-        {start: '1030', end: '1200'},
-        {start: '1210', end: '1340'},
-        {start: '1350', end: '1520'},
-        {start: '1550', end: '1720'},
-        {start: '1730', end: '1900'},
-        {start: '1910', end: '2040'},
-    ],
-    // Среда
-    3: [
-        {start: '0830', end: '1000'},
-        {start: '1030', end: '1200'},
-        {start: '1210', end: '1340'},
-        {start: '1350', end: '1520'},
-        {start: '1550', end: '1720'},
-        {start: '1730', end: '1900'},
-        {start: '1910', end: '2040'},
-    ],
-    // Четверг
-    4: [
-        {start: '0830', end: '1000'},
-        {start: '1030', end: '1200'},
-        {start: '1210', end: '1340'},
-        {start: '1350', end: '1520'},
-        {start: '1550', end: '1720'},
-        {start: '1730', end: '1900'},
-        {start: '1910', end: '2040'},
-    ],
-    // Пятница
-    5: [
-        {start: '0830', end: '1000'},
-        {start: '1030', end: '1200'},
-        {start: '1210', end: '1340'},
-        {start: '1350', end: '1520'},
-        {start: '1550', end: '1720'},
-        {start: '1730', end: '1900'},
-        {start: '1910', end: '2040'},
-    ],
-    // Суббота
-    6: [
-        {start: '0830', end: '0930'},
-        {start: '0945', end: '1045'},
-        {start: '1055', end: '1155'},
-        {start: '1205', end: '1305'},
-        {start: '1320', end: '1420'},
-        {start: '1430', end: '1530'},
-        {start: '1540', end: '1640'},
-    ],
-};
-
-var DAY_NAMES = {
-    0: 'Воскресенье',
-    1: 'Понедельник',
-    2: 'Вторник',
-    3: 'Среда',
-    4: 'Четверг',
-    5: 'Пятница',
-    6: 'Суббота',
-};
-
-// ============================================================
-// Утилиты
-// ============================================================
-
-function shortToHuman(t) {
-    // '0900' -> '09:00'
-    if (!t || t.length !== 4) return t;
-    return t.substring(0, 2) + ':' + t.substring(2, 4);
-}
-
-function formatSlot(slot) {
-    // {start: '0900', end: '1030'} -> '09:00-10:30'
-    return shortToHuman(slot.start) + '-' + shortToHuman(slot.end);
-}
-
-function formatSlotRaw(slot) {
-    // {start: '0900', end: '1030'} -> '0900-1030'  (для БД)
-    return slot.start + '-' + slot.end;
-}
-
-// ============================================================
-// Построение панели кнопок
-// ============================================================
-
-var dayOfWeek = null;
-var timeButtonsPanel = null;
-var timeIntervalInput = null;
-var selectedTimeLabel = null;
-var selectedTimeText = null;
-var dayOfWeekLabel = null;
-var lessonDate = null;
-
-function renderTimeButtons() {
-    timeButtonsPanel.innerHTML = '';
-    timeIntervalInput.value = '';
-    selectedTimeLabel.style.display = 'none';
-    selectedTimeText.textContent = '—';
-
-    if (dayOfWeek === null || !TIMES_BY_DAY[dayOfWeek]) {
-        var hint = document.createElement('div');
-        hint.className = 'text-muted small';
-        hint.textContent = 'Для этого дня времена пар не заданы.';
-        timeButtonsPanel.appendChild(hint);
-        return;
-    }
-
-    var slots = TIMES_BY_DAY[dayOfWeek];
-
-    slots.forEach(function(slot, idx) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-outline-primary btn-sm time-slot-btn';
-        btn.dataset.raw = formatSlotRaw(slot);
-        btn.dataset.human = formatSlot(slot);
-        btn.textContent = formatSlot(slot);
-
-        btn.addEventListener('click', function() {
-            // Снимаем active со всех
-            var all = timeButtonsPanel.querySelectorAll('.time-slot-btn');
-            all.forEach(function(b) {
-                b.classList.remove('active', 'btn-primary');
-                b.classList.add('btn-outline-primary');
-            });
-
-            // Делаем текущую активной
-            btn.classList.remove('btn-outline-primary');
-            btn.classList.add('active', 'btn-primary');
-
-            // Пишем в скрытый input (формат для БД)
-            timeIntervalInput.value = btn.dataset.raw;
-
-            // Показываем подпись
-            selectedTimeText.textContent = btn.dataset.human;
-            selectedTimeLabel.style.display = '';
-        });
-
-        timeButtonsPanel.appendChild(btn);
-    });
-}
-
-// ============================================================
-// Реакция на изменение даты
-// ============================================================
-
-function updateDayOfWeek() {
-    if (!lessonDate.value) {
-        dayOfWeek = null;
-        dayOfWeekLabel.textContent = '—';
-        renderTimeButtons();
-        return;
-    }
-
-    // Парсим YYYY-MM-DD как локальную дату
-    var parts = lessonDate.value.split('-');
-    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-
-    dayOfWeek = d.getDay();  // 0=Вс, 1=Пн, ..., 6=Сб
-    dayOfWeekLabel.textContent = DAY_NAMES[dayOfWeek] || '—';
-
-    renderTimeButtons();
-}
-
-// ============================================================
-// Инициализация
-// ============================================================
-
-document.addEventListener('DOMContentLoaded', function() {
-    lessonDate = document.getElementById('lessonDate');
-    dayOfWeekLabel = document.getElementById('dayOfWeekLabel');
-    timeButtonsPanel = document.getElementById('timeButtonsPanel');
-    timeIntervalInput = document.getElementById('timeIntervalInput');
-    selectedTimeLabel = document.getElementById('selectedTimeLabel');
-    selectedTimeText = document.getElementById('selectedTimeText');
-
-    if (!lessonDate) return;
-
-    // По умолчанию — сегодня
-    if (!lessonDate.value) {
-        var today = new Date();
-        var y = today.getFullYear();
-        var m = String(today.getMonth() + 1).padStart(2, '0');
-        var d = String(today.getDate()).padStart(2, '0');
-        lessonDate.value = y + '-' + m + '-' + d;
-    }
-
-    updateDayOfWeek();
-
-    lessonDate.addEventListener('change', updateDayOfWeek);
-
-    // Валидация перед submit
-    document.getElementById('addLessonForm').addEventListener('submit', function(e) {
-        if (!timeIntervalInput.value) {
-            e.preventDefault();
-            alert('Выберите время занятия из предложенных кнопок.');
-        }
-    });
-});
-</script>
 {% endblock %}
