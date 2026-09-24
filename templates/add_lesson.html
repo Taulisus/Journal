@@ -20,17 +20,36 @@
 
 <div class="card shadow-sm">
     <div class="card-body">
-        <form method="POST">
+        <form method="POST" id="addLessonForm">
 
             <div class="row g-3">
                 <div class="col-12 col-md-4">
                     <label class="form-label small">Дата</label>
-                    <input type="date" name="date" class="form-control" required>
+                    <input type="date" name="date" class="form-control" required
+                           id="lessonDate"
+                           value="{{ request.form.get('date') or '' }}">
+                    <div class="form-text" id="lessonDayHint"></div>
                 </div>
                 <div class="col-12 col-md-4">
-                    <label class="form-label small">Время (формат: 0900-1030)</label>
-                    <input type="text" name="time_interval" class="form-control"
-                           placeholder="0900-1030" pattern="\d{4}-\d{4}" required>
+                    <label class="form-label small">
+                        Время (формат: 0900-1030)
+                    </label>
+                    <input type="text"
+                           name="time_interval"
+                           id="timeInterval"
+                           class="form-control"
+                           placeholder="0900-1030"
+                           pattern="\d{4}-\d{4}"
+                           list="timeIntervalOptions"
+                           autocomplete="off"
+                           required
+                           value="{{ request.form.get('time_interval') or '' }}">
+                    <datalist id="timeIntervalOptions">
+                        {# Заполняется JS в зависимости от дня недели #}
+                    </datalist>
+                    <div class="form-text">
+                        Подсказки зависят от дня недели.
+                    </div>
                 </div>
                 <div class="col-12 col-md-4">
                     <label class="form-label small">Семестр</label>
@@ -44,15 +63,31 @@
                 </div>
                 <div class="col-12 col-md-8">
                     <label class="form-label small">Тема (не длиннее 50 символов)</label>
-                    <input type="text" name="topic" class="form-control no-emoji" maxlength="50">
+                    <input type="text" name="topic" class="form-control no-emoji" maxlength="50"
+                           value="{{ request.form.get('topic') or '' }}">
                 </div>
                 <div class="col-12 col-md-4">
                     <label class="form-label small">Тип занятия</label>
-                    <select name="type" class="form-select">
+                    <select name="type" class="form-select" id="lessonType">
                         {% for code, name in lesson_types %}
-                            <option value="{{ code }}">{{ name }}</option>
+                            <option value="{{ code }}"
+                                    {% if request.form.get('type') == code %}selected{% endif %}>
+                                {{ name }}
+                            </option>
                         {% endfor %}
                     </select>
+                </div>
+            </div>
+
+            <!-- Быстрый выбор времени (зависит от дня недели) -->
+            <div class="mt-3">
+                <label class="form-label small text-muted mb-1">
+                    <i class="bi bi-lightning-charge"></i>
+                    Быстрый выбор времени
+                    <span id="quickTimeDayLabel" class="badge bg-secondary ms-1">—</span>
+                </label>
+                <div class="d-flex flex-wrap gap-1" id="quickTimeButtons">
+                    {# Заполняется JS #}
                 </div>
             </div>
 
@@ -71,20 +106,23 @@
                     </thead>
                     <tbody>
                     {% for st in students %}
+                        {% set sid = st.id|string %}
                         <tr>
                             <td>{{ st.full_name }}</td>
                             <td class="text-center">
                                 <div class="btn-group btn-group-sm" role="group">
                                     <input type="radio" class="btn-check"
                                            name="attendance_{{ st.id }}"
-                                           id="att_p_{{ st.id }}" value="present" checked>
+                                           id="att_p_{{ st.id }}" value="present"
+                                           {% if request.form.get('attendance_' ~ sid, 'present') == 'present' %}checked{% endif %}>
                                     <label class="btn btn-outline-success" for="att_p_{{ st.id }}">
                                         <i class="bi bi-check"></i> Был
                                     </label>
 
                                     <input type="radio" class="btn-check"
                                            name="attendance_{{ st.id }}"
-                                           id="att_a_{{ st.id }}" value="absent">
+                                           id="att_a_{{ st.id }}" value="absent"
+                                           {% if request.form.get('attendance_' ~ sid) == 'absent' %}checked{% endif %}>
                                     <label class="btn btn-outline-danger" for="att_a_{{ st.id }}">
                                         <i class="bi bi-x"></i> Нет
                                     </label>
@@ -93,7 +131,10 @@
                             <td class="text-center">
                                 <select name="grade_{{ st.id }}" class="form-select form-select-sm">
                                     {% for code, name in grades %}
-                                        <option value="{{ code }}">{{ name }}</option>
+                                        <option value="{{ code }}"
+                                                {% if request.form.get('grade_' ~ sid, '') == code %}selected{% endif %}>
+                                            {{ name }}
+                                        </option>
                                     {% endfor %}
                                 </select>
                             </td>
@@ -117,4 +158,188 @@
     </div>
 </div>
 
+{% endblock %}
+
+
+{% block scripts %}
+
+{# Прокидываем интервалы по дням недели в JS #}
+<script id="timeIntervalsData" type="application/json">
+{{ all_time_intervals | tojson }}
+</script>
+
+{# Имена дней недели #}
+<script id="dayNamesData" type="application/json">
+{{ day_names_short | tojson }}
+</script>
+
+<script>
+// ==================== ДАННЫЕ ИЗ БЭКЕНДА ====================
+var TIME_INTERVALS = JSON.parse(document.getElementById('timeIntervalsData').textContent);
+var DAY_NAMES = JSON.parse(document.getElementById('dayNamesData').textContent);
+var DEFAULT_DAY = '1'; // Вт — день по умолчанию для неизвестных дат
+
+// ==================== УТИЛИТЫ ====================
+
+function getWeekdayFromDate(dateStr) {
+    // 'YYYY-MM-DD' → '0'..'6' (0=Пн, 6=Вс) или null
+    if (!dateStr) return null;
+    var parts = dateStr.split('-');
+    if (parts.length !== 3) return null;
+    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    if (isNaN(d.getTime())) return null;
+    // JS: 0=Вс, 1=Пн, ..., 6=Сб
+    // Python-стиль: 0=Пн, ..., 6=Вс
+    var wd = d.getDay();
+    return wd === 0 ? '6' : String(wd - 1);
+}
+
+function formatHHMM(v) {
+    // '0830-0930' → '08:30–09:30'
+    var m = v.match(/^(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+    return m ? m[1] + ':' + m[2] + '–' + m[3] + ':' + m[4] : v;
+}
+
+function normalizeTime(value) {
+    if (!value) return value;
+    value = value.trim().replace(/\s+/g, '');
+
+    // '9:00-10:30'
+    var m = value.match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
+    if (m) {
+        var h1 = ('0' + m[1]).slice(-2);
+        var h2 = ('0' + m[3]).slice(-2);
+        return h1 + m[2] + '-' + h2 + m[4];
+    }
+
+    // '9.00-10.30'
+    m = value.match(/^(\d{1,2})\.(\d{2})-(\d{1,2})\.(\d{2})$/);
+    if (m) {
+        var h1b = ('0' + m[1]).slice(-2);
+        var h2b = ('0' + m[3]).slice(-2);
+        return h1b + m[2] + '-' + h2b + m[4];
+    }
+
+    // '900-1030'
+    m = value.match(/^(\d{3})-(\d{4})$/);
+    if (m) return '0' + m[1] + '-' + m[2];
+
+    // '09001030'
+    m = value.match(/^(\d{4})(\d{4})$/);
+    if (m) return m[1] + '-' + m[2];
+
+    return value;
+}
+
+// ==================== ПЕРЕРИСОВКА ====================
+
+function getIntervalsForDate(dateStr) {
+    var wd = getWeekdayFromDate(dateStr);
+    if (wd === null || !TIME_INTERVALS[wd]) {
+        wd = DEFAULT_DAY;
+    }
+    return { weekday: wd, intervals: TIME_INTERVALS[wd] || TIME_INTERVALS[DEFAULT_DAY] };
+}
+
+function rebuildTimeOptions(dateStr) {
+    if (!dateStr) return;
+
+    var result = getIntervalsForDate(dateStr);
+    var intervals = result.intervals;
+    var weekday = result.weekday;
+
+    // --- Datalist ---
+    var datalist = document.getElementById('timeIntervalOptions');
+    if (datalist) {
+        datalist.innerHTML = '';
+        intervals.forEach(function (pair) {
+            var opt = document.createElement('option');
+            opt.value = pair[0];
+            opt.label = pair[1];
+            datalist.appendChild(opt);
+        });
+    }
+
+    // --- Кнопки ---
+    var buttons = document.getElementById('quickTimeButtons');
+    if (buttons) {
+        buttons.innerHTML = '';
+        intervals.forEach(function (pair) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm btn-outline-secondary quick-time';
+            btn.setAttribute('data-time', pair[0]);
+            btn.textContent = pair[1].split(' ')[0] + ' ' + pair[1].split(' ')[1];
+            btn.title = pair[1] + ' — ' + formatHHMM(pair[0]);
+            buttons.appendChild(btn);
+        });
+
+        // Перевешиваем обработчики
+        buttons.querySelectorAll('.quick-time').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var t = this.getAttribute('data-time');
+                var input = document.getElementById('timeInterval');
+                if (input) {
+                    input.value = t;
+                    input.focus();
+                }
+
+                buttons.querySelectorAll('.quick-time').forEach(function (b) {
+                    b.classList.remove('btn-primary');
+                    b.classList.add('btn-outline-secondary');
+                });
+                this.classList.remove('btn-outline-secondary');
+                this.classList.add('btn-primary');
+            });
+        });
+    }
+
+    // --- Метка дня ---
+    var label = document.getElementById('quickTimeDayLabel');
+    if (label) {
+        label.textContent = DAY_NAMES[parseInt(weekday)] || '—';
+    }
+
+    // --- Подсказка под датой ---
+    var hint = document.getElementById('lessonDayHint');
+    if (hint) {
+        var wdInt = parseInt(weekday);
+        hint.textContent = 'День: ' + (DAY_NAMES[wdInt] || '—')
+            + ' — ' + intervals.length + ' пар';
+    }
+}
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+
+document.addEventListener('DOMContentLoaded', function () {
+    var dateInput = document.getElementById('lessonDate');
+
+    // Если дата пуста — ставим сегодня
+    if (dateInput && !dateInput.value) {
+        var today = new Date();
+        var y = today.getFullYear();
+        var m = String(today.getMonth() + 1).padStart(2, '0');
+        var d = String(today.getDate()).padStart(2, '0');
+        dateInput.value = y + '-' + m + '-' + d;
+    }
+
+    // Первичная отрисовка
+    if (dateInput) {
+        rebuildTimeOptions(dateInput.value);
+
+        // При смене даты — перерисовываем
+        dateInput.addEventListener('change', function () {
+            rebuildTimeOptions(this.value);
+        });
+    }
+
+    // Нормализация времени при blur
+    var timeInput = document.getElementById('timeInterval');
+    if (timeInput) {
+        timeInput.addEventListener('blur', function () {
+            this.value = normalizeTime(this.value);
+        });
+    }
+});
+</script>
 {% endblock %}

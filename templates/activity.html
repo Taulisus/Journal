@@ -260,6 +260,38 @@
 </div>
 {% endif %}
 
+<!-- РЕЗЕРВНАЯ КОПИЯ БД -->
+<div class="card shadow-sm mt-4 border-info">
+    <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+            <div>
+                <h6 class="mb-1">
+                    <i class="bi bi-shield-check text-info"></i>
+                    Резервная копия БД
+                </h6>
+                <div class="text-muted small">
+                    Создать копию <code>journal.db</code> прямо сейчас.
+                    Файл сохраняется в папку <code>backups/</code>.
+                </div>
+                <div class="text-muted small mt-1">
+                    Хранятся последние 30 бэкапов — старые удаляются автоматически.
+                </div>
+            </div>
+
+            <form method="post"
+                  action="{{ url_for('main.manual_backup') }}"
+                  onsubmit="return confirm('Создать резервную копию БД?\n\nФайл будет сохранён в папку backups/.');"
+                  class="d-inline">
+                <button type="submit" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-download"></i>
+                    Создать бэкап
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+
 <!-- ОЧИСТКА СТАРОГО ЛОГА -->
 <div class="card shadow-sm mt-4 border-warning">
     <div class="card-body">

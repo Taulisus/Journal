@@ -202,7 +202,7 @@
 {% endif %}
 
 <!-- ============================================================
-     РЯД 4. Последние действия
+     РЯД 4. Последние действия (со скроллом)
      ============================================================ -->
 {% if activity %}
 <div class="row g-3 mb-4">
@@ -215,25 +215,27 @@
                 </h5>
                 <span class="badge bg-secondary">{{ activity|length }}</span>
             </div>
-            <div class="list-group list-group-flush">
-                {% for a in activity %}
-                    <div class="list-group-item d-flex align-items-start gap-3">
-                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0"
-                             style="width:36px; height:36px; font-weight:700;">
-                            {{ a.display_name[0]|upper if a.display_name else '?' }}
-                        </div>
-                        <div class="flex-grow-1 min-w-0">
-                            <div class="d-flex flex-wrap justify-content-between gap-2">
-                                <div class="fw-semibold">{{ a.display_name }}</div>
-                                <div class="text-muted small">
-                                    <i class="bi bi-clock"></i>
-                                    {{ a.created_at_human }}
-                                </div>
+            <div class="activity-scroll">
+                <div class="list-group list-group-flush">
+                    {% for a in activity %}
+                        <div class="list-group-item d-flex align-items-start gap-3">
+                            <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0"
+                                 style="width:36px; height:36px; font-weight:700;">
+                                {{ a.display_name[0]|upper if a.display_name else '?' }}
                             </div>
-                            <div class="text-muted small">{{ a.description or a.action }}</div>
+                            <div class="flex-grow-1 min-w-0">
+                                <div class="d-flex flex-wrap justify-content-between gap-2">
+                                    <div class="fw-semibold">{{ a.display_name }}</div>
+                                    <div class="text-muted small">
+                                        <i class="bi bi-clock"></i>
+                                        {{ a.created_at_human }}
+                                    </div>
+                                </div>
+                                <div class="text-muted small">{{ a.description or a.action }}</div>
+                            </div>
                         </div>
-                    </div>
-                {% endfor %}
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
@@ -299,7 +301,40 @@ document.addEventListener('DOMContentLoaded', function () {
     font-size: 1.5rem;
 }
 
-/* iPhone 12 mini и подобные (375px) */
+/* ============================================================
+   СКРОЛЛ ДЛЯ БЛОКА «ПОСЛЕДНИЕ ДЕЙСТВИЯ»
+   ============================================================ */
+.activity-scroll {
+    max-height: 420px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #c0c0c0 #f1f1f1;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.activity-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.activity-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.activity-scroll::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 4px;
+}
+
+.activity-scroll::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
+}
+
+/* ============================================================
+   iPHONE 12 MINI И ПОДОБНЫЕ (375px)
+   ============================================================ */
 @media (max-width: 575.98px) {
     /* Иконки в карточках счётчиков меньше */
     .stat-icon {
@@ -342,6 +377,11 @@ document.addEventListener('DOMContentLoaded', function () {
     .card-header .small.text-muted {
         font-size: 0.8rem;
         width: 100%;
+    }
+
+    /* Скролл «Последние действия» — меньше высота */
+    .activity-scroll {
+        max-height: 340px;
     }
 }
 </style>

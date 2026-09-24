@@ -3,17 +3,25 @@ import os
 import re
 import shutil
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, Response
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, flash,
+    jsonify, session, Response, send_file,
+)
 from werkzeug.security import generate_password_hash
 
 from decorators import login_required, permission_required
 from models import (
     Group, Subject, Student, GroupSubject, get_db, UserProfile, Permission, Position,
     TeacherJournal, Curator, TeacherHours, User, SemesterGrade, PositionPermission,
-    StudentGroupHistory,
 )
 from journal_manager import JournalManager
-from utils import import_students_from_xlsx, generate_report_chart, generate_student_chart
+from utils import (
+    import_students_from_xlsx,
+    generate_report_chart,
+    generate_student_chart,
+    export_journal_to_excel,
+    create_backup,
+)
 from config import Config
 from stats import get_user_weekly_avg, refresh_user_weekly_avg, get_teacher_stats
 from activity import (
@@ -48,24 +56,16 @@ def has_emoji(text):
 
 def _make_db_backup(prefix='mass_transfer'):
     """
-    Делает копию journal.db в backups/ с указанным префиксом.
-    Возвращает путь или None.
+    Обёртка над utils.create_backup для обратной совместимости.
+    Возвращает путь к бэкапу или None.
     """
-    try:
-        db_path = Config.DATABASE
-        if not os.path.exists(db_path):
-            return None
-
-        backup_dir = os.path.join(os.path.dirname(os.path.abspath(db_path)), 'backups')
-        os.makedirs(backup_dir, exist_ok=True)
-
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        dst = os.path.join(backup_dir, f'journal_{ts}_before_{prefix}.db')
-        shutil.copy2(db_path, dst)
-        return dst
-    except Exception as e:
-        print(f"[backup] Ошибка: {e}")
-        return None
+    ok, path_or_err, _ = create_backup(
+        db_path=Config.DATABASE,
+        backup_dir=os.path.join(os.path.dirname(Config.DATABASE), 'backups'),
+        prefix=prefix,
+        max_backups=30,
+    )
+    return path_or_err if ok else None
 
 
 def _user_owns_journal(uid, gsid):
@@ -185,6 +185,11 @@ ACTION_LABELS = {
     'add_schedule_lesson': 'Добавление занятия в расписание',
     'edit_schedule_lesson': 'Изменение занятия в расписании',
     'delete_schedule_lesson': 'Удаление занятия из расписания',
+    'activity_export': 'Экспорт лога',
+    'activity_cleanup': 'Очистка лога',
+    'export_journal': 'Экспорт журнала в Excel',
+    'create_backup': 'Создание бэкапа БД',
+    'edit_lesson_time': 'Изменение времени занятия',
 }
 
 TARGET_TYPE_LABELS = {
@@ -302,6 +307,22 @@ def activity_cleanup():
 
     return redirect(url_for('main.activity_log_page'))
 
+@main_bp.route('/admin/backup', methods=['POST'])
+@permission_required('manage_users')
+def manual_backup():
+    uid = session['user_id']
+
+    ok, path_or_err, size_kb = create_backup(prefix='manual')
+
+    if ok:
+        log_activity(uid, 'create_backup',
+                     f'Создан бэкап БД ({size_kb:.1f} КБ)',
+                     'user', uid)
+        flash(f'Бэкап создан: {os.path.basename(path_or_err)} ({size_kb:.1f} КБ)', 'success')
+    else:
+        flash(f'Ошибка: {path_or_err}', 'danger')
+
+    return redirect(url_for('main.activity_log_page'))
 
 # ============================================================
 #                 РОЛИ И ПРАВА
@@ -984,6 +1005,57 @@ def edit_group_subject_hours():
     return redirect(url_for('main.group_subjects'))
 
 
+@main_bp.route('/journal/<int:gsid>/export')
+@permission_required('create_report')
+def export_journal(gsid):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
+    pair = GroupSubject.get_by_id(gsid)
+    if not pair:
+        flash('Пара не найдена', 'danger')
+        return redirect(url_for('main.group_subjects'))
+
+    semester = request.args.get('semester', None, type=int)
+    journal_data = JournalManager.get_journal(gsid, semester)
+    students = Student.get_by_group(pair['group_id'])
+
+    if not journal_data:
+        flash('Нет данных для экспорта', 'warning')
+        return redirect(url_for('main.journal', gsid=gsid, semester=semester or 1))
+
+    from werkzeug.utils import secure_filename
+    filename = f"journal_{gsid}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    tmp_dir = os.path.join(Config.UPLOAD_FOLDER, 'exports')
+    os.makedirs(tmp_dir, exist_ok=True)
+    save_path = os.path.join(tmp_dir, secure_filename(filename))
+
+    ok, msg = export_journal_to_excel(
+        gs_id=gsid,
+        pair_info={'group_name': pair['group_name'], 'subject_name': pair['subject_name']},
+        students=students,
+        journal_data=journal_data,
+        save_path=save_path,
+    )
+
+    if not ok:
+        flash(msg, 'danger')
+        return redirect(url_for('main.journal', gsid=gsid, semester=semester or 1))
+
+    log_activity(uid, 'export_journal',
+                 f'Экспорт журнала «{pair["group_name"]} / {pair["subject_name"]}» в Excel',
+                 'journal', gsid)
+
+    return send_file(
+        save_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
 # ============ Журнал ============
 
 @main_bp.route('/journal/<int:gsid>')
@@ -1191,6 +1263,71 @@ def delete_lesson(gsid, date, ti):
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('main.journal', gsid=gsid, semester=semester))
 
+@main_bp.route('/journal/<int:gsid>/update-lesson-time', methods=['POST'])
+@permission_required('view_journals')
+def update_lesson_time(gsid):
+    """
+    Изменяет time_interval у всех записей journal_<gsid>
+    с указанной датой и старым временем.
+    """
+    uid = session['user_id']
+
+    resp = _require_journal_access_json(uid, gsid)
+    if resp:
+        return resp
+
+    date = request.form.get('date', '').strip()
+    old_time = request.form.get('old_time', '').strip()
+    new_time = request.form.get('new_time', '').strip()
+    semester = request.form.get('semester', type=int)
+
+    if not date or not old_time or not new_time:
+        return jsonify({'success': False, 'message': 'Не указаны обязательные поля'}), 400
+
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+        return jsonify({'success': False, 'message': 'Некорректная дата'}), 400
+
+    if not re.match(r'^\d{4}-\d{4}$', new_time):
+        return jsonify({'success': False, 'message': 'Формат времени: 0900-1030'}), 400
+
+    if old_time == new_time:
+        return jsonify({'success': False, 'message': 'Новое время совпадает со старым'}), 400
+
+    conn = get_db()
+    table_name = JournalManager.get_table_name(gsid)
+    try:
+        # Проверяем, что уже нет занятия с таким временем в этот день
+        conflict = conn.execute(
+            f"SELECT COUNT(*) as c FROM {table_name} "
+            f"WHERE date = ? AND time_interval = ? AND semester = ?",
+            (date, new_time, semester)
+        ).fetchone()
+        if conflict['c'] > 0:
+            return jsonify({
+                'success': False,
+                'message': 'Занятие с таким временем уже существует в этот день'
+            }), 409
+
+        cur = conn.execute(
+            f"UPDATE {table_name} SET time_interval = ? "
+            f"WHERE date = ? AND time_interval = ? AND semester = ?",
+            (new_time, date, old_time, semester)
+        )
+        affected = cur.rowcount
+        conn.commit()
+
+        log_activity(uid, 'edit_lesson_time',
+                     f'Изменено время занятия: журнал #{gsid}, '
+                     f'{date} {old_time} → {new_time} ({affected} записей)',
+                     'journal', gsid)
+
+        return jsonify({'success': True, 'affected': affected,
+                        'message': f'Время обновлено ({affected} записей)'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'Ошибка: {e}'}), 500
+    finally:
+        conn.close()
 
 # ============ Оценка за семестр ============
 
