@@ -108,11 +108,24 @@
                                     </a>
                                 </li>
                                 <li>
+                                    <a class="dropdown-item" href="{{ url_for('journals.plan_view', gsid=pair.id) }}">
+                                        <i class="bi bi-list-ol"></i> Тематический план
+                                    </a>
+                                </li>
+                                <li>
                                     <a class="dropdown-item" href="#"
                                        onclick="openEditHoursModal({{ pair.id }}, '{{ pair.group_name }}', '{{ pair.subject_name }}'); return false;">
                                         <i class="bi bi-clock"></i> Редактировать часы
                                     </a>
                                 </li>
+                                {% if has_permission('add_journal') %}
+                                <li>
+                                    <a class="dropdown-item" href="#"
+                                       onclick="openCopyJournalModal({{ pair.id }}, '{{ pair.group_name }}', '{{ pair.subject_name }}', {{ pair.subject_id }}); return false;">
+                                        <i class="bi bi-files"></i> Копировать в группы
+                                    </a>
+                                </li>
+                                {% endif %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <a class="dropdown-item text-danger"
@@ -173,7 +186,6 @@
                 </div>
 
                 <div class="modal-body">
-                    <!-- Группа -->
                     <div class="mb-3">
                         <label for="group_id" class="form-label fw-bold">
                             Группа <span class="text-danger">*</span>
@@ -186,7 +198,6 @@
                         </select>
                     </div>
 
-                    <!-- Предмет -->
                     <div class="mb-3">
                         <label for="subject_id" class="form-label fw-bold">
                             Предмет <span class="text-danger">*</span>
@@ -201,7 +212,6 @@
 
                     <hr>
 
-                    <!-- Выбор семестров -->
                     <div class="mb-3">
                         <label class="form-label fw-bold">
                             <i class="bi bi-calendar3"></i>
@@ -232,7 +242,6 @@
                         </div>
                     </div>
 
-                    <!-- Часы по семестрам -->
                     <div id="semestersContainer">
                         <div class="card mb-2 border-primary semester-card" id="semester_1_card">
                             <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
@@ -348,6 +357,117 @@
     </div>
 </div>
 
+<!-- ============ МОДАЛЬНОЕ ОКНО КОПИРОВАНИЯ ЖУРНАЛА ============ -->
+<div class="modal fade" id="copyJournalModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" id="copyJournalForm">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-files"></i>
+                        Копировать журнал в группы
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="alert alert-light border mb-3">
+                        <div class="fw-bold" id="copySourceTitle">—</div>
+                        <div class="small text-muted" id="copySourceSubtitle">—</div>
+                    </div>
+
+                    <div class="alert alert-info small mb-3">
+                        <i class="bi bi-info-circle"></i>
+                        Копируются <strong>предмет</strong>, <strong>часы по семестрам</strong>
+                        и <strong>тематический план</strong> (если отмечено).
+                        Записи журнала, студенты и оценки <strong>не копируются</strong>.
+                    </div>
+
+                    <!-- Выбор преподавателя -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-person-badge"></i>
+                            Назначить преподавателя (опционально)
+                        </label>
+                        <select name="teacher_id" class="form-select">
+                            <option value="">— Не назначать —</option>
+                            {% for t in all_teachers %}
+                                <option value="{{ t.id }}">
+                                    {{ t.short_name or t.full_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Преподаватель будет назначен на все новые журналы.
+                        </div>
+                    </div>
+
+                    <!-- Чекбоксы «что копировать» -->
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox"
+                               name="copy_hours" id="copyHoursCheck" value="1" checked>
+                        <label class="form-check-label" for="copyHoursCheck">
+                            <strong>Скопировать часы по семестрам</strong>
+                        </label>
+                        <div class="form-text">
+                            Если снять галочку — журналы создадутся с нулевыми часами.
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox"
+                               name="copy_plan" id="copyPlanCheck" value="1" checked>
+                        <label class="form-check-label" for="copyPlanCheck">
+                            <strong>Скопировать тематический план</strong>
+                        </label>
+                        <div class="form-text">
+                            Пункты плана будут перенесены в новые журналы.
+                            Отметки о проведении не копируются.
+                        </div>
+                    </div>
+
+                    <!-- Список групп -->
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold mb-0">
+                            <i class="bi bi-people"></i>
+                            Группы для копирования
+                        </label>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-secondary" onclick="copyToggleAll(true)">
+                                <i class="bi bi-check-all"></i> Все доступные
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="copyToggleAll(false)">
+                                <i class="bi bi-x-circle"></i> Снять все
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="border rounded p-2" style="max-height: 320px; overflow-y: auto;">
+                        <div id="copyGroupsList">
+                            {# Заполняется JS #}
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning small mt-3 mb-0" id="copyWarning" style="display:none;">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <span id="copyWarningText"></span>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <div class="me-auto small text-muted" id="copySelectedCount">Выбрано: 0</div>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> Отмена
+                    </button>
+                    <button type="submit" class="btn btn-info text-white" id="copySubmitBtn">
+                        <i class="bi bi-check-circle"></i> Создать журналы
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- ============ МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ЧАСОВ ============ -->
 <div class="modal fade" id="editHoursModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
@@ -382,6 +502,31 @@
         </div>
     </div>
 </div>
+
+{# Данные о существующих журналах для JS #}
+<script id="allPairsData" type="application/json">
+[
+    {% for p in pairs %}
+    {
+        "group_id": {{ p.group_id }},
+        "subject_id": {{ p.subject_id }},
+        "group_name": "{{ p.group_name|e }}",
+        "subject_name": "{{ p.subject_name|e }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+]
+</script>
+
+<script id="allGroupsData" type="application/json">
+[
+    {% for g in groups %}
+    {
+        "id": {{ g.id }},
+        "name": "{{ g.name|e }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+]
+</script>
 
 <style>
     #journalsList { overflow: visible !important; }
@@ -445,12 +590,37 @@
     @media print {
         .fab-create-journal, .dropdown, .card-header .btn, .btn, .modal { display: none !important; }
     }
+
+    /* Копирование — группы */
+    .copy-group-item {
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
+        margin-bottom: 4px;
+        background-color: #fff;
+    }
+    .copy-group-item.available:hover {
+        background-color: #f8f9fa;
+        border-color: #0d6efd;
+    }
+    .copy-group-item.disabled {
+        background-color: #f8f9fa;
+        opacity: 0.75;
+    }
+    .copy-group-item .form-check-input {
+        margin-top: 0.25rem;
+    }
+    .copy-group-item .reason {
+        font-size: 0.75rem;
+        color: #dc3545;
+    }
 </style>
 
 {% endblock %}
 
 {% block scripts %}
 <script>
+// ==================== ПОИСК И ФИЛЬТР ====================
 document.querySelectorAll('.journal-item .dropdown').forEach(function(dropdown) {
     dropdown.addEventListener('show.bs.dropdown', function() {
         var item = this.closest('.journal-item');
@@ -648,6 +818,148 @@ document.getElementById('createJournalModal').addEventListener('hidden.bs.modal'
     validateForm();
 });
 
+// ==================== КОПИРОВАНИЕ ЖУРНАЛА ====================
+var ALL_GROUPS = JSON.parse(document.getElementById('allGroupsData').textContent);
+var ALL_PAIRS = JSON.parse(document.getElementById('allPairsData').textContent);
+
+var copySourceGsid = null;
+var copySourceSubjectId = null;
+
+function openCopyJournalModal(gsid, groupName, subjectName, subjectId) {
+    copySourceGsid = gsid;
+    copySourceSubjectId = subjectId;
+
+    document.getElementById('copySourceTitle').textContent =
+        groupName + ' — ' + subjectName;
+    document.getElementById('copySourceSubtitle').textContent =
+        'Исходный журнал #' + gsid;
+
+    document.getElementById('copyJournalForm').action =
+        '/group-subjects/' + gsid + '/copy-to-groups';
+
+    buildCopyGroupsList(gsid, subjectId, groupName);
+
+    document.getElementById('copyHoursCheck').checked = true;
+    document.getElementById('copyPlanCheck').checked = true;
+    document.getElementById('copyWarning').style.display = 'none';
+
+    var modal = new bootstrap.Modal(document.getElementById('copyJournalModal'));
+    modal.show();
+}
+
+function buildCopyGroupsList(sourceGsid, sourceSubjectId, sourceGroupName) {
+    var container = document.getElementById('copyGroupsList');
+    container.innerHTML = '';
+
+    if (!ALL_GROUPS || ALL_GROUPS.length === 0) {
+        container.innerHTML = '<div class="text-muted small">Нет групп</div>';
+        updateCopyCount();
+        return;
+    }
+
+    var busyBySubject = {};
+    ALL_PAIRS.forEach(function(p) {
+        if (p.subject_id === sourceSubjectId) {
+            busyBySubject[p.group_id] = true;
+        }
+    });
+
+    var sourceGroupId = null;
+    ALL_PAIRS.forEach(function(p) {
+        if (p.subject_id === sourceSubjectId && p.group_name === sourceGroupName) {
+            sourceGroupId = p.group_id;
+        }
+    });
+
+    ALL_GROUPS.forEach(function(g) {
+        var isSource = (g.id === sourceGroupId);
+        var isBusy = !!busyBySubject[g.id];
+        var disabled = isSource || isBusy;
+
+        var reason = '';
+        if (isSource) reason = 'Это исходная группа';
+        else if (isBusy) reason = 'Журнал по этому предмету уже есть — сначала удалите его';
+
+        var item = document.createElement('div');
+        item.className = 'copy-group-item ' + (disabled ? 'disabled' : 'available');
+
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'form-check-input me-2 copy-group-check';
+        cb.value = g.id;
+        cb.id = 'copy_g_' + g.id;
+        cb.name = 'group_ids';
+        cb.disabled = disabled;
+        cb.dataset.groupName = g.name;
+
+        var lbl = document.createElement('label');
+        lbl.className = 'form-check-label d-flex justify-content-between align-items-center w-100';
+        lbl.setAttribute('for', 'copy_g_' + g.id);
+
+        var nameSpan = document.createElement('span');
+        nameSpan.textContent = g.name;
+        if (disabled) {
+            nameSpan.classList.add('text-muted');
+        }
+        lbl.appendChild(nameSpan);
+
+        if (reason) {
+            var reasonSpan = document.createElement('span');
+            reasonSpan.className = 'reason';
+            reasonSpan.textContent = reason;
+            lbl.appendChild(reasonSpan);
+        }
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'd-flex align-items-start';
+        wrapper.appendChild(cb);
+        wrapper.appendChild(lbl);
+
+        item.appendChild(wrapper);
+        container.appendChild(item);
+    });
+
+    container.querySelectorAll('.copy-group-check').forEach(function(cb) {
+        cb.addEventListener('change', updateCopyCount);
+    });
+
+    updateCopyCount();
+}
+
+function updateCopyCount() {
+    var checks = document.querySelectorAll('.copy-group-check:checked');
+    var n = checks.length;
+    document.getElementById('copySelectedCount').textContent = 'Выбрано: ' + n;
+    document.getElementById('copySubmitBtn').disabled = (n === 0);
+
+    var busyCount = document.querySelectorAll('.copy-group-item.disabled .copy-group-check').length;
+    if (busyCount > 0) {
+        document.getElementById('copyWarningText').textContent =
+            busyCount + ' групп(ы) недоступны — там уже есть журнал по этому предмету. ' +
+            'Сначала удалите существующие журналы.';
+        document.getElementById('copyWarning').style.display = 'block';
+    } else {
+        document.getElementById('copyWarning').style.display = 'none';
+    }
+}
+
+function copyToggleAll(state) {
+    document.querySelectorAll('.copy-group-check:not(:disabled)').forEach(function(cb) {
+        cb.checked = state;
+    });
+    updateCopyCount();
+}
+
+document.getElementById('copyJournalModal').addEventListener('hidden.bs.modal', function() {
+    document.querySelectorAll('.copy-group-check').forEach(function(cb) {
+        cb.checked = false;
+    });
+    document.getElementById('copyHoursCheck').checked = true;
+    document.getElementById('copyPlanCheck').checked = true;
+    updateCopyCount();
+});
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
 document.addEventListener('DOMContentLoaded', function() {
     updateAllTotals();
     validateForm();

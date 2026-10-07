@@ -249,7 +249,9 @@ def edit_lesson(lesson_id):
         if is_admin:
             teacher_id = request.form.get('teacher_id', type=int) or None
         else:
-            teacher_id = my_teacher_id
+            # Преподаватель: может выбрать другого, но по умолчанию — свой
+            form_teacher_id = request.form.get('teacher_id', type=int) or None
+            teacher_id = form_teacher_id or my_teacher_id
 
         if not date or not _parse_date(date):
             flash('Некорректная дата', 'danger')
@@ -303,7 +305,6 @@ def edit_lesson(lesson_id):
         my_teacher_id=my_teacher_id,
     )
 
-
 @schedule_bp.route('/lesson/<int:lesson_id>/delete', methods=['POST'])
 @login_required
 def delete_lesson(lesson_id):
@@ -346,7 +347,27 @@ def new_lesson():
         return redirect(url_for('schedule.index'))
 
     is_admin = Permission.has_permission(uid, 'manage_users')
-    my_teacher_id = User.get_teacher_id(uid)
+
+    # Определяем teacher_id по умолчанию
+    my_teacher_id = None
+
+    if not is_admin:
+        # Для не-админа: ищем или создаём преподавателя из профиля
+        teacher_id, was_created, err = User.find_or_create_teacher(uid)
+        if err:
+            flash(err, 'warning')
+        else:
+            my_teacher_id = teacher_id
+            if was_created:
+                flash(
+                    'Преподаватель создан автоматически из вашего профиля. '
+                    'Проверьте ФИО в справочнике преподавателей.',
+                    'info'
+                )
+    else:
+        # Админ: teacher_id берётся из формы (или None)
+        # Если у админа тоже есть teacher_id — покажем его по умолчанию
+        my_teacher_id = User.get_teacher_id(uid)
 
     if request.method == 'POST':
         date = request.form.get('date', '').strip()
@@ -358,18 +379,12 @@ def new_lesson():
         room_id = request.form.get('room_id', type=int) or None
         lesson_type = request.form.get('lesson_type', 'lecture')
 
+        # Админ — из формы, преподаватель — свой либо выбранный из формы
         if is_admin:
             teacher_id = request.form.get('teacher_id', type=int) or None
         else:
-            teacher_id = my_teacher_id
-            if not teacher_id:
-                flash(
-                    'Ваш профиль не связан с преподавателем. '
-                    'Обратитесь к администратору — без этой связи '
-                    'нельзя добавить занятие.',
-                    'danger'
-                )
-                return redirect(url_for('schedule.index'))
+            form_teacher_id = request.form.get('teacher_id', type=int) or None
+            teacher_id = form_teacher_id or my_teacher_id
 
         if not date or not _parse_date(date):
             flash('Некорректная дата', 'danger')
@@ -416,11 +431,13 @@ def new_lesson():
     teachers = Teacher.get_all()
     rooms = Room.get_all()
     default_date = _parse_date(request.args.get('date'), _today_str())
+    default_group_id = request.args.get('group_id', type=int)
 
     return render_template(
         'schedule/edit_lesson.html',
         lesson=None,
         default_date=default_date,
+        default_group_id=default_group_id,
         groups=groups,
         subjects=subjects,
         teachers=teachers,
@@ -429,8 +446,6 @@ def new_lesson():
         is_admin=is_admin,
         my_teacher_id=my_teacher_id,
     )
-
-
 # ============================================================
 #                 СВОБОДНЫЕ АУДИТОРИИ
 # ============================================================
@@ -960,3 +975,180 @@ def import_commit():
             flash(err, 'warning')
 
     return redirect(url_for('schedule.index'))
+# ============================================================
+#                 РАСПИСАНИЕ ГРУППЫ
+# ============================================================
+
+def _academic_weeks(academic_year, max_weeks=36):
+    """
+    Возвращает список недель учебного года:
+    [
+        {
+            'number': 1,
+            'start': '2025-09-01',
+            'end': '2025-09-07',
+            'label': 'Неделя 1: 01.09 — 07.09',
+        },
+        ...
+    ]
+    """
+    if not academic_year:
+        return []
+
+    try:
+        start = datetime.strptime(academic_year['start_date'], '%Y-%m-%d').date()
+        end = datetime.strptime(academic_year['end_date'], '%Y-%m-%d').date()
+    except (ValueError, TypeError, KeyError):
+        return []
+
+    # Сдвигаем start до понедельника
+    start = start - timedelta(days=start.weekday())
+
+    weeks = []
+    current = start
+    number = 1
+
+    while current <= end and number <= max_weeks:
+        week_end = current + timedelta(days=6)
+        weeks.append({
+            'number': number,
+            'start': current.isoformat(),
+            'end': week_end.isoformat(),
+            'label': (
+                f"Неделя {number}: "
+                f"{current.strftime('%d.%m')} — {week_end.strftime('%d.%m')}"
+            ),
+        })
+        current += timedelta(days=7)
+        number += 1
+
+    return weeks
+
+
+def _current_week_number(academic_year):
+    """Возвращает номер текущей недели или None."""
+    if not academic_year:
+        return None
+    try:
+        start = datetime.strptime(academic_year['start_date'], '%Y-%m-%d').date()
+    except (ValueError, TypeError, KeyError):
+        return None
+
+    start = start - timedelta(days=start.weekday())
+    today = datetime.now().date()
+    delta_days = (today - start).days
+    if delta_days < 0:
+        return 1
+    return delta_days // 7 + 1
+
+
+@schedule_bp.route('/group/<int:group_id>')
+@permission_required('view_journals')
+def group_schedule(group_id):
+    """
+    Расписание конкретной группы на неделю.
+
+    Query:
+      ?week=N — номер учебной недели (1..36), по умолчанию — текущая
+      ?date=YYYY-MM-DD — альтернатива: любая дата в нужной неделе
+    """
+    uid = session['user_id']
+
+    group = Group.get_by_id(group_id)
+    if not group:
+        flash('Группа не найдена', 'danger')
+        return redirect(url_for('schedule.index'))
+
+    academic_year = AcademicYear.get_current()
+    weeks = _academic_weeks(academic_year, max_weeks=36)
+
+    # Определяем номер недели
+    week_number = request.args.get('week', type=int)
+    date_param = request.args.get('date', '').strip()
+
+    if not week_number and date_param:
+        # Определяем номер недели по дате
+        try:
+            d = datetime.strptime(date_param, '%Y-%m-%d').date()
+            for w in weeks:
+                ws = datetime.strptime(w['start'], '%Y-%m-%d').date()
+                we = datetime.strptime(w['end'], '%Y-%m-%d').date()
+                if ws <= d <= we:
+                    week_number = w['number']
+                    break
+        except (ValueError, TypeError):
+            pass
+
+    if not week_number:
+        week_number = _current_week_number(academic_year) or 1
+
+    # Находим нужную неделю
+    week = None
+    for w in weeks:
+        if w['number'] == week_number:
+            week = w
+            break
+
+    if not week:
+        week = weeks[0] if weeks else {
+            'number': 1,
+            'start': datetime.now().date().isoformat(),
+            'end': (datetime.now().date() + timedelta(days=6)).isoformat(),
+            'label': 'Текущая неделя',
+        }
+
+    # Собираем занятия
+    monday = week['start']
+    week_data, start, end = ScheduleLesson.get_week(monday)
+
+    # Фильтруем только эту группу
+    group_lessons_by_date = {}
+    for d, lessons in week_data.items():
+        group_lessons_by_date[d] = [
+            l for l in lessons if l['group_id'] == group_id
+        ]
+
+    # Формируем сетку дней
+    days = []
+    day_names = ScheduleLesson.DAY_NAMES_SHORT
+    day_names_full = ScheduleLesson.DAY_NAMES_FULL
+
+    current = datetime.strptime(week['start'], '%Y-%m-%d').date()
+    for i in range(6):  # Пн–Сб
+        d = current + timedelta(days=i)
+        ds = d.isoformat()
+        lessons = sorted(
+            group_lessons_by_date.get(ds, []),
+            key=lambda l: (l['pair_number'], l['time_start'])
+        )
+        days.append({
+            'date': ds,
+            'date_short': d.strftime('%d.%m'),
+            'date_full': d.strftime('%d.%m.%Y'),
+            'day_short': day_names[i],
+            'day_full': day_names_full[i],
+            'is_today': d == datetime.now().date(),
+            'lessons': lessons,
+        })
+
+    # Предыдущая / следующая неделя
+    prev_week_number = week_number - 1 if week_number > 1 else None
+    next_week_number = week_number + 1 if week_number < len(weeks) else None
+
+    # Для формы создания занятия — текущий пользователь
+    my_teacher_id = User.get_teacher_id(uid)
+    can_edit_any = _can_edit_schedule(uid)
+
+    return render_template(
+        'schedule/group.html',
+        group=group,
+        academic_year=academic_year,
+        weeks=weeks,
+        week=week,
+        week_number=week_number,
+        days=days,
+        prev_week_number=prev_week_number,
+        next_week_number=next_week_number,
+        can_edit_any=can_edit_any,
+        my_teacher_id=my_teacher_id,
+    )

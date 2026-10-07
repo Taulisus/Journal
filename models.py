@@ -5,12 +5,25 @@ import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import Config
+from datetime import datetime
 
 
 def get_db():
-    conn = sqlite3.connect(Config.DATABASE)
+    """
+    Открывает соединение с БД.
+    - timeout=30 и busy_timeout=30000 — ждём до 30 секунд, если БД занята.
+    - journal_mode=WAL — параллельное чтение и запись без блокировок.
+    - check_same_thread=False — разрешает доступ из разных потоков Flask.
+    """
+    conn = sqlite3.connect(
+        Config.DATABASE,
+        timeout=30,
+        check_same_thread=False,
+    )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 
@@ -242,6 +255,18 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS journal_plan (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_subject_id INTEGER NOT NULL,
+            order_number INTEGER,
+            topic TEXT NOT NULL,
+            hours INTEGER DEFAULT 2,
+            lesson_type TEXT DEFAULT 'lecture',
+            used_lesson_id INTEGER,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (group_subject_id) REFERENCES group_subjects(id) ON DELETE CASCADE
+        );
+
         CREATE INDEX IF NOT EXISTS idx_schedule_date ON schedule_lessons(date);
         CREATE INDEX IF NOT EXISTS idx_schedule_group ON schedule_lessons(group_id);
         CREATE INDEX IF NOT EXISTS idx_schedule_teacher ON schedule_lessons(teacher_id);
@@ -256,6 +281,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_stats_user_key ON stats_cache(user_id, stat_key);
         CREATE INDEX IF NOT EXISTS idx_pos_perm_position ON position_permissions(position_id);
         CREATE INDEX IF NOT EXISTS idx_pos_perm_permission ON position_permissions(permission_id);
+        CREATE INDEX IF NOT EXISTS idx_plan_gsid ON journal_plan(group_subject_id);
     ''')
 
     # --- Сид: пользователь admin ---
@@ -370,7 +396,7 @@ class User:
     def get_teacher_id(user_id):
         """
         Возвращает teachers.id, если пользователь связан с преподавателем.
-        Иначе None (тогда показываем все занятия).
+        Иначе None.
         """
         if not user_id:
             return None
@@ -389,8 +415,7 @@ class User:
     @staticmethod
     def set_teacher_id(user_id, teacher_id):
         """
-        Привязывает пользователя к преподавателю.
-        teacher_id=None — отвязать.
+        Привязывает пользователя к преподавателю. teacher_id=None — отвязать.
         """
         conn = get_db()
         try:
@@ -421,8 +446,6 @@ class User:
     def get_all_with_teacher():
         """
         Все пользователи + привязка к преподавателю (если есть).
-        Возвращает Row с полями: id, username, full_name, phone,
-        teacher_id, teacher_full_name, teacher_short_name.
         """
         conn = get_db()
         try:
@@ -548,6 +571,95 @@ class User:
         finally:
             conn.close()
 
+    @staticmethod
+    def find_or_create_teacher(user_id):
+        """
+        Возвращает teachers.id для пользователя.
+        Если у пользователя уже есть users.teacher_id — возвращает его.
+        Иначе ищет teachers по ФИО из user_profiles. Если нет — создаёт.
+
+        Возвращает (teacher_id, was_created, message).
+        """
+        if not user_id:
+            return None, False, 'Не указан user_id'
+
+        conn = get_db()
+        try:
+            # 1. Уже привязан?
+            row = conn.execute(
+                "SELECT teacher_id FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+            if row and row['teacher_id']:
+                return row['teacher_id'], False, ''
+
+            # 2. Ищем ФИО пользователя
+            profile = conn.execute(
+                "SELECT full_name FROM user_profiles WHERE user_id = ?",
+                (user_id,)
+            ).fetchone()
+
+            full_name = (profile['full_name'] if profile else '') or ''
+            full_name = full_name.strip()
+
+            if not full_name:
+                # Нет ФИО — не можем создать преподавателя
+                return None, False, (
+                    'У вас не заполнено ФИО в профиле. '
+                    'Заполните его в разделе «Профиль», чтобы создавать занятия.'
+                )
+
+            # 3. Ищем преподавателя с таким ФИО (без учёта регистра)
+            teacher = conn.execute(
+                "SELECT id FROM teachers WHERE LOWER(full_name) = LOWER(?)",
+                (full_name,)
+            ).fetchone()
+
+            teacher_id = None
+            was_created = False
+
+            if teacher:
+                teacher_id = teacher['id']
+            else:
+                # 4. Создаём нового преподавателя
+                short_name = User._make_short_name(full_name)
+                cur = conn.execute(
+                    "INSERT INTO teachers (full_name, short_name, is_active) "
+                    "VALUES (?, ?, 1)",
+                    (full_name, short_name)
+                )
+                teacher_id = cur.lastrowid
+                was_created = True
+
+            # 5. Привязываем к пользователю
+            conn.execute(
+                "UPDATE users SET teacher_id = ? WHERE id = ?",
+                (teacher_id, user_id)
+            )
+            conn.commit()
+
+            return teacher_id, was_created, ''
+
+        except Exception as e:
+            conn.rollback()
+            return None, False, f'Ошибка создания преподавателя: {e}'
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _make_short_name(full_name):
+        if not full_name:
+            return ''
+        parts = full_name.strip().split()
+        if len(parts) < 2:
+            return full_name
+        surname = parts[0]
+        initials = []
+        for p in parts[1:]:
+            if p:
+                initials.append(p[0].upper())
+        if not initials:
+            return surname
+        return f"{surname} {'.'.join(initials)}."
 
 # ============================================================
 #                 GROUP
@@ -710,11 +822,44 @@ class Subject:
 
     @staticmethod
     def delete(sid):
+        """
+        Удаляет предмет. Если есть связанные данные в таблицах без CASCADE
+        (журналы, расписание) — возвращает (False, message).
+        """
         conn = get_db()
-        conn.execute("DELETE FROM subjects WHERE id = ?", (sid,))
-        conn.commit()
-        conn.close()
-        return True, "Предмет удален"
+        try:
+            blocking = []
+
+            cnt = conn.execute(
+                "SELECT COUNT(*) AS c FROM group_subjects WHERE subject_id = ?",
+                (sid,)
+            ).fetchone()['c']
+            if cnt:
+                blocking.append(f"журналов — {cnt}")
+
+            cnt = conn.execute(
+                "SELECT COUNT(*) AS c FROM schedule_lessons WHERE subject_id = ?",
+                (sid,)
+            ).fetchone()['c']
+            if cnt:
+                blocking.append(f"занятий в расписании — {cnt}")
+
+            if blocking:
+                return False, (
+                    "Нельзя удалить предмет: есть связанные данные "
+                    f"({'; '.join(blocking)}). "
+                    "Сначала удалите журналы и занятия в расписании."
+                )
+
+            conn.execute("DELETE FROM subjects WHERE id = ?", (sid,))
+            conn.commit()
+            return True, "Предмет удалён"
+
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка удаления: {e}"
+        finally:
+            conn.close()
 
 
 # ============================================================
@@ -1526,3 +1671,188 @@ class TeacherHours:
             ).fetchall()
         conn.close()
         return hours
+
+# ============================================================
+#                 JOURNAL PLAN (тематический план)
+# ============================================================
+
+class JournalPlan:
+    @staticmethod
+    def get_for_journal(gsid):
+        """Возвращает все пункты плана для пары Группа-Предмет."""
+        conn = get_db()
+        try:
+            rows = conn.execute('''
+                SELECT * FROM journal_plan
+                WHERE group_subject_id = ?
+                ORDER BY
+                    CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
+                    order_number,
+                    id
+            ''', (gsid,)).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_unused_for_journal(gsid, lesson_type=None):
+        """
+        Возвращает неиспользованные пункты плана.
+        Если lesson_type задан — фильтрует по типу занятия.
+        """
+        conn = get_db()
+        try:
+            sql = '''
+                SELECT * FROM journal_plan
+                WHERE group_subject_id = ?
+                  AND used_lesson_id IS NULL
+            '''
+            params = [gsid]
+            if lesson_type:
+                sql += " AND lesson_type = ?"
+                params.append(lesson_type)
+
+            sql += '''
+                ORDER BY
+                    CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
+                    order_number,
+                    id
+            '''
+
+            rows = conn.execute(sql, params).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_by_id(plan_id):
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT * FROM journal_plan WHERE id = ?", (plan_id,)
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    @staticmethod
+    def create(gsid, order_number, topic, hours, lesson_type):
+        conn = get_db()
+        try:
+            cur = conn.execute('''
+                INSERT INTO journal_plan
+                (group_subject_id, order_number, topic, hours, lesson_type, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                gsid, order_number, topic, hours, lesson_type,
+                datetime.now().isoformat(timespec='seconds')
+            ))
+            conn.commit()
+            return True, "Пункт плана добавлен", cur.lastrowid
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка: {e}", None
+        finally:
+            conn.close()
+
+    @staticmethod
+    def update(plan_id, order_number, topic, hours, lesson_type):
+        conn = get_db()
+        try:
+            conn.execute('''
+                UPDATE journal_plan
+                SET order_number = ?, topic = ?, hours = ?, lesson_type = ?
+                WHERE id = ?
+            ''', (order_number, topic, hours, lesson_type, plan_id))
+            conn.commit()
+            return True, "Пункт плана обновлён"
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка: {e}"
+        finally:
+            conn.close()
+
+    @staticmethod
+    def delete(plan_id):
+        conn = get_db()
+        try:
+            conn.execute("DELETE FROM journal_plan WHERE id = ?", (plan_id,))
+            conn.commit()
+            return True, "Пункт плана удалён"
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка: {e}"
+        finally:
+            conn.close()
+
+    @staticmethod
+    def delete_all_for_journal(gsid):
+        conn = get_db()
+        try:
+            cur = conn.execute(
+                "DELETE FROM journal_plan WHERE group_subject_id = ?", (gsid,)
+            )
+            conn.commit()
+            return True, f"Удалено {cur.rowcount} пунктов", cur.rowcount
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка: {e}", 0
+        finally:
+            conn.close()
+
+    @staticmethod
+    def mark_used(plan_id, lesson_id):
+        """Помечает пункт плана как использованный."""
+        conn = get_db()
+        try:
+            conn.execute(
+                "UPDATE journal_plan SET used_lesson_id = ? WHERE id = ?",
+                (lesson_id, plan_id)
+            )
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
+    @staticmethod
+    def copy_to_journal(source_gsid, target_gsid):
+        """
+        Копирует все пункты плана из одного журнала в другой.
+        used_lesson_id не копируется (новый журнал — план не выполнен).
+        Возвращает (ok, message, count).
+        """
+        conn = get_db()
+        try:
+            rows = conn.execute('''
+                SELECT order_number, topic, hours, lesson_type
+                FROM journal_plan
+                WHERE group_subject_id = ?
+                ORDER BY
+                    CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
+                    order_number,
+                    id
+            ''', (source_gsid,)).fetchall()
+
+            now = datetime.now().isoformat(timespec='seconds')
+            count = 0
+            for r in rows:
+                conn.execute('''
+                    INSERT INTO journal_plan
+                    (group_subject_id, order_number, topic, hours, lesson_type, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    target_gsid, r['order_number'], r['topic'],
+                    r['hours'], r['lesson_type'], now
+                ))
+                count += 1
+
+            conn.commit()
+            return True, f"Скопировано пунктов: {count}", count
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка: {e}", 0
+        finally:
+            conn.close()

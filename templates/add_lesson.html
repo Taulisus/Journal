@@ -28,7 +28,6 @@
                     <input type="date" name="date" class="form-control" required
                            id="lessonDate"
                            value="{{ request.form.get('date') or '' }}">
-                    <div class="form-text" id="lessonDayHint"></div>
                 </div>
                 <div class="col-12 col-md-4">
                     <label class="form-label small">
@@ -44,12 +43,8 @@
                            autocomplete="off"
                            required
                            value="{{ request.form.get('time_interval') or '' }}">
-                    <datalist id="timeIntervalOptions">
-                        {# Заполняется JS в зависимости от дня недели #}
-                    </datalist>
-                    <div class="form-text">
-                        Подсказки зависят от дня недели.
-                    </div>
+                    <datalist id="timeIntervalOptions"></datalist>
+                    <div class="form-text">Подсказки зависят от дня недели.</div>
                 </div>
                 <div class="col-12 col-md-4">
                     <label class="form-label small">Семестр</label>
@@ -61,14 +56,11 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-12 col-md-8">
-                    <label class="form-label small">Тема (не длиннее 50 символов)</label>
-                    <input type="text" name="topic" class="form-control no-emoji" maxlength="50"
-                           value="{{ request.form.get('topic') or '' }}">
-                </div>
+
                 <div class="col-12 col-md-4">
                     <label class="form-label small">Тип занятия</label>
-                    <select name="type" class="form-select" id="lessonType">
+                    <select name="type" class="form-select" id="lessonType"
+                            onchange="onLessonTypeChange()">
                         {% for code, name in lesson_types %}
                             <option value="{{ code }}"
                                     {% if request.form.get('type') == code %}selected{% endif %}>
@@ -77,46 +69,80 @@
                         {% endfor %}
                     </select>
                 </div>
+
+                <div class="col-12 col-md-8">
+                    <label class="form-label small">Тема занятия</label>
+
+                    <select class="form-select mb-2" id="planTopicSelect"
+                            onchange="onPlanTopicChange()">
+                        <option value="">— Своя тема (введите ниже) —</option>
+                    </select>
+
+                    <input type="text" name="topic" id="topicInput"
+                           class="form-control no-emoji" maxlength="200"
+                           placeholder="Введите тему занятия"
+                           value="{{ request.form.get('topic') or '' }}"
+                           required>
+
+                    <input type="hidden" name="plan_id" id="planIdInput" value="">
+
+                    <div class="form-text" id="planHint"></div>
+                </div>
             </div>
 
-            <!-- Быстрый выбор времени (зависит от дня недели) -->
+            <!-- Быстрый выбор времени -->
             <div class="mt-3">
                 <label class="form-label small text-muted mb-1">
                     <i class="bi bi-lightning-charge"></i>
                     Быстрый выбор времени
                     <span id="quickTimeDayLabel" class="badge bg-secondary ms-1">—</span>
                 </label>
-                <div class="d-flex flex-wrap gap-1" id="quickTimeButtons">
-                    {# Заполняется JS #}
-                </div>
+                <div class="d-flex flex-wrap gap-1" id="quickTimeButtons"></div>
             </div>
 
             <hr class="my-4">
 
-            <h5 class="mb-3">Студенты ({{ students|length }})</h5>
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <h5 class="mb-0">
+                    Студенты <span class="text-muted small">({{ students|length }})</span>
+                </h5>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-success" id="btnAllPresent">
+                        <i class="bi bi-check-all"></i> Все были
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" id="btnAllAbsent">
+                        <i class="bi bi-x-circle"></i> Все нет
+                    </button>
+                </div>
+            </div>
 
-            <div class="table-responsive">
-                <table class="table table-sm align-middle">
+            <div class="students-table-wrapper">
+                <table class="table table-sm align-middle students-attendance-table mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>ФИО</th>
-                            <th class="text-center" style="width: 200px;">Посещение</th>
-                            <th class="text-center" style="width: 200px;">Оценка</th>
+                            <th class="col-student-name">ФИО</th>
+                            <th class="col-attendance text-center">Посещение</th>
+                            <th class="col-grade text-center">Оценка</th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for st in students %}
                         {% set sid = st.id|string %}
                         <tr>
-                            <td>{{ st.full_name }}</td>
-                            <td class="text-center">
-                                <div class="btn-group btn-group-sm" role="group">
+                            <td class="col-student-name">
+                                <span class="student-name-text" title="{{ st.full_name }}">
+                                    {{ st.full_name }}
+                                </span>
+                            </td>
+                            <td class="col-attendance">
+                                <div class="btn-group btn-group-sm attendance-group" role="group">
                                     <input type="radio" class="btn-check"
                                            name="attendance_{{ st.id }}"
                                            id="att_p_{{ st.id }}" value="present"
                                            {% if request.form.get('attendance_' ~ sid, 'present') == 'present' %}checked{% endif %}>
                                     <label class="btn btn-outline-success" for="att_p_{{ st.id }}">
-                                        <i class="bi bi-check"></i> Был
+                                        <i class="bi bi-check"></i>
+                                        <span class="d-none d-lg-inline">Был</span>
                                     </label>
 
                                     <input type="radio" class="btn-check"
@@ -124,12 +150,13 @@
                                            id="att_a_{{ st.id }}" value="absent"
                                            {% if request.form.get('attendance_' ~ sid) == 'absent' %}checked{% endif %}>
                                     <label class="btn btn-outline-danger" for="att_a_{{ st.id }}">
-                                        <i class="bi bi-x"></i> Нет
+                                        <i class="bi bi-x"></i>
+                                        <span class="d-none d-lg-inline">Нет</span>
                                     </label>
                                 </div>
                             </td>
-                            <td class="text-center">
-                                <select name="grade_{{ st.id }}" class="form-select form-select-sm">
+                            <td class="col-grade">
+                                <select name="grade_{{ st.id }}" class="form-select form-select-sm grade-select">
                                     {% for code, name in grades %}
                                         <option value="{{ code }}"
                                                 {% if request.form.get('grade_' ~ sid, '') == code %}selected{% endif %}>
@@ -144,11 +171,11 @@
                 </table>
             </div>
 
-            <div class="d-flex gap-2 mt-3">
+            <div class="d-flex gap-2 mt-3 flex-wrap">
                 <button type="submit" class="btn btn-success">
                     <i class="bi bi-save"></i> Сохранить занятие
                 </button>
-                <a href="{{ url_for('main.journal', gsid=pair.id, semester=current_semester) }}"
+                <a href="{{ url_for('journals.journal', gsid=pair.id, semester=current_semester) }}"
                    class="btn btn-outline-secondary">
                     Отмена
                 </a>
@@ -163,39 +190,47 @@
 
 {% block scripts %}
 
-{# Прокидываем интервалы по дням недели в JS #}
 <script id="timeIntervalsData" type="application/json">
 {{ all_time_intervals | tojson }}
 </script>
 
-{# Имена дней недели #}
 <script id="dayNamesData" type="application/json">
 {{ day_names_short | tojson }}
+</script>
+
+<script id="planUnusedData" type="application/json">
+{{ plan_unused | tojson }}
+</script>
+
+<script id="lessonTypesData" type="application/json">
+{
+    {% for code, name in lesson_types %}
+    "{{ code }}": "{{ name }}"{% if not loop.last %},{% endif %}
+    {% endfor %}
+}
 </script>
 
 <script>
 // ==================== ДАННЫЕ ИЗ БЭКЕНДА ====================
 var TIME_INTERVALS = JSON.parse(document.getElementById('timeIntervalsData').textContent);
 var DAY_NAMES = JSON.parse(document.getElementById('dayNamesData').textContent);
-var DEFAULT_DAY = '1'; // Вт — день по умолчанию для неизвестных дат
+var PLAN_UNUSED = JSON.parse(document.getElementById('planUnusedData').textContent);
+var LESSON_TYPE_NAMES = JSON.parse(document.getElementById('lessonTypesData').textContent);
+var DEFAULT_DAY = '1';
 
 // ==================== УТИЛИТЫ ====================
 
 function getWeekdayFromDate(dateStr) {
-    // 'YYYY-MM-DD' → '0'..'6' (0=Пн, 6=Вс) или null
     if (!dateStr) return null;
     var parts = dateStr.split('-');
     if (parts.length !== 3) return null;
     var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     if (isNaN(d.getTime())) return null;
-    // JS: 0=Вс, 1=Пн, ..., 6=Сб
-    // Python-стиль: 0=Пн, ..., 6=Вс
     var wd = d.getDay();
     return wd === 0 ? '6' : String(wd - 1);
 }
 
 function formatHHMM(v) {
-    // '0830-0930' → '08:30–09:30'
     var m = v.match(/^(\d{2})(\d{2})-(\d{2})(\d{2})$/);
     return m ? m[1] + ':' + m[2] + '–' + m[3] + ':' + m[4] : v;
 }
@@ -204,7 +239,6 @@ function normalizeTime(value) {
     if (!value) return value;
     value = value.trim().replace(/\s+/g, '');
 
-    // '9:00-10:30'
     var m = value.match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
     if (m) {
         var h1 = ('0' + m[1]).slice(-2);
@@ -212,7 +246,6 @@ function normalizeTime(value) {
         return h1 + m[2] + '-' + h2 + m[4];
     }
 
-    // '9.00-10.30'
     m = value.match(/^(\d{1,2})\.(\d{2})-(\d{1,2})\.(\d{2})$/);
     if (m) {
         var h1b = ('0' + m[1]).slice(-2);
@@ -220,18 +253,16 @@ function normalizeTime(value) {
         return h1b + m[2] + '-' + h2b + m[4];
     }
 
-    // '900-1030'
     m = value.match(/^(\d{3})-(\d{4})$/);
     if (m) return '0' + m[1] + '-' + m[2];
 
-    // '09001030'
     m = value.match(/^(\d{4})(\d{4})$/);
     if (m) return m[1] + '-' + m[2];
 
     return value;
 }
 
-// ==================== ПЕРЕРИСОВКА ====================
+// ==================== ПЕРЕРИСОВКА ВРЕМЕНИ ====================
 
 function getIntervalsForDate(dateStr) {
     var wd = getWeekdayFromDate(dateStr);
@@ -248,7 +279,6 @@ function rebuildTimeOptions(dateStr) {
     var intervals = result.intervals;
     var weekday = result.weekday;
 
-    // --- Datalist ---
     var datalist = document.getElementById('timeIntervalOptions');
     if (datalist) {
         datalist.innerHTML = '';
@@ -260,7 +290,6 @@ function rebuildTimeOptions(dateStr) {
         });
     }
 
-    // --- Кнопки ---
     var buttons = document.getElementById('quickTimeButtons');
     if (buttons) {
         buttons.innerHTML = '';
@@ -274,7 +303,6 @@ function rebuildTimeOptions(dateStr) {
             buttons.appendChild(btn);
         });
 
-        // Перевешиваем обработчики
         buttons.querySelectorAll('.quick-time').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var t = this.getAttribute('data-time');
@@ -294,18 +322,70 @@ function rebuildTimeOptions(dateStr) {
         });
     }
 
-    // --- Метка дня ---
     var label = document.getElementById('quickTimeDayLabel');
     if (label) {
         label.textContent = DAY_NAMES[parseInt(weekday)] || '—';
     }
+}
 
-    // --- Подсказка под датой ---
-    var hint = document.getElementById('lessonDayHint');
-    if (hint) {
-        var wdInt = parseInt(weekday);
-        hint.textContent = 'День: ' + (DAY_NAMES[wdInt] || '—')
-            + ' — ' + intervals.length + ' пар';
+// ==================== ПЛАН ЗАНЯТИЙ ====================
+
+function rebuildPlanTopics() {
+    var lt = document.getElementById('lessonType').value;
+    var select = document.getElementById('planTopicSelect');
+    var hint = document.getElementById('planHint');
+
+    select.innerHTML = '<option value="">— Своя тема (введите ниже) —</option>';
+
+    var filtered = PLAN_UNUSED.filter(function (p) {
+        return p.lesson_type === lt;
+    });
+
+    filtered.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = (p.order_number ? '№' + p.order_number + '. ' : '') + p.topic;
+        opt.dataset.topic = p.topic;
+        select.appendChild(opt);
+    });
+
+    if (filtered.length === 0) {
+        var opt = document.createElement('option');
+        opt.disabled = true;
+        opt.textContent = '— Нет тем в плане для этого типа занятия —';
+        select.appendChild(opt);
+        if (hint) {
+            hint.textContent = 'В плане нет неиспользованных тем для выбранного типа. ' +
+                'Введите свою тему или добавьте темы в план.';
+        }
+    } else {
+        if (hint) {
+            hint.textContent = 'Доступно неиспользованных тем: ' + filtered.length + '.';
+        }
+    }
+
+    select.value = '';
+    document.getElementById('planIdInput').value = '';
+    document.getElementById('topicInput').value = '';
+}
+
+function onLessonTypeChange() {
+    rebuildPlanTopics();
+}
+
+function onPlanTopicChange() {
+    var select = document.getElementById('planTopicSelect');
+    var topicInput = document.getElementById('topicInput');
+    var planIdInput = document.getElementById('planIdInput');
+
+    var opt = select.options[select.selectedIndex];
+
+    if (select.value) {
+        topicInput.value = opt.dataset.topic;
+        planIdInput.value = select.value;
+    } else {
+        topicInput.value = '';
+        planIdInput.value = '';
     }
 }
 
@@ -314,7 +394,6 @@ function rebuildTimeOptions(dateStr) {
 document.addEventListener('DOMContentLoaded', function () {
     var dateInput = document.getElementById('lessonDate');
 
-    // Если дата пуста — ставим сегодня
     if (dateInput && !dateInput.value) {
         var today = new Date();
         var y = today.getFullYear();
@@ -323,23 +402,299 @@ document.addEventListener('DOMContentLoaded', function () {
         dateInput.value = y + '-' + m + '-' + d;
     }
 
-    // Первичная отрисовка
     if (dateInput) {
         rebuildTimeOptions(dateInput.value);
-
-        // При смене даты — перерисовываем
         dateInput.addEventListener('change', function () {
             rebuildTimeOptions(this.value);
         });
     }
 
-    // Нормализация времени при blur
     var timeInput = document.getElementById('timeInterval');
     if (timeInput) {
         timeInput.addEventListener('blur', function () {
             this.value = normalizeTime(this.value);
         });
     }
+
+    // План — построить список тем для текущего типа
+    rebuildPlanTopics();
+
+    // ==================== МАССОВАЯ ОТМЕТКА ====================
+    var btnAllPresent = document.getElementById('btnAllPresent');
+    var btnAllAbsent = document.getElementById('btnAllAbsent');
+
+    if (btnAllPresent) {
+        btnAllPresent.addEventListener('click', function () {
+            document.querySelectorAll('input[type="radio"][id^="att_p_"]').forEach(function (r) {
+                r.checked = true;
+            });
+        });
+    }
+
+    if (btnAllAbsent) {
+        btnAllAbsent.addEventListener('click', function () {
+            document.querySelectorAll('input[type="radio"][id^="att_a_"]').forEach(function (r) {
+                r.checked = true;
+            });
+        });
+    }
 });
 </script>
+
+<style>
+/* ============================================================
+   ТАБЛИЦА СТУДЕНТОВ — ЖЁСТКАЯ РАСКЛАДКА
+   ============================================================ */
+
+.students-table-wrapper {
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.students-attendance-table {
+    margin-bottom: 0 !important;
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+
+.students-attendance-table th,
+.students-attendance-table td {
+    vertical-align: middle;
+    padding: 6px 10px;
+    box-sizing: border-box;
+}
+
+.students-attendance-table .col-student-name {
+    width: 320px !important;
+    max-width: 320px !important;
+    min-width: 320px !important;
+    text-align: left;
+    overflow: hidden;
+}
+
+.student-name-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.students-attendance-table .col-attendance {
+    width: 150px !important;
+    max-width: 150px !important;
+    min-width: 150px !important;
+    text-align: center;
+}
+
+.students-attendance-table .col-grade {
+    width: 120px !important;
+    max-width: 120px !important;
+    min-width: 120px !important;
+    text-align: center;
+}
+
+.grade-select {
+    width: 100%;
+    max-width: 100px;
+    margin: 0 auto;
+    display: block;
+    font-size: 0.85rem;
+}
+
+.attendance-group .btn {
+    padding: 4px 8px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.students-attendance-table tbody tr {
+    line-height: 1.2;
+}
+
+.students-attendance-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* ============================================================
+   ПЛАНШЕТЫ 576–991
+   ============================================================ */
+
+@media (max-width: 991.98px) {
+    .attendance-group .btn .d-none.d-lg-inline {
+        display: none !important;
+    }
+
+    .attendance-group .btn {
+        padding: 6px 10px;
+        font-size: 0.9rem;
+        min-width: 38px;
+    }
+
+    .students-attendance-table .col-student-name {
+        width: 220px !important;
+        max-width: 220px !important;
+        min-width: 220px !important;
+    }
+
+    .students-attendance-table .col-attendance {
+        width: 100px !important;
+        max-width: 100px !important;
+        min-width: 100px !important;
+    }
+
+    .students-attendance-table .col-grade {
+        width: 110px !important;
+        max-width: 110px !important;
+        min-width: 110px !important;
+    }
+}
+
+/* ============================================================
+   ТЕЛЕФОНЫ ≤ 575.98 — КАРТОЧКИ
+   ============================================================ */
+
+@media (max-width: 575.98px) {
+    .students-attendance-table thead {
+        display: none;
+    }
+
+    .students-attendance-table,
+    .students-attendance-table tbody,
+    .students-attendance-table tr,
+    .students-attendance-table td {
+        display: block;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .students-attendance-table {
+        table-layout: auto !important;
+    }
+
+    .students-attendance-table tr {
+        border-bottom: 1px solid #e9ecef;
+        padding: 10px 8px;
+        position: relative;
+    }
+
+    .students-attendance-table tr:last-child {
+        border-bottom: none;
+    }
+
+    .students-attendance-table .col-student-name {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        padding: 0 0 6px 0;
+        white-space: normal;
+    }
+
+    .student-name-text {
+        font-weight: 600;
+        font-size: 0.95rem;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+
+    .students-attendance-table .col-attendance,
+    .students-attendance-table .col-grade {
+        display: inline-flex !important;
+        align-items: center;
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        padding: 4px 6px;
+        vertical-align: middle;
+    }
+
+    .students-attendance-table .col-attendance {
+        justify-content: flex-start;
+        padding-left: 0;
+    }
+
+    .students-attendance-table .col-grade {
+        justify-content: flex-end;
+        padding-right: 0;
+        margin-left: auto;
+    }
+
+    .attendance-group .btn {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        min-width: 44px;
+        min-height: 40px;
+    }
+
+    .attendance-group .btn .d-none.d-lg-inline {
+        display: inline !important;
+    }
+
+    .grade-select {
+        max-width: 110px;
+        font-size: 0.9rem;
+        padding: 6px 8px;
+        min-height: 40px;
+    }
+
+    .card-body {
+        padding: 0.75rem;
+    }
+
+    h2 {
+        font-size: 1.2rem;
+        margin-bottom: 0.75rem !important;
+    }
+
+    h5 {
+        font-size: 1rem;
+    }
+
+    #btnAllPresent,
+    #btnAllAbsent {
+        flex: 1;
+    }
+
+    .d-flex.gap-2.mt-3.flex-wrap .btn {
+        flex: 1;
+        min-width: 130px;
+    }
+
+    #quickTimeButtons {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+    }
+
+    #quickTimeButtons .quick-time {
+        width: 100%;
+        padding: 6px 4px;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 400px) {
+    .attendance-group .btn {
+        padding: 6px 8px;
+        font-size: 0.85rem;
+        min-width: 40px;
+    }
+
+    .attendance-group .btn .d-none.d-lg-inline {
+        display: none !important;
+    }
+
+    .grade-select {
+        max-width: 90px;
+        font-size: 0.85rem;
+    }
+
+    #quickTimeButtons {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
 {% endblock %}

@@ -5,7 +5,7 @@
 {% block breadcrumbs %}
     {{ breadcrumbs([
         ('Главная', url_for('main.dashboard')),
-        ('Пользователи', url_for('main.users')),
+        ('Пользователи', url_for('users.index')),
         ('Назначение журналов', None),
     ]) }}
 {% endblock %}
@@ -17,7 +17,7 @@
         <i class="bi bi-journal-bookmark"></i>
         Назначение журналов: {{ user.full_name or user.username }}
     </h2>
-    <a href="{{ url_for('main.users') }}" class="btn btn-outline-secondary btn-sm">
+    <a href="{{ url_for('users.index') }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> К пользователям
     </a>
 </div>
@@ -136,7 +136,7 @@
         <button type="submit" class="btn btn-primary">
             <i class="bi bi-save"></i> Сохранить назначения
         </button>
-        <a href="{{ url_for('main.users') }}" class="btn btn-outline-secondary">
+        <a href="{{ url_for('users.index') }}" class="btn btn-outline-secondary">
             Отмена
         </a>
     </div>

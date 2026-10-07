@@ -17,13 +17,7 @@
     {% if lesson %}Изменить занятие{% else %}Новое занятие{% endif %}
 </h2>
 
-{% if not is_admin and not my_teacher_id %}
-<div class="alert alert-warning">
-    <i class="bi bi-exclamation-triangle-fill"></i>
-    Ваш профиль не связан с преподавателем. Обратитесь к администратору —
-    без этой связи нельзя добавлять и редактировать занятия.
-</div>
-{% endif %}
+{% set selected_group_id = lesson.group_id if lesson else default_group_id %}
 
 <div class="card shadow-sm">
     <div class="card-body">
@@ -72,7 +66,7 @@
                         <option value="">— Выберите —</option>
                         {% for g in groups %}
                             <option value="{{ g.id }}"
-                                    {% if lesson and lesson.group_id == g.id %}selected{% endif %}>
+                                    {% if selected_group_id == g.id %}selected{% endif %}>
                                 {{ g.name }}
                             </option>
                         {% endfor %}
@@ -94,29 +88,41 @@
 
                 <div class="col-12 col-md-6">
                     <label class="form-label small">Преподаватель</label>
-                    {% if is_admin %}
-                        <select name="teacher_id" class="form-select">
+                    <select name="teacher_id" class="form-select">
+                        {% if is_admin %}
                             <option value="">— Не указан —</option>
                             {% for t in teachers %}
                                 <option value="{{ t.id }}"
-                                        {% if lesson and lesson.teacher_id == t.id %}selected{% endif %}>
+                                        {% if lesson and lesson.teacher_id == t.id %}selected
+                                        {% elif not lesson and my_teacher_id == t.id %}selected
+                                        {% endif %}>
                                     {{ t.short_name or t.full_name }}
                                 </option>
                             {% endfor %}
-                        </select>
-                    {% else %}
-                        {# Преподаватель — только он сам #}
-                        <input type="text"
-                               class="form-control"
-                               value="{{ (teachers | selectattr('id', 'equalto', my_teacher_id) | first).short_name
-                                         or (teachers | selectattr('id', 'equalto', my_teacher_id) | first).full_name
-                                         or 'Я' }}"
-                               disabled>
-                        <div class="form-text">
+                        {% else %}
+                            {% if not my_teacher_id %}
+                                <option value="">— Ваш профиль не связан с преподавателем —</option>
+                            {% endif %}
+                            {% for t in teachers %}
+                                <option value="{{ t.id }}"
+                                        {% if lesson and lesson.teacher_id == t.id %}selected
+                                        {% elif not lesson and my_teacher_id == t.id %}selected
+                                        {% endif %}>
+                                    {{ t.short_name or t.full_name }}
+                                    {% if my_teacher_id == t.id %} (вы){% endif %}
+                                </option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                    <div class="form-text">
+                        {% if is_admin %}
                             <i class="bi bi-info-circle"></i>
-                            Вы добавляете занятие от своего имени.
-                        </div>
-                    {% endif %}
+                            Выберите преподавателя.
+                        {% else %}
+                            <i class="bi bi-info-circle"></i>
+                            По умолчанию — вы. Если подменяете кого-то, выберите другого.
+                        {% endif %}
+                    </div>
                 </div>
 
                 <div class="col-12 col-md-6">

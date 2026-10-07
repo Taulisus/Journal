@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Журналы', url_for('journals.index')),
+        (pair.group_name, url_for('journals.journal', gsid=pair.id)),
+        (pair.subject_name, None),
+        ('Тематический план', None),
+    ]) }}
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h2 class="mb-0">
+        <i class="bi bi-list-ol"></i>
+        Тематический план
+        <small class="text-muted">{{ pair.group_name }} — {{ pair.subject_name }}</small>
+    </h2>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('journals.journal', gsid=pair.id) }}"
+           class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> К журналу
+        </a>
+        <a href="{{ url_for('journals.plan_import', gsid=pair.id) }}"
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-upload"></i> Импорт из Excel
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-light border">
+    <div class="row g-2">
+        <div class="col-12 col-md-6">
+            <i class="bi bi-info-circle text-primary"></i>
+            Всего пунктов: <strong>{{ plan|length }}</strong>
+        </div>
+        <div class="col-12 col-md-6">
+            <i class="bi bi-check-circle text-success"></i>
+            Проведено: <strong>{{ used_count }}</strong> из {{ plan|length }}
+        </div>
+    </div>
+</div>
+
+<!-- Форма добавления нового пункта -->
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-white">
+        <h6 class="mb-0">
+            <i class="bi bi-plus-circle text-success"></i>
+            Добавить пункт плана
+        </h6>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('journals.plan_add', gsid=pair.id) }}"
+              class="row g-2 align-items-end">
+            <div class="col-12 col-md-1">
+                <label class="form-label small mb-1">№</label>
+                <input type="number" name="order_number" class="form-control form-control-sm"
+                       min="1" value="{{ plan|length + 1 }}">
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">Тема</label>
+                <input type="text" name="topic" class="form-control form-control-sm no-emoji"
+                       placeholder="Например, Информационные ресурсы общества" required>
+            </div>
+            <div class="col-6 col-md-1">
+                <label class="form-label small mb-1">Часы</label>
+                <input type="number" name="hours" class="form-control form-control-sm"
+                       min="1" value="2">
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-1">Вид занятия</label>
+                <select name="lesson_type" class="form-select form-select-sm">
+                    {% for code, name in lesson_types %}
+                        <option value="{{ code }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-1">
+                <button type="submit" class="btn btn-success btn-sm w-100">
+                    <i class="bi bi-plus-lg"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Таблица плана -->
+{% if plan %}
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 60px;">№</th>
+                    <th>Тема</th>
+                    <th style="width: 80px;" class="text-center">Часы</th>
+                    <th style="width: 180px;">Вид занятия</th>
+                    <th style="width: 140px;" class="text-center">Статус</th>
+                    <th style="width: 180px;" class="text-end">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for item in plan %}
+                <tr class="{% if item.used_lesson_id %}table-success{% endif %}">
+                    <td class="text-muted small">{{ item.order_number or '—' }}</td>
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('journals.plan_edit', gsid=pair.id, plan_id=item.id) }}"
+                              class="d-flex gap-1 align-items-center">
+                            <input type="number" name="order_number" class="form-control form-control-sm"
+                                   style="width: 60px;"
+                                   value="{{ item.order_number or '' }}" min="1">
+                            <input type="text" name="topic" class="form-control form-control-sm no-emoji"
+                                   value="{{ item.topic }}" required>
+                    </td>
+                    <td>
+                        <input type="number" name="hours" class="form-control form-control-sm text-center"
+                               value="{{ item.hours or 2 }}" min="1">
+                    </td>
+                    <td>
+                        <select name="lesson_type" class="form-select form-select-sm">
+                            {% for code, name in lesson_types %}
+                                <option value="{{ code }}"
+                                        {% if item.lesson_type == code %}selected{% endif %}>
+                                    {{ name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td class="text-center">
+                        {% if item.used_lesson_id %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-check"></i> Проведено
+                            </span>
+                        {% else %}
+                            <span class="badge bg-light text-dark border">Не проведено</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                            <button type="submit" class="btn btn-sm btn-outline-primary"
+                                    title="Сохранить">
+                                <i class="bi bi-save"></i>
+                            </button>
+                        </form>
+                        <form method="POST"
+                              action="{{ url_for('journals.plan_delete', gsid=pair.id, plan_id=item.id) }}"
+                              style="display:inline;"
+                              onsubmit="return confirm('Удалить пункт плана «{{ item.topic }}»?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                    title="Удалить">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer bg-white">
+        <form method="POST" action="{{ url_for('journals.plan_clear', gsid=pair.id) }}"
+              onsubmit="return confirm('Удалить весь план? Действие необратимо.');"
+              class="d-inline">
+            <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i> Очистить весь план
+            </button>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="card shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-list-ol" style="font-size: 4rem; color: #ccc;"></i>
+        <h5 class="text-muted mt-3">План ещё не задан</h5>
+        <p class="text-muted small">
+            Добавьте пункты вручную или импортируйте из Excel-файла
+        </p>
+        <a href="{{ url_for('journals.plan_import', gsid=pair.id) }}"
+           class="btn btn-primary">
+            <i class="bi bi-upload"></i> Импортировать из Excel
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -41,13 +41,20 @@
 {% endif %}
 
 <!-- Заголовок и кнопки -->
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 no-print">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h2 class="mb-0">
         <i class="bi bi-journal-bookmark-fill"></i>
         {{ pair.group_name }} — {{ pair.subject_name }}
     </h2>
 
     <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('journals.plan_view', gsid=pair.id) }}"
+           class="btn btn-outline-info"
+           title="Тематический план">
+            <i class="bi bi-list-ol"></i>
+            <span class="d-none d-sm-inline">План</span>
+        </a>
+
         {% if has_permission('create_report') %}
         <a href="{{ url_for('journals.export_journal', gsid=pair.id, semester=current_semester) }}"
            class="btn btn-outline-success"
@@ -55,23 +62,6 @@
             <i class="bi bi-file-earmark-excel"></i>
             <span class="d-none d-sm-inline">Excel</span>
         </a>
-        {% endif %}
-
-        {% if not ns.has_exam %}
-        <a href="{{ url_for('journals.add_lesson', gsid=pair.id, semester=current_semester) }}"
-           class="btn btn-success btn-lg">
-            <i class="bi bi-plus-circle"></i>
-            <span class="d-none d-sm-inline">Добавить занятие</span>
-            <span class="d-sm-none">Добавить</span>
-        </a>
-        {% else %}
-        <div class="alert alert-warning mb-0 py-2 px-3 d-flex align-items-center gap-2">
-            <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.5rem;"></i>
-            <div>
-                <strong>Экзамен проведен</strong><br>
-                <small>Добавление занятий заблокировано</small>
-            </div>
-        </div>
         {% endif %}
     </div>
 </div>

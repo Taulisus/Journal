@@ -8,6 +8,7 @@ URL-префиксы: /group-subjects, /journal
 import os
 import re
 from datetime import datetime
+from models_schedule import Teacher
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
@@ -19,6 +20,7 @@ from decorators import login_required, permission_required
 from models import (
     Group, Subject, Student, GroupSubject, get_db,
     Permission, TeacherJournal, SemesterGrade,
+    JournalPlan,
 )
 from journal_manager import JournalManager
 from utils import export_journal_to_excel
@@ -43,16 +45,20 @@ journals_bp = Blueprint('journals', __name__)
 @journals_bp.route('/group-subjects')
 @login_required
 def index():
+    from models_schedule import Teacher   # импорт сверху файла лучше
+
     uid = session['user_id']
     if Permission.has_permission(uid, 'manage_users'):
         pairs = GroupSubject.get_all()
     else:
         pairs = TeacherJournal.get_user_journals(uid)
+
     return render_template(
         'group_subjects.html',
         pairs=pairs,
         groups=Group.get_all(),
         subjects=Subject.get_all(),
+        all_teachers=Teacher.get_all(active_only=False),   # ← новое
     )
 
 
@@ -129,6 +135,142 @@ def delete_group_subject(gsid):
 
     return redirect(url_for('journals.index'))
 
+@journals_bp.route('/group-subjects/<int:gsid>/copy-to-groups', methods=['POST'])
+@permission_required('add_journal')
+def copy_journal_to_groups(gsid):
+    """
+    Копирует базовый набор журнала (предмет + часы) в выбранные группы.
+
+    POST-параметры:
+      group_ids[]        — список id групп (обязательно)
+      teacher_id         — id преподавателя из справочника teachers (опционально)
+      copy_hours         — '1'/'0', копировать ли часы (по умолчанию '1')
+    """
+    uid = session['user_id']
+
+    # Проверка доступа к исходному журналу
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
+    source = GroupSubject.get_by_id(gsid)
+    if not source:
+        flash('Исходный журнал не найден', 'danger')
+        return redirect(url_for('journals.index'))
+
+    group_ids = request.form.getlist('group_ids')
+    group_ids = [int(g) for g in group_ids if g.isdigit()]
+
+    teacher_id = request.form.get('teacher_id', type=int) or None
+    copy_hours = request.form.get('copy_hours', '1') == '1'
+
+    if not group_ids:
+        flash('Не выбрано ни одной группы', 'warning')
+        return redirect(url_for('journals.index'))
+
+    subject_id = source['subject_id']
+    subject_name = source['subject_name']
+
+    # Часы исходного журнала (по семестрам)
+    source_semesters = GroupSubject.get_semesters(gsid)
+    source_hours = {}
+    if copy_hours:
+        for sem in source_semesters:
+            h = GroupSubject.get_hours(gsid, sem)
+            source_hours[sem] = {
+                'lecture': h.get('lecture_hours', 0),
+                'practice': h.get('practice_hours', 0),
+                'independent': h.get('independent_hours', 0),
+                'exam': h.get('exam_hours', 0),
+            }
+
+    # Найти пользователя-преподавателя, если teacher_id задан
+    teacher_user_id = None
+    if teacher_id:
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT id FROM users WHERE teacher_id = ? LIMIT 1",
+                (teacher_id,)
+            ).fetchone()
+            if row:
+                teacher_user_id = row['id']
+        finally:
+            conn.close()
+
+    created = 0
+    skipped = []
+    errors = []
+
+    for gid in group_ids:
+        grp = Group.get_by_id(gid)
+        if not grp:
+            errors.append(f'Группа #{gid} не найдена')
+            continue
+
+        # Проверка: у группы уже есть журнал по этому предмету?
+        conn = get_db()
+        try:
+            existing = conn.execute(
+                "SELECT id FROM group_subjects WHERE group_id = ? AND subject_id = ?",
+                (gid, subject_id)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        if existing:
+            skipped.append(f'{grp["name"]}: журнал по «{subject_name}» уже есть (сначала удалите его)')
+            continue
+
+        # Формируем данные семестров для нового журнала
+        semesters_data = None
+        if source_hours:
+            semesters_data = []
+            for sem, h in source_hours.items():
+                semesters_data.append({
+                    'semester': sem,
+                    'lecture': h['lecture'],
+                    'practice': h['practice'],
+                    'independent': h['independent'],
+                    'exam': h['exam'],
+                })
+
+        # Создаём журнал
+        ok, msg, new_gsid = GroupSubject.create(gid, subject_id, semesters_data)
+        if not ok:
+            errors.append(f'{grp["name"]}: {msg}')
+            continue
+
+        # Назначаем преподавателя
+        if teacher_user_id:
+            try:
+                TeacherJournal.assign(teacher_user_id, new_gsid)
+            except Exception as e:
+                errors.append(f'{grp["name"]}: не удалось назначить преподавателя — {e}')
+
+        created += 1
+
+    log_activity(
+        uid, 'copy_journal',
+        f'Копирование журнала «{source["group_name"]} / {subject_name}» '
+        f'в {created} групп(ы); пропущено: {len(skipped)}; ошибок: {len(errors)}',
+        'journal', gsid,
+    )
+
+    # Формируем сообщение
+    parts = [f'Создано журналов: {created}']
+    if skipped:
+        parts.append(f'пропущено: {len(skipped)}')
+    if errors:
+        parts.append(f'ошибок: {len(errors)}')
+    flash(' • '.join(parts), 'success' if created > 0 else 'warning')
+
+    for s in skipped:
+        flash(s, 'warning')
+    for e in errors[:5]:
+        flash(e, 'danger')
+
+    return redirect(url_for('journals.index'))
 
 @journals_bp.route('/group-subjects/get-hours/<int:gsid>')
 @login_required
@@ -255,12 +397,16 @@ def add_lesson(gsid):
     semesters = GroupSubject.get_semesters(gsid)
     current_semester = request.args.get('semester', semesters[0] if semesters else 1, type=int)
 
+    # Все неиспользованные пункты плана (без фильтра по типу)
+    plan_unused = JournalPlan.get_unused_for_journal(gsid)
+
     if request.method == 'POST':
         date = request.form['date']
         ti = request.form.get('time_interval', '').strip()
         topic = request.form.get('topic', '').strip()
         ltype = request.form['type']
         semester = int(request.form.get('semester', 1))
+        plan_id = request.form.get('plan_id', type=int)
 
         if not ti:
             flash('Введите время занятия', 'danger')
@@ -268,8 +414,11 @@ def add_lesson(gsid):
         if not re.match(r'^\d{4}-\d{4}$', ti):
             flash('Формат: 0900-1030', 'danger')
             return redirect(url_for('journals.add_lesson', gsid=gsid, semester=semester))
-        if len(topic) > 50:
-            flash('Тема не может быть длиннее 50 символов', 'danger')
+        if not topic:
+            flash('Введите тему занятия', 'danger')
+            return redirect(url_for('journals.add_lesson', gsid=gsid, semester=semester))
+        if len(topic) > 200:
+            flash('Тема слишком длинная (макс. 200 символов)', 'danger')
             return redirect(url_for('journals.add_lesson', gsid=gsid, semester=semester))
         if has_emoji(topic):
             flash('Эмодзи запрещены в теме', 'danger')
@@ -285,12 +434,26 @@ def add_lesson(gsid):
 
         s, m = JournalManager.add_lesson(gsid, date, ti, topic, ltype, semester, students_data)
         if s:
-            log_activity(
-                uid, 'add_lesson',
-                f'Добавлено занятие: {pair["group_name"]} / {pair["subject_name"]} '
-                f'({date}, {ti})',
-                'journal', gsid,
-            )
+            # Если был выбран пункт из плана — отметим его использованным
+            if plan_id:
+                # Найдём id первой созданной записи в журнале
+                conn = get_db()
+                try:
+                    table_name = JournalManager.get_table_name(gsid)
+                    row = conn.execute(
+                        f"SELECT id FROM {table_name} "
+                        f"WHERE date = ? AND time_interval = ? LIMIT 1",
+                        (date, ti)
+                    ).fetchone()
+                    if row:
+                        JournalPlan.mark_used(plan_id, row['id'])
+                finally:
+                    conn.close()
+
+            log_activity(uid, 'add_lesson',
+                         f'Добавлено занятие: {pair["group_name"]} / {pair["subject_name"]} '
+                         f'({date}, {ti}, тема «{topic}»)',
+                         'journal', gsid)
         flash(m, 'success' if s else 'danger')
         return redirect(url_for('journals.journal', gsid=gsid, semester=semester))
 
@@ -302,6 +465,7 @@ def add_lesson(gsid):
         grades=Config.GRADES,
         semesters=semesters,
         current_semester=current_semester,
+        plan_unused=plan_unused,
     )
 
 
@@ -635,3 +799,570 @@ def set_semester_grade(gsid):
     )
 
     return jsonify({'success': True})
+
+# ============================================================
+#                 ТЕМАТИЧЕСКИЙ ПЛАН (КТП)
+# ============================================================
+
+@journals_bp.route('/group-subjects/<int:gsid>/plan')
+@permission_required('view_journals')
+def plan_view(gsid):
+    """Страница тематического плана журнала."""
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
+    pair = GroupSubject.get_by_id(gsid)
+    if not pair:
+        flash('Журнал не найден', 'danger')
+        return redirect(url_for('journals.index'))
+
+    plan = JournalPlan.get_for_journal(gsid)
+
+    # Для селектов
+    lesson_types = Config.LESSON_TYPES
+
+    # Сколько пунктов уже использовано
+    used_count = sum(1 for p in plan if p.get('used_lesson_id'))
+
+    return render_template(
+        'journal_plan.html',
+        pair=pair,
+        plan=plan,
+        lesson_types=lesson_types,
+        used_count=used_count,
+    )
+
+
+@journals_bp.route('/group-subjects/<int:gsid>/plan/add', methods=['POST'])
+@permission_required('add_journal')
+def plan_add(gsid):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
+    order_number = request.form.get('order_number', type=int)
+    topic = (request.form.get('topic') or '').strip()
+    hours = request.form.get('hours', 2, type=int) or 2
+    lesson_type = request.form.get('lesson_type', 'lecture')
+
+    if not topic:
+        flash('Введите название темы', 'danger')
+        return redirect(url_for('journals.plan_view', gsid=gsid))
+
+    ok, msg, new_id = JournalPlan.create(gsid, order_number, topic, hours, lesson_type)
+    flash(msg, 'success' if ok else 'danger')
+
+    return redirect(url_for('journals.plan_view', gsid=gsid))
+
+
+@journals_bp.route('/group-subjects/<int:gsid>/plan/<int:plan_id>/edit', methods=['POST'])
+@permission_required('add_journal')
+def plan_edit(gsid, plan_id):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
+    order_number = request.form.get('order_number', type=int)
+    topic = (request.form.get('topic') or '').strip()
+    hours = request.form.get('hours', 2, type=int) or 2
+    lesson_type = request.form.get('lesson_type', 'lecture')
+
+    if not topic:
+        flash('Введите название темы', 'danger')
+        return redirect(url_for('journals.plan_view', gsid=gsid))
+
+    ok, msg = JournalPlan.update(plan_id, order_number, topic, hours, lesson_type)
+    flash(msg, 'success' if ok else 'danger')
+
+    return redirect(url_for('journals.plan_view', gsid=gsid))
+
+
+@journals_bp.route('/group-subjects/<int:gsid>/plan/<int:plan_id>/delete', methods=['POST'])
+@permission_required('add_journal')
+def plan_delete(gsid, plan_id):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
+    ok, msg = JournalPlan.delete(plan_id)
+    flash(msg, 'success' if ok else 'danger')
+
+    return redirect(url_for('journals.plan_view', gsid=gsid))
+
+
+@journals_bp.route('/group-subjects/<int:gsid>/plan/clear', methods=['POST'])
+@permission_required('add_journal')
+def plan_clear(gsid):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
+    ok, msg, count = JournalPlan.delete_all_for_journal(gsid)
+    if ok:
+        log_activity(uid, 'plan_clear',
+                     f'Очищен план журнала #{gsid} ({count} пунктов)',
+                     'journal', gsid)
+    flash(msg, 'success' if ok else 'danger')
+
+    return redirect(url_for('journals.plan_view', gsid=gsid))
+
+
+# ============================================================
+#                 ИМПОРТ ПЛАНА ИЗ WORD / EXCEL
+# ============================================================
+
+def _parse_plan_tsv(text):
+    """
+    Разбирает TSV-текст (Word/Excel → Ctrl+C → вставка в textarea).
+
+    Формат: строки, разделённые \\n, колонки — \\t.
+    Шапка может быть многострочной (merged cells в Word).
+    Ищем заголовки накопительно по первым ~15 строкам.
+
+    Возвращает список dict-ов.
+    """
+    if not text:
+        return []
+
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+    raw_lines = text.split('\n')
+    lines = []
+    for line in raw_lines:
+        cols = line.split('\t')
+        if not any(c.strip() for c in cols):
+            continue
+        lines.append(cols)
+
+    if not lines:
+        return []
+
+    # ============================================================
+    #  1. Определяем индексы колонок
+    # ============================================================
+    # Пройдём по первым 15 строкам. Каждое «правильное» значение
+    # заголовка ищем в отдельной ячейке. Найденное запоминаем.
+    # Это нужно, потому что в merged-шапке Word заголовки в
+    # разных строках и разных колонках.
+
+    header_map = {}
+    header_row_idx = None
+
+    def _norm(s):
+        """Нормализует текст: lower, убирает дефисы, лишние пробелы."""
+        s = str(s).strip().lower()
+        s = s.replace('-', '').replace('–', '').replace('—', '')
+        s = ' '.join(s.split())
+        return s
+
+    # Шапка может быть до 15 строк
+    for i in range(min(15, len(lines))):
+        cols = lines[i]
+        found_here = 0
+
+        for j, cell in enumerate(cols):
+            cell_norm = _norm(cell)
+            if not cell_norm:
+                continue
+
+            # № п/п
+            if 'order_number' not in header_map:
+                if cell_norm in ('№', '№ п/п', 'п/п', 'n', '№п/п'):
+                    header_map['order_number'] = j
+                    found_here += 1
+
+            # Тема / наименование
+            if 'topic' not in header_map:
+                if 'наименование' in cell_norm and ('тем' in cell_norm or 'раздел' in cell_norm):
+                    header_map['topic'] = j
+                    found_here += 1
+
+            # Часы
+            if 'hours' not in header_map:
+                if 'количество' in cell_norm and 'час' in cell_norm:
+                    header_map['hours'] = j
+                    found_here += 1
+                # Если слово "часов" отдельно — тоже подходит
+                elif cell_norm == 'часов' or cell_norm.startswith('часов'):
+                    header_map.setdefault('hours', j)
+                    found_here += 1
+
+            # Вид занятия
+            if 'lesson_type' not in header_map:
+                if 'вид' in cell_norm and 'занят' in cell_norm:
+                    header_map['lesson_type'] = j
+                    found_here += 1
+
+        # Если на этой строке нашли хотя бы что-то новое — запоминаем
+        # её как «начало» шапки (для определения data_start).
+        if found_here > 0:
+            if header_row_idx is None:
+                header_row_idx = i
+            # Продолжаем сканировать дальше, чтобы накопить все колонки
+
+        # Если нашли все 4 — выходим
+        if all(k in header_map for k in ('order_number', 'topic', 'hours', 'lesson_type')):
+            break
+
+    # Если хоть одну колонку не нашли — используем fallback по самой
+    # длинной строке таблицы (обычно это строка данных).
+    if 'topic' not in header_map or 'lesson_type' not in header_map:
+        # Ищем «эталонную» строку данных — где 4+ колонки, и они «наполнены».
+        for i, cols in enumerate(lines):
+            if len(cols) < 4:
+                continue
+            # Первая колонка — число, вторая — длинный текст,
+            # третья — число, четвёртая — текст с «урок»/«занятие»/«подготовка»
+            if not cols[0].strip():
+                continue
+
+            c0 = cols[0].strip().lstrip('+-').rstrip('.').strip()
+            if not c0.isdigit():
+                continue
+
+            topic_text = cols[1].strip() if len(cols) > 1 else ''
+            if len(topic_text) < 10:
+                continue
+
+            hours_text = cols[2].strip() if len(cols) > 2 else ''
+            if not hours_text.isdigit():
+                continue
+
+            type_text = cols[3].strip().lower() if len(cols) > 3 else ''
+            if any(w in type_text for w in ['урок', 'занятие', 'подготовк', 'работа']):
+                header_map.setdefault('order_number', 0)
+                header_map.setdefault('topic', 1)
+                header_map.setdefault('hours', 2)
+                header_map.setdefault('lesson_type', 3)
+                header_row_idx = i - 1 if i > 0 else -1
+                break
+
+    # Если совсем не разобрались — стандартные 0/1/2/3
+    for k, v in (('order_number', 0), ('topic', 1), ('hours', 2), ('lesson_type', 3)):
+        header_map.setdefault(k, v)
+
+    # data_start — следующая строка после шапки
+    if header_row_idx is None:
+        data_start = 0
+    else:
+        data_start = header_row_idx + 1
+
+        # Пропускаем ещё строки, если они выглядят как часть шапки:
+        # без номера, без длинного текста.
+        while data_start < len(lines):
+            cols = lines[data_start]
+            first = cols[0].strip().lstrip('+-').rstrip('.').strip() if cols else ''
+            if first.isdigit():
+                break
+            # Если в первой ячейке пусто, а во второй — короткий текст
+            # без точки — это ещё шапка.
+            second = cols[1].strip() if len(cols) > 1 else ''
+            if not first and len(second) < 25:
+                data_start += 1
+                continue
+            break
+
+    # ============================================================
+    #  2. Парсим строки данных
+    # ============================================================
+
+    parsed = []
+    last_order = 0
+
+    for i in range(data_start, len(lines)):
+        cols = lines[i]
+
+        def get_cell(key):
+            col = header_map.get(key)
+            if col is None or col >= len(cols):
+                return None
+            return cols[col]
+
+        topic_raw = get_cell('topic')
+        if topic_raw is None:
+            candidates = [c for c in cols if c.strip() and len(c.strip()) > 3]
+            if not candidates:
+                continue
+            topic = max(candidates, key=len).strip()
+        else:
+            topic = topic_raw.strip()
+
+        if not topic or len(topic) < 3:
+            continue
+
+        # Номер (убираем + / - и точку)
+        order_raw = get_cell('order_number')
+        order_number = None
+        if order_raw:
+            cleaned = str(order_raw).strip().lstrip('+-').rstrip('.').strip()
+            if cleaned.isdigit():
+                order_number = int(cleaned)
+
+        # Часы
+        hours_raw = get_cell('hours')
+        hours = None
+        if hours_raw:
+            h_clean = str(hours_raw).strip()
+            if h_clean.isdigit():
+                hours = int(h_clean)
+        if hours is None or hours <= 0:
+            hours = 2
+
+        # Тип занятия
+        raw_type = get_cell('lesson_type')
+        raw_type_str = str(raw_type).strip() if raw_type else ''
+
+        lt_lower = raw_type_str.lower()
+        if 'практическ' in lt_lower or 'практик' in lt_lower:
+            lesson_type = 'practice'
+        elif 'экзамен' in lt_lower:
+            lesson_type = 'exam'
+        elif 'самостоятельн' in lt_lower or 'с/р' in lt_lower:
+            lesson_type = 'independent'
+        elif 'под запись' in lt_lower or 'диктант' in lt_lower:
+            lesson_type = 'dictation'
+        elif 'зачёт' in lt_lower or 'зачет' in lt_lower or 'дифф' in lt_lower:
+            lesson_type = 'diff_credit'
+        else:
+            lesson_type = 'lecture'
+
+        # Определяем skip
+        topic_lower = topic.lower()
+        skip = False
+
+        # Раздел / Тема — заголовки
+        if topic_lower.startswith('раздел ') or topic_lower.startswith('тема '):
+            skip = True
+
+        # Объединённая ячейка шапки
+        if topic_lower in ('обязательная учебная нагрузка/самостоятельная работа',
+                           'обязательная учебная нагрузка',
+                           'самостоятельная работа'):
+            skip = True
+
+        # Одиночные цифры как тема («2», «3») — мусор
+        if topic.strip().isdigit():
+            skip = True
+
+        # Если нет номера и нет вида занятия и нет длинного текста — пропуск
+        if order_number is None and not raw_type_str and len(topic) < 20:
+            skip = True
+
+        # Если нет вида занятия, но есть номер — оставляем галочку
+        # (пользователь сам решит: это тема без типа или дубликат)
+        # Специально НЕ ставим skip.
+
+        # Номер
+        if order_number is None:
+            if not skip:
+                last_order += 1
+                order_number = last_order
+        else:
+            if not skip:
+                last_order = order_number
+
+        parsed.append({
+            'order_number': order_number,
+            'topic': topic,
+            'hours': hours,
+            'lesson_type': lesson_type,
+            'raw_type': raw_type_str,
+            'skip': skip,
+        })
+
+    return parsed
+
+def _parse_plan_xlsx(file):
+    """
+    Разбирает Excel-файл и возвращает список строк в том же формате,
+    что _parse_plan_tsv.
+    """
+    import pandas as pd
+
+    df = pd.read_excel(file, header=None)
+
+    if df.empty:
+        return []
+
+    # Превращаем DataFrame в текстовое представление TSV и парсим общим парсером.
+    lines = []
+    for _, row in df.iterrows():
+        cells = []
+        for v in row:
+            if pd.isna(v):
+                cells.append('')
+            else:
+                cells.append(str(v))
+        lines.append('\t'.join(cells))
+
+    return _parse_plan_tsv('\n'.join(lines))
+
+
+@journals_bp.route('/group-subjects/<int:gsid>/plan/import', methods=['GET', 'POST'])
+@permission_required('add_journal')
+def plan_import(gsid):
+    """
+    Импорт плана.
+
+    GET  — форма: вкладка «Вставить из Word/Excel» и вкладка «Загрузить .xlsx».
+    POST — с параметром source:
+        source=paste → берём textarea
+        source=file  → берём файл .xlsx
+    """
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
+    pair = GroupSubject.get_by_id(gsid)
+    if not pair:
+        flash('Журнал не найден', 'danger')
+        return redirect(url_for('journals.index'))
+
+    if request.method == 'GET':
+        return render_template(
+            'journal_plan_import.html',
+            pair=pair,
+            step='upload',
+            parsed=None,
+        )
+
+    # POST — разбор
+    source = request.form.get('source', 'paste')
+    parsed = []
+    filename = ''
+
+    if source == 'paste':
+        text = (request.form.get('paste_text') or '').strip()
+        if not text:
+            flash('Вставьте таблицу из Word или Excel', 'danger')
+            return redirect(url_for('journals.plan_import', gsid=gsid))
+        parsed = _parse_plan_tsv(text)
+        filename = 'вставка из буфера'
+    else:
+        # source == 'file'
+        if 'file' not in request.files:
+            flash('Файл не выбран', 'danger')
+            return redirect(url_for('journals.plan_import', gsid=gsid))
+
+        file = request.files['file']
+        if not file.filename:
+            flash('Файл не выбран', 'danger')
+            return redirect(url_for('journals.plan_import', gsid=gsid))
+
+        if not file.filename.lower().endswith(('.xlsx', '.xls')):
+            flash('Поддерживаются только .xlsx и .xls', 'danger')
+            return redirect(url_for('journals.plan_import', gsid=gsid))
+
+        try:
+            parsed = _parse_plan_xlsx(file)
+            filename = file.filename
+        except Exception as e:
+            flash(f'Ошибка разбора файла: {e}', 'danger')
+            return redirect(url_for('journals.plan_import', gsid=gsid))
+
+    if not parsed:
+        flash('Не найдено ни одной строки с данными. '
+              'Проверьте, что скопирована таблица целиком, '
+              'включая шапку и все строки.', 'warning')
+        return redirect(url_for('journals.plan_import', gsid=gsid))
+
+    # Если совсем мало данных — предупредим
+    if len(parsed) < 3:
+        flash(f'Найдено только {len(parsed)} строк(и). '
+              'Проверьте, что таблица скопирована целиком.', 'warning')
+
+    return render_template(
+        'journal_plan_import.html',
+        pair=pair,
+        step='preview',
+        parsed=parsed,
+        filename=filename,
+    )
+
+
+@journals_bp.route('/group-subjects/<int:gsid>/plan/import/commit', methods=['POST'])
+@permission_required('add_journal')
+def plan_import_commit(gsid):
+    """Сохраняет пункты плана после предпросмотра."""
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return resp
+
+    pair = GroupSubject.get_by_id(gsid)
+    if not pair:
+        flash('Журнал не найден', 'danger')
+        return redirect(url_for('journals.index'))
+
+    indices = set()
+    for key in request.form:
+        if key.startswith('row_') and key.endswith('_include'):
+            try:
+                idx = int(key.split('_')[1])
+                indices.add(idx)
+            except (ValueError, IndexError):
+                pass
+
+    created = 0
+    errors = []
+
+    for idx in sorted(indices):
+        include = request.form.get(f'row_{idx}_include')
+        if include != '1':
+            continue
+
+        topic = (request.form.get(f'row_{idx}_topic') or '').strip()
+        if not topic:
+            continue
+
+        order_raw = request.form.get(f'row_{idx}_order', '')
+        try:
+            order_number = int(order_raw) if order_raw else None
+        except ValueError:
+            order_number = None
+
+        hours_raw = request.form.get(f'row_{idx}_hours', '2')
+        try:
+            hours = int(hours_raw) if hours_raw else 2
+        except ValueError:
+            hours = 2
+
+        lesson_type = request.form.get(f'row_{idx}_type', 'lecture')
+
+        ok, msg, new_id = JournalPlan.create(
+            gsid, order_number, topic, hours, lesson_type
+        )
+        if ok:
+            created += 1
+        else:
+            errors.append(f'Строка {idx + 1}: {msg}')
+
+    log_activity(
+        uid, 'plan_import',
+        f'Импорт плана: журнал #{gsid}, добавлено {created} пунктов',
+        'journal', gsid,
+    )
+
+    parts = [f'Добавлено пунктов: {created}']
+    if errors:
+        parts.append(f'ошибок: {len(errors)}')
+    flash(' • '.join(parts), 'success' if created else 'warning')
+
+    for e in errors[:5]:
+        flash(e, 'danger')
+
+    return redirect(url_for('journals.plan_view', gsid=gsid))

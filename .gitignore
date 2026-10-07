@@ -110,3 +110,6 @@ parsers/output/
 *.xlsx
 *.xls
 !templates/**/*.xlsx
+
+journal.db-wal
+journal.db-shm

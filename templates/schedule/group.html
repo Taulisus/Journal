@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Расписание', url_for('schedule.index')),
+        (group.name, None),
+    ]) }}
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2 no-print">
+    <h2 class="mb-0">
+        <i class="bi bi-calendar-week"></i>
+        Расписание группы: {{ group.name }}
+    </h2>
+    <div class="d-flex gap-2 flex-wrap">
+        {% if can_edit_any %}
+            <a href="{{ url_for('schedule.new_lesson', date=week.start) }}?group_id={{ group.id }}"
+               class="btn btn-sm btn-success">
+                <i class="bi bi-plus-circle"></i> Добавить занятие
+            </a>
+        {% endif %}
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print();">
+            <i class="bi bi-printer"></i> Печать
+        </button>
+    </div>
+</div>
+
+<!-- Навигация по неделям -->
+<div class="card shadow-sm mb-3 no-print">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1">
+                    <i class="bi bi-calendar3"></i>
+                    Учебная неделя:
+                </label>
+                <select class="form-select"
+                        onchange="window.location.href='{{ url_for('schedule.group_schedule', group_id=group.id) }}?week=' + this.value;">
+                    {% for w in weeks %}
+                        <option value="{{ w.number }}"
+                                {% if w.number == week_number %}selected{% endif %}>
+                            {{ w.label }}{% if w.number == week_number %} — текущая{% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-md-6 d-flex justify-content-end gap-2 flex-wrap">
+                {% if prev_week_number %}
+                    <a href="{{ url_for('schedule.group_schedule', group_id=group.id, week=prev_week_number) }}"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-chevron-left"></i> Пред. неделя
+                    </a>
+                {% else %}
+                    <button class="btn btn-outline-secondary btn-sm" disabled>
+                        <i class="bi bi-chevron-left"></i> Пред. неделя
+                    </button>
+                {% endif %}
+
+                {% if academic_year %}
+                    <span class="btn btn-outline-secondary btn-sm disabled">
+                        <i class="bi bi-mortarboard"></i>
+                        {{ academic_year.name }}
+                    </span>
+                {% endif %}
+
+                {% if next_week_number %}
+                    <a href="{{ url_for('schedule.group_schedule', group_id=group.id, week=next_week_number) }}"
+                       class="btn btn-outline-primary btn-sm">
+                        След. неделя <i class="bi bi-chevron-right"></i>
+                    </a>
+                {% else %}
+                    <button class="btn btn-outline-secondary btn-sm" disabled>
+                        След. неделя <i class="bi bi-chevron-right"></i>
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Печатный заголовок -->
+<div class="d-none d-print-block mb-3">
+    <h3 class="text-center mb-2">Расписание группы «{{ group.name }}»</h3>
+    <div class="text-center mb-3">
+        {{ week.label }}
+        {% if academic_year %} ({{ academic_year.name }}){% endif %}
+    </div>
+</div>
+
+<!-- Сетка дней -->
+<div class="schedule-group-grid">
+    {% for day in days %}
+        <div class="schedule-group-day {% if day.is_today %}is-today{% endif %}">
+            <div class="schedule-group-day-header">
+                <div class="day-name">
+                    {{ day.day_short }}
+                    {% if day.is_today %}<span class="badge bg-warning text-dark ms-1">Сегодня</span>{% endif %}
+                </div>
+                <div class="day-date">{{ day.date_short }}</div>
+            </div>
+
+            <div class="schedule-group-day-body">
+                {% if day.lessons %}
+                    {% for l in day.lessons %}
+                        <div class="lesson-card">
+                            <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                                <div class="lesson-pair">
+                                    <span class="badge bg-primary">{{ l.pair_number }}</span>
+                                </div>
+                                <div class="small text-muted text-nowrap">
+                                    {{ l.time_start }}–{{ l.time_end }}
+                                </div>
+                            </div>
+
+                            <div class="lesson-subject">
+                                {{ l.subject_name or '—' }}
+                            </div>
+
+                            {% if l.teacher_short_name or l.teacher_name_raw %}
+                                <div class="lesson-teacher small text-muted">
+                                    <i class="bi bi-person"></i>
+                                    {{ l.teacher_short_name or l.teacher_name_raw }}
+                                </div>
+                            {% endif %}
+
+                            {% if l.room_resolved_name or l.room_name_raw %}
+                                <div class="lesson-room small text-muted">
+                                    <i class="bi bi-door-open"></i>
+                                    {{ l.room_resolved_name or l.room_name_raw }}
+                                </div>
+                            {% endif %}
+
+                            {% if l.lesson_type and l.lesson_type != 'lecture' %}
+                                <div class="lesson-type small mt-1">
+                                    <span class="badge bg-light text-dark border">
+                                        {{ l.lesson_type }}
+                                    </span>
+                                </div>
+                            {% endif %}
+
+                            <div class="lesson-actions mt-2 no-print">
+                                {% if can_edit_any %}
+                                    <a href="{{ url_for('schedule.edit_lesson', lesson_id=l.id) }}"
+                                       class="btn btn-sm btn-outline-primary"
+                                       title="Редактировать">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form method="post"
+                                          action="{{ url_for('schedule.delete_lesson', lesson_id=l.id) }}"
+                                          style="display:inline;"
+                                          onsubmit="return confirm('Удалить занятие?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                title="Удалить">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-day">
+                        <i class="bi bi-dash-circle"></i>
+                        <span>нет занятий</span>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<style>
+.schedule-group-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(200px, 1fr));
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+}
+
+.schedule-group-day {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+}
+
+.schedule-group-day.is-today {
+    background-color: #fff8e1;
+    border-color: #ffc107;
+    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.25);
+}
+
+.schedule-group-day-header {
+    text-align: center;
+    padding: 6px 4px;
+    border-bottom: 1px solid #e9ecef;
+    background-color: #f1f3f5;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.schedule-group-day.is-today .schedule-group-day-header {
+    background-color: #ffecb3;
+}
+
+.day-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.day-date {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.schedule-group-day-body {
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-grow: 1;
+}
+
+.lesson-card {
+    background-color: #fff;
+    border: 1px solid #e9ecef;
+    border-left: 3px solid #0d6efd;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 0.85rem;
+}
+
+.lesson-pair .badge {
+    font-size: 0.75rem;
+}
+
+.lesson-subject {
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.lesson-teacher,
+.lesson-room {
+    font-size: 0.78rem;
+}
+
+.empty-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: #ced4da;
+    font-size: 0.85rem;
+    flex-grow: 1;
+    padding: 20px 0;
+}
+
+.empty-day i {
+    font-size: 1.5rem;
+}
+
+/* Мобильные */
+@media (max-width: 767px) {
+    .schedule-group-grid {
+        grid-template-columns: repeat(6, 240px);
+    }
+}
+
+/* Печать */
+@media print {
+    @page {
+        size: A4 landscape;
+        margin: 8mm 6mm;
+    }
+
+    .no-print,
+    .navbar,
+    footer,
+    .breadcrumbs,
+    .btn,
+    .alert,
+    .dropdown {
+        display: none !important;
+    }
+
+    body {
+        background: #fff !important;
+        background-image: none !important;
+        font-size: 10px;
+    }
+
+    body::before,
+    body::after {
+        display: none !important;
+    }
+
+    .schedule-group-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 4px;
+    }
+
+    .schedule-group-day {
+        border: 1px solid #666;
+        border-radius: 4px;
+    }
+
+    .schedule-group-day-header {
+        background-color: #e9ecef !important;
+        padding: 3px 2px;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .day-name { font-size: 9px; }
+    .day-date { font-size: 8px; }
+
+    .lesson-card {
+        border: 1px solid #999;
+        padding: 4px;
+        font-size: 8px;
+        border-left: 2px solid #333;
+    }
+
+    .lesson-subject { font-size: 8px; font-weight: bold; }
+    .lesson-teacher,
+    .lesson-room { font-size: 7px; }
+    .lesson-pair .badge { font-size: 7px; padding: 1px 4px; }
+}
+</style>
+{% endblock %}
