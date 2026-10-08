@@ -123,6 +123,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('main.profile_edit') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="row g-3">
                         <div class="col-12 col-md-6">
@@ -166,6 +167,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('main.profile_change_password') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="row g-3">
                         <div class="col-12">
@@ -176,14 +178,14 @@
                         <div class="col-12 col-md-6">
                             <label class="form-label small mb-1">Новый пароль</label>
                             <input type="password" name="new_password" class="form-control"
-                                   minlength="6" required>
-                            <div class="form-text">Не короче 6 символов</div>
+                                   minlength="8" required>
+                            <div class="form-text">Не короче 8 символов</div>
                         </div>
 
                         <div class="col-12 col-md-6">
                             <label class="form-label small mb-1">Повторите новый пароль</label>
                             <input type="password" name="new_password2" class="form-control"
-                                   minlength="6" required>
+                                   minlength="8" required>
                         </div>
                     </div>
 

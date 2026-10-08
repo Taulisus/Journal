@@ -29,6 +29,18 @@ schedule_bp = Blueprint('schedule', __name__, url_prefix='/schedule')
 # ============================================================
 
 _import_previews = {}
+_IMPORT_PREVIEW_LIMIT = 50  # максимум одновременных предпросмотров
+
+
+def _register_preview(preview_id, data):
+    """
+    Кладёт данные в _import_previews с ограничением размера:
+    если превышен лимит — вытесняется самая старая запись.
+    """
+    if len(_import_previews) >= _IMPORT_PREVIEW_LIMIT:
+        oldest = next(iter(_import_previews))
+        _import_previews.pop(oldest, None)
+    _import_previews[preview_id] = data
 
 
 # ============================================================
@@ -246,12 +258,11 @@ def edit_lesson(lesson_id):
         room_id = request.form.get('room_id', type=int) or None
         lesson_type = request.form.get('lesson_type', 'lecture')
 
+        # ЭТАП 5.3: не-админ не может назначить занятие на чужого преподавателя.
         if is_admin:
             teacher_id = request.form.get('teacher_id', type=int) or None
         else:
-            # Преподаватель: может выбрать другого, но по умолчанию — свой
-            form_teacher_id = request.form.get('teacher_id', type=int) or None
-            teacher_id = form_teacher_id or my_teacher_id
+            teacher_id = my_teacher_id
 
         if not date or not _parse_date(date):
             flash('Некорректная дата', 'danger')
@@ -304,6 +315,7 @@ def edit_lesson(lesson_id):
         is_admin=is_admin,
         my_teacher_id=my_teacher_id,
     )
+
 
 @schedule_bp.route('/lesson/<int:lesson_id>/delete', methods=['POST'])
 @login_required
@@ -379,12 +391,11 @@ def new_lesson():
         room_id = request.form.get('room_id', type=int) or None
         lesson_type = request.form.get('lesson_type', 'lecture')
 
-        # Админ — из формы, преподаватель — свой либо выбранный из формы
+        # ЭТАП 5.3: не-админ не может назначить занятие на чужого.
         if is_admin:
             teacher_id = request.form.get('teacher_id', type=int) or None
         else:
-            form_teacher_id = request.form.get('teacher_id', type=int) or None
-            teacher_id = form_teacher_id or my_teacher_id
+            teacher_id = my_teacher_id
 
         if not date or not _parse_date(date):
             flash('Некорректная дата', 'danger')
@@ -446,6 +457,8 @@ def new_lesson():
         is_admin=is_admin,
         my_teacher_id=my_teacher_id,
     )
+
+
 # ============================================================
 #                 СВОБОДНЫЕ АУДИТОРИИ
 # ============================================================
@@ -729,7 +742,10 @@ def upload_pdf():
     os.makedirs(upload_dir, exist_ok=True)
     safe_name = secure_filename(file.filename)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    pdf_path = os.path.join(upload_dir, f"{timestamp}_{safe_name}")
+    # ЭТАП 6.2: добавляем уникальный суффикс, чтобы два PDF с одинаковым
+    # именем, загруженные в одну секунду, не перезаписывали друг друга.
+    uniq = _uuid.uuid4().hex[:8]
+    pdf_path = os.path.join(upload_dir, f"{timestamp}_{uniq}_{safe_name}")
     file.save(pdf_path)
 
     try:
@@ -746,13 +762,13 @@ def upload_pdf():
         return redirect(url_for('schedule.upload_pdf'))
 
     preview_id = str(_uuid.uuid4())
-    _import_previews[preview_id] = {
+    _register_preview(preview_id, {
         'lessons': lessons,
         'filename': safe_name,
         'teacher_pattern': teacher_pattern,
         'year': year,
         'pdf_path': pdf_path,
-    }
+    })
 
     groups = sorted({l['group'] for l in lessons if l.get('group')})
     teachers = sorted({l['teacher'] for l in lessons if l.get('teacher')})
@@ -975,6 +991,8 @@ def import_commit():
             flash(err, 'warning')
 
     return redirect(url_for('schedule.index'))
+
+
 # ============================================================
 #                 РАСПИСАНИЕ ГРУППЫ
 # ============================================================

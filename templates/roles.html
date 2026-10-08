@@ -49,7 +49,7 @@
 
                 <form method="POST"
                       action="{{ url_for('roles.save_role', role_id=role.id) }}">
-
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="row">
                         {% for perm in permissions %}
                         <div class="col-12 mb-2">

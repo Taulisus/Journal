@@ -23,7 +23,7 @@ from models import (
     JournalPlan,
 )
 from journal_manager import JournalManager
-from utils import export_journal_to_excel
+from utils import export_journal_to_excel, cleanup_old_exports
 from config import Config
 from activity import log_activity
 from ._helpers import (
@@ -45,8 +45,6 @@ journals_bp = Blueprint('journals', __name__)
 @journals_bp.route('/group-subjects')
 @login_required
 def index():
-    from models_schedule import Teacher   # импорт сверху файла лучше
-
     uid = session['user_id']
     if Permission.has_permission(uid, 'manage_users'):
         pairs = GroupSubject.get_all()
@@ -58,7 +56,7 @@ def index():
         pairs=pairs,
         groups=Group.get_all(),
         subjects=Subject.get_all(),
-        all_teachers=Teacher.get_all(active_only=False),   # ← новое
+        all_teachers=Teacher.get_all(active_only=False),
     )
 
 
@@ -134,6 +132,7 @@ def delete_group_subject(gsid):
         flash(m, 'danger')
 
     return redirect(url_for('journals.index'))
+
 
 @journals_bp.route('/group-subjects/<int:gsid>/copy-to-groups', methods=['POST'])
 @permission_required('add_journal')
@@ -272,6 +271,7 @@ def copy_journal_to_groups(gsid):
 
     return redirect(url_for('journals.index'))
 
+
 @journals_bp.route('/group-subjects/get-hours/<int:gsid>')
 @login_required
 def get_group_subject_hours(gsid):
@@ -292,13 +292,17 @@ def get_group_subject_hours(gsid):
 @permission_required('add_journal')
 def edit_group_subject_hours():
     uid = session['user_id']
-    gsid = request.form['gsid']
+    # ЭТАП 5.4: безопасный парсинг gsid через type=int
+    gsid = request.form.get('gsid', type=int)
+    if not gsid:
+        flash('Некорректный журнал', 'danger')
+        return redirect(url_for('journals.index'))
 
     pair = GroupSubject.get_by_id(gsid)
     if not pair:
         flash('Журнал не найден', 'danger')
         return redirect(url_for('journals.index'))
-    if not _user_owns_journal(uid, int(gsid)):
+    if not _user_owns_journal(uid, gsid):
         flash('Журнал вам не назначен', 'danger')
         return redirect(url_for('journals.index'))
 
@@ -320,7 +324,7 @@ def edit_group_subject_hours():
 
         conn.commit()
         log_activity(uid, 'edit_hours',
-                     f'Изменены часы журнала #{gsid}', 'journal', int(gsid))
+                     f'Изменены часы журнала #{gsid}', 'journal', gsid)
         flash('Часы обновлены', 'success')
     except Exception as e:
         conn.rollback()
@@ -741,6 +745,10 @@ def export_journal(gsid):
     filename = f"journal_{gsid}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     tmp_dir = os.path.join(Config.UPLOAD_FOLDER, 'exports')
     os.makedirs(tmp_dir, exist_ok=True)
+
+    # Очищаем старые экспорты (старше 24 часов)
+    cleanup_old_exports(tmp_dir, max_age_hours=24)
+
     save_path = os.path.join(tmp_dir, secure_filename(filename))
 
     ok, msg = export_journal_to_excel(
@@ -799,6 +807,7 @@ def set_semester_grade(gsid):
     )
 
     return jsonify({'success': True})
+
 
 # ============================================================
 #                 ТЕМАТИЧЕСКИЙ ПЛАН (КТП)
@@ -951,11 +960,6 @@ def _parse_plan_tsv(text):
     # ============================================================
     #  1. Определяем индексы колонок
     # ============================================================
-    # Пройдём по первым 15 строкам. Каждое «правильное» значение
-    # заголовка ищем в отдельной ячейке. Найденное запоминаем.
-    # Это нужно, потому что в merged-шапке Word заголовки в
-    # разных строках и разных колонках.
-
     header_map = {}
     header_row_idx = None
 
@@ -993,7 +997,6 @@ def _parse_plan_tsv(text):
                 if 'количество' in cell_norm and 'час' in cell_norm:
                     header_map['hours'] = j
                     found_here += 1
-                # Если слово "часов" отдельно — тоже подходит
                 elif cell_norm == 'часов' or cell_norm.startswith('часов'):
                     header_map.setdefault('hours', j)
                     found_here += 1
@@ -1004,26 +1007,17 @@ def _parse_plan_tsv(text):
                     header_map['lesson_type'] = j
                     found_here += 1
 
-        # Если на этой строке нашли хотя бы что-то новое — запоминаем
-        # её как «начало» шапки (для определения data_start).
         if found_here > 0:
             if header_row_idx is None:
                 header_row_idx = i
-            # Продолжаем сканировать дальше, чтобы накопить все колонки
 
-        # Если нашли все 4 — выходим
         if all(k in header_map for k in ('order_number', 'topic', 'hours', 'lesson_type')):
             break
 
-    # Если хоть одну колонку не нашли — используем fallback по самой
-    # длинной строке таблицы (обычно это строка данных).
     if 'topic' not in header_map or 'lesson_type' not in header_map:
-        # Ищем «эталонную» строку данных — где 4+ колонки, и они «наполнены».
         for i, cols in enumerate(lines):
             if len(cols) < 4:
                 continue
-            # Первая колонка — число, вторая — длинный текст,
-            # третья — число, четвёртая — текст с «урок»/«занятие»/«подготовка»
             if not cols[0].strip():
                 continue
 
@@ -1048,25 +1042,19 @@ def _parse_plan_tsv(text):
                 header_row_idx = i - 1 if i > 0 else -1
                 break
 
-    # Если совсем не разобрались — стандартные 0/1/2/3
     for k, v in (('order_number', 0), ('topic', 1), ('hours', 2), ('lesson_type', 3)):
         header_map.setdefault(k, v)
 
-    # data_start — следующая строка после шапки
     if header_row_idx is None:
         data_start = 0
     else:
         data_start = header_row_idx + 1
 
-        # Пропускаем ещё строки, если они выглядят как часть шапки:
-        # без номера, без длинного текста.
         while data_start < len(lines):
             cols = lines[data_start]
             first = cols[0].strip().lstrip('+-').rstrip('.').strip() if cols else ''
             if first.isdigit():
                 break
-            # Если в первой ячейке пусто, а во второй — короткий текст
-            # без точки — это ещё шапка.
             second = cols[1].strip() if len(cols) > 1 else ''
             if not first and len(second) < 25:
                 data_start += 1
@@ -1101,7 +1089,6 @@ def _parse_plan_tsv(text):
         if not topic or len(topic) < 3:
             continue
 
-        # Номер (убираем + / - и точку)
         order_raw = get_cell('order_number')
         order_number = None
         if order_raw:
@@ -1109,7 +1096,6 @@ def _parse_plan_tsv(text):
             if cleaned.isdigit():
                 order_number = int(cleaned)
 
-        # Часы
         hours_raw = get_cell('hours')
         hours = None
         if hours_raw:
@@ -1119,7 +1105,6 @@ def _parse_plan_tsv(text):
         if hours is None or hours <= 0:
             hours = 2
 
-        # Тип занятия
         raw_type = get_cell('lesson_type')
         raw_type_str = str(raw_type).strip() if raw_type else ''
 
@@ -1137,33 +1122,23 @@ def _parse_plan_tsv(text):
         else:
             lesson_type = 'lecture'
 
-        # Определяем skip
         topic_lower = topic.lower()
         skip = False
 
-        # Раздел / Тема — заголовки
         if topic_lower.startswith('раздел ') or topic_lower.startswith('тема '):
             skip = True
 
-        # Объединённая ячейка шапки
         if topic_lower in ('обязательная учебная нагрузка/самостоятельная работа',
                            'обязательная учебная нагрузка',
                            'самостоятельная работа'):
             skip = True
 
-        # Одиночные цифры как тема («2», «3») — мусор
         if topic.strip().isdigit():
             skip = True
 
-        # Если нет номера и нет вида занятия и нет длинного текста — пропуск
         if order_number is None and not raw_type_str and len(topic) < 20:
             skip = True
 
-        # Если нет вида занятия, но есть номер — оставляем галочку
-        # (пользователь сам решит: это тема без типа или дубликат)
-        # Специально НЕ ставим skip.
-
-        # Номер
         if order_number is None:
             if not skip:
                 last_order += 1
@@ -1183,6 +1158,7 @@ def _parse_plan_tsv(text):
 
     return parsed
 
+
 def _parse_plan_xlsx(file):
     """
     Разбирает Excel-файл и возвращает список строк в том же формате,
@@ -1195,7 +1171,6 @@ def _parse_plan_xlsx(file):
     if df.empty:
         return []
 
-    # Превращаем DataFrame в текстовое представление TSV и парсим общим парсером.
     lines = []
     for _, row in df.iterrows():
         cells = []
@@ -1249,6 +1224,10 @@ def plan_import(gsid):
         if not text:
             flash('Вставьте таблицу из Word или Excel', 'danger')
             return redirect(url_for('journals.plan_import', gsid=gsid))
+        # ЭТАП 6.4: ограничение на размер вставки
+        if len(text) > 2_000_000:
+            flash('Слишком большой объём вставки (макс. 2 МБ)', 'danger')
+            return redirect(url_for('journals.plan_import', gsid=gsid))
         parsed = _parse_plan_tsv(text)
         filename = 'вставка из буфера'
     else:
@@ -1279,7 +1258,6 @@ def plan_import(gsid):
               'включая шапку и все строки.', 'warning')
         return redirect(url_for('journals.plan_import', gsid=gsid))
 
-    # Если совсем мало данных — предупредим
     if len(parsed) < 3:
         flash(f'Найдено только {len(parsed)} строк(и). '
               'Проверьте, что таблица скопирована целиком.', 'warning')

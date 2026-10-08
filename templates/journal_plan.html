@@ -56,6 +56,7 @@
     <div class="card-body">
         <form method="POST" action="{{ url_for('journals.plan_add', gsid=pair.id) }}"
               class="row g-2 align-items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="col-12 col-md-1">
                 <label class="form-label small mb-1">№</label>
                 <input type="number" name="order_number" class="form-control form-control-sm"
@@ -111,6 +112,7 @@
                         <form method="POST"
                               action="{{ url_for('journals.plan_edit', gsid=pair.id, plan_id=item.id) }}"
                               class="d-flex gap-1 align-items-center">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="number" name="order_number" class="form-control form-control-sm"
                                    style="width: 60px;"
                                    value="{{ item.order_number or '' }}" min="1">
@@ -150,6 +152,7 @@
                               action="{{ url_for('journals.plan_delete', gsid=pair.id, plan_id=item.id) }}"
                               style="display:inline;"
                               onsubmit="return confirm('Удалить пункт плана «{{ item.topic }}»?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-outline-danger"
                                     title="Удалить">
                                 <i class="bi bi-trash"></i>
@@ -164,6 +167,7 @@
     <div class="card-footer bg-white">
         <form method="POST" action="{{ url_for('journals.plan_clear', gsid=pair.id) }}"
               onsubmit="return confirm('Удалить весь план? Действие необратимо.');"
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               class="d-inline">
             <button type="submit" class="btn btn-sm btn-outline-danger">
                 <i class="bi bi-trash"></i> Очистить весь план

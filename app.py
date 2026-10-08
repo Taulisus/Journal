@@ -1,11 +1,11 @@
-import json
 import os
 
 from flask import Flask, session
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 
 from config import Config, FLASK_HOST, FLASK_PORT, FLASK_DEBUG
 from models import init_db, GroupSubject, Permission
-from auth import auth_bp
+from auth import auth_bp, init_auth_limiter
 from routes import main_bp
 from blueprints.groups import groups_bp
 from blueprints.subjects import subjects_bp
@@ -14,6 +14,10 @@ from blueprints.journals import journals_bp
 from blueprints.users import users_bp, roles_bp
 from routes_schedule import schedule_bp
 from utils import format_time_interval, get_grade_color, get_attendance_color
+
+
+# CSRF-защита: инициализируется в create_app()
+csrf = CSRFProtect()
 
 
 def create_app():
@@ -30,7 +34,13 @@ def create_app():
     # Инициализируем БД
     init_db()
 
-    # Глобальные хелперы для всех шаблонов (доступны во всех Blueprint'ах)
+    # CSRF-защита (до регистрации blueprint'ов)
+    csrf.init_app(app)
+
+    # Rate-limit для auth (только для login)
+    init_auth_limiter(app)
+
+    # Глобальные хелперы для всех шаблонов
     @app.context_processor
     def utility_processor():
         def has_permission(permission_code):
@@ -51,6 +61,9 @@ def create_app():
             from datetime import datetime
             return Config.get_time_intervals(datetime.now().strftime('%Y-%m-%d'))
 
+        def csrf_token():
+            return generate_csrf()
+
         return dict(
             has_permission=has_permission,
             get_semesters=get_semesters,
@@ -60,10 +73,10 @@ def create_app():
             attendance_color=get_attendance_color,
             get_time_intervals=get_time_intervals,
             get_time_intervals_for_today=get_time_intervals_for_today,
-            # JSON со всеми интервалами по дням — для JS на страницах
             all_time_intervals=Config.intervals_as_json(),
             day_names_short=Config.DAY_NAMES_SHORT,
             day_names_full=Config.DAY_NAMES_FULL,
+            csrf_token=csrf_token,
         )
 
     # Регистрируем blueprints

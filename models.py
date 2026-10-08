@@ -284,6 +284,12 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_plan_gsid ON journal_plan(group_subject_id);
     ''')
 
+    # --- Миграция: гарантируем колонку users.teacher_id ---
+    cursor.execute("PRAGMA table_info(users)")
+    user_cols = [r[1] for r in cursor.fetchall()]
+    if 'teacher_id' not in user_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN teacher_id INTEGER")
+
     # --- Сид: пользователь admin ---
     user = cursor.execute("SELECT COUNT(*) as count FROM users").fetchone()
     if user['count'] == 0:
@@ -303,12 +309,27 @@ def init_db():
         )
 
         if generated:
-            print("=" * 60)
-            print("Создан пользователь admin")
-            print("  Логин:  admin")
-            print(f"  Пароль: {initial_password}")
-            print("Смените пароль сразу после первого входа!")
-            print("=" * 60)
+            # Пишем в файл с правами 600, чтобы не светить в логах
+            creds_path = os.path.join(
+                os.path.dirname(os.path.abspath(Config.DATABASE)),
+                'admin_initial_password.txt',
+            )
+            try:
+                with open(creds_path, 'w', encoding='utf-8') as f:
+                    f.write(f"admin / {initial_password}\n")
+                try:
+                    os.chmod(creds_path, 0o600)
+                except OSError:
+                    pass
+                print("=" * 60)
+                print("Создан пользователь admin.")
+                print(f"Пароль записан в {creds_path}.")
+                print("Прочитайте файл и удалите его после смены пароля.")
+                print("=" * 60)
+            except OSError as e:
+                print(f"[init_db] Не удалось записать пароль admin: {e}")
+                print("Пароль admin не задан в ADMIN_INITIAL_PASSWORD и не сохранён.")
+                print("Установите ADMIN_INITIAL_PASSWORD в .env и пересоздайте БД.")
         else:
             print("Создан пользователь admin с паролем из ADMIN_INITIAL_PASSWORD")
 
@@ -407,7 +428,8 @@ class User:
                 (user_id,)
             ).fetchone()
             return row['teacher_id'] if row and row['teacher_id'] else None
-        except sqlite3.OperationalError:
+        except sqlite3.OperationalError as e:
+            print(f"[User.get_teacher_id] {e}")
             return None
         finally:
             conn.close()
@@ -468,6 +490,10 @@ class User:
     def create(username, password, full_name='', phone='', position_ids=None, permission_ids=None):
         conn = get_db()
         try:
+            if not password or len(password) < 8:
+                conn.close()
+                return False, "Пароль должен быть не короче 8 символов", None
+
             cur = conn.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
                                (username, generate_password_hash(password)))
             uid = cur.lastrowid
@@ -535,8 +561,12 @@ class User:
     def change_password(user_id, current_password, new_password, new_password2):
         if not current_password or not new_password or not new_password2:
             return False, 'Заполните все поля'
-        if len(new_password) < 6:
-            return False, 'Новый пароль должен быть не короче 6 символов'
+        if len(new_password) < 8:
+            return False, 'Новый пароль должен быть не короче 8 символов'
+        if new_password.lower() in (
+            'password', '12345678', 'qwertyui', 'admin123', '123456789',
+        ):
+            return False, 'Слишком простой пароль'
         if new_password != new_password2:
             return False, 'Новые пароли не совпадают'
 
@@ -660,6 +690,7 @@ class User:
         if not initials:
             return surname
         return f"{surname} {'.'.join(initials)}."
+
 
 # ============================================================
 #                 GROUP
@@ -1671,6 +1702,7 @@ class TeacherHours:
             ).fetchall()
         conn.close()
         return hours
+
 
 # ============================================================
 #                 JOURNAL PLAN (тематический план)

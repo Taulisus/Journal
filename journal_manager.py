@@ -6,6 +6,10 @@ from models import get_db
 class JournalManager:
     @staticmethod
     def get_table_name(gs_id):
+        # Защита от SQL-инъекции: имя таблицы формируется из gs_id,
+        # поэтому gs_id обязан быть положительным целым.
+        if not isinstance(gs_id, int) or gs_id <= 0:
+            raise ValueError(f"Некорректный gs_id: {gs_id!r}")
         return f"journal_{gs_id}"
 
     @staticmethod
@@ -242,6 +246,15 @@ class JournalManager:
                 if grade not in (None, '', '2', '3', '4', '5', 'passed'):
                     continue
 
+                # Защита в глубину: проверяем, что entry_id принадлежит
+                # именно этой таблице журнала.
+                row = conn.execute(
+                    f"SELECT id FROM {table_name} WHERE id = ?",
+                    (entry_id,)
+                ).fetchone()
+                if not row:
+                    continue
+
                 cur = conn.execute(f'''
                     UPDATE {table_name}
                     SET attendance = ?, grade = ?
@@ -459,8 +472,6 @@ class JournalManager:
                     (gs_id,)
                 ).fetchone()
 
-            conn.close()
-
             result = {
                 'lecture': 0, 'practice': 0, 'independent': 0,
                 'exam': 0, 'dictation': 0, 'diff_credit': 0, 'total': 0
@@ -482,9 +493,10 @@ class JournalManager:
 
             return result
         except Exception as e:
-            conn.close()
             print(f"Ошибка при подсчете часов: {e}")
             return {
                 'lecture': 0, 'practice': 0, 'independent': 0,
                 'exam': 0, 'dictation': 0, 'diff_credit': 0, 'total': 0
             }
+        finally:
+            conn.close()

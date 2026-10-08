@@ -1,13 +1,11 @@
 from datetime import datetime
 import os
 import re
-import shutil
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash,
     jsonify, session, Response, send_file,
 )
-from werkzeug.security import generate_password_hash
 
 from decorators import login_required, permission_required
 from models import (
@@ -36,6 +34,7 @@ from activity import (
 from models_schedule import (
     ScheduleLesson, Teacher, Room, AcademicYear, GroupAlias,
 )
+from blueprints._helpers import has_emoji
 
 
 main_bp = Blueprint('main', __name__)
@@ -44,15 +43,6 @@ main_bp = Blueprint('main', __name__)
 # ============================================================
 #                 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ============================================================
-
-def has_emoji(text):
-    if not text:
-        return False
-    emoji_pattern = re.compile(
-        "[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF\u2600-\u27BF\U0001F900-\U0001F9FF]+",
-        flags=re.UNICODE)
-    return bool(emoji_pattern.search(text))
-
 
 def _make_db_backup(prefix='mass_transfer'):
     """Обёртка над utils.create_backup. Возвращает путь или None."""

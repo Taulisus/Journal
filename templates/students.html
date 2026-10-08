@@ -34,6 +34,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('students.add') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label small mb-1">Группа</label>
                         <select name="group_id" class="form-select" required>
@@ -64,6 +65,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('students.import_students') }}" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label small mb-1">Группа</label>
                         <select name="group_id" class="form-select" required>
@@ -210,6 +212,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <form method="POST" action="{{ url_for('students.edit', sid=s.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
                     <h5 class="modal-title">Редактировать студента</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -248,6 +251,7 @@
         <div class="modal-content">
             <form method="POST" action="{{ url_for('students.mass_transfer') }}"
                   id="massTransferForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
                         <i class="bi bi-arrow-left-right"></i>

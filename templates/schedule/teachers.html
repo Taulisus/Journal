@@ -26,6 +26,7 @@
             </div>
             <div class="card-body">
                 <form method="post" action="{{ url_for('schedule.teacher_add') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label small mb-1">ФИО полностью</label>
                         <input type="text" name="full_name" class="form-control no-emoji"
@@ -64,6 +65,7 @@
                                 <form method="post"
                                       action="{{ url_for('schedule.teacher_edit', tid=t.id) }}"
                                       class="d-flex gap-2 align-items-center">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="text" name="full_name"
                                            class="form-control form-control-sm no-emoji"
                                            value="{{ t.full_name }}" required>
@@ -86,6 +88,7 @@
                                       action="{{ url_for('schedule.teacher_delete', tid=t.id) }}"
                                       style="display:inline;"
                                       onsubmit="return confirm('Удалить преподавателя?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="bi bi-trash"></i>
                                     </button>

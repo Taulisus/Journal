@@ -41,6 +41,10 @@ def import_students_from_xlsx(file, group_id):
         if df.empty:
             return False, "Файл пустой"
 
+        # Ограничение: не более 5000 строк на файл
+        if len(df) > 5000:
+            return False, "Слишком много строк в файле (макс. 5000)"
+
         # Ищем колонку с ФИО
         name_column = None
         possible_names = ['фио', 'имя', 'name', 'фамилия', 'студент', 'ф.и.о', 'fio', 'фи']
@@ -97,6 +101,10 @@ def import_students_from_docx(file, group_id):
         from docx import Document
 
         doc = Document(file)
+
+        # Ограничение: не более 5000 абзацев
+        if len(doc.paragraphs) > 5000:
+            return False, "Слишком много абзацев в файле (макс. 5000)"
 
         imported_count = 0
         skipped_count = 0
@@ -384,6 +392,35 @@ def export_journal_to_excel(gs_id, pair_info, students, journal_data, save_path)
 
 
 # ============================================================
+#                 ОЧИСТКА ВРЕМЕННЫХ ФАЙЛОВ
+# ============================================================
+
+def cleanup_old_exports(directory, max_age_hours=24):
+    """
+    Удаляет старые .xlsx-экспорты из uploads/exports.
+    Вызывается перед созданием нового экспорта.
+    """
+    import time
+    try:
+        if not os.path.isdir(directory):
+            return 0
+        now = time.time()
+        removed = 0
+        for f in os.listdir(directory):
+            p = os.path.join(directory, f)
+            try:
+                if (os.path.isfile(p)
+                        and now - os.path.getmtime(p) > max_age_hours * 3600):
+                    os.remove(p)
+                    removed += 1
+            except OSError:
+                pass
+        return removed
+    except Exception:
+        return 0
+
+
+# ============================================================
 #                 БЭКАП БД
 # ============================================================
 
@@ -459,7 +496,9 @@ def _rotate_backups(backup_dir, prefix='journal_', keep=30):
         if len(files) <= keep:
             return
 
-        files.sort(key=os.path.getmtime)
+        # Сортируем по имени: там timestamp YYYYMMDD_HHMMSS,
+        # это надёжнее, чем mtime (который может измениться при копировании).
+        files.sort()
         for old in files[:-keep]:
             try:
                 os.remove(old)

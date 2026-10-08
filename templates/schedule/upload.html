@@ -24,6 +24,7 @@
         <div class="card shadow-sm">
             <div class="card-body">
                 <form method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label fw-bold">PDF-файл расписания</label>
                         <input type="file" name="file" class="form-control"
@@ -160,6 +161,7 @@
 </div>
 
 <form method="post" action="{{ url_for('schedule.import_commit') }}" id="importForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="preview_id" value="{{ preview_id }}">
 
     <div class="card shadow-sm mb-3">

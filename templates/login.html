@@ -6,6 +6,7 @@
             <div class="card-body">
                 <h3 class="card-title text-center mb-4"><i class="bi bi-lock-fill"></i> Вход в систему</h3>
                 <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label">Логин</label>
                         <input type="text" class="form-control" name="username" required autofocus>

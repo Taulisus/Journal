@@ -177,6 +177,7 @@
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" action="{{ url_for('journals.add_group_subject') }}" id="createJournalForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
                         <i class="bi bi-plus-circle"></i>
@@ -362,6 +363,7 @@
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" id="copyJournalForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header bg-info text-white">
                     <h5 class="modal-title">
                         <i class="bi bi-files"></i>
@@ -473,6 +475,7 @@
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" id="editHoursForm" action="{{ url_for('journals.edit_group_subject_hours') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header bg-warning">
                     <h5 class="modal-title">
                         <i class="bi bi-clock"></i>

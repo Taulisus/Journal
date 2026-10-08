@@ -6,8 +6,6 @@
 
 import os
 import re
-import shutil
-from datetime import datetime
 
 from flask import session, redirect, url_for, flash, jsonify
 
@@ -36,25 +34,24 @@ def has_emoji(text):
 #                 БЭКАП БД
 # ============================================================
 
-def _make_db_backup(prefix='manual'):
+def _make_db_backup(prefix='manual', max_backups=30):
     """
-    Делает копию journal.db в backups/ с указанным префиксом.
+    Делает копию journal.db в backups/ с ротацией старых файлов.
     Возвращает путь или None.
+    Использует utils.create_backup — единая точка правды.
     """
     try:
-        db_path = Config.DATABASE
-        if not os.path.exists(db_path):
-            return None
-
-        backup_dir = os.path.join(
-            os.path.dirname(os.path.abspath(db_path)), 'backups'
+        from utils import create_backup
+        ok, path_or_err, _size_kb = create_backup(
+            db_path=Config.DATABASE,
+            backup_dir=os.path.join(
+                os.path.dirname(os.path.abspath(Config.DATABASE)),
+                'backups',
+            ),
+            prefix=prefix,
+            max_backups=max_backups,
         )
-        os.makedirs(backup_dir, exist_ok=True)
-
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        dst = os.path.join(backup_dir, f'journal_{ts}_before_{prefix}.db')
-        shutil.copy2(db_path, dst)
-        return dst
+        return path_or_err if ok else None
     except Exception as e:
         print(f"[backup] Ошибка: {e}")
         return None

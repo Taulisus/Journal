@@ -1,5 +1,4 @@
 import os
-import warnings
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -17,20 +16,32 @@ def _env_bool(name, default=False):
 
 
 class Config:
-    # SECRET_KEY: обязателен в .env. Fallback — только для локальной разработки.
+    # SECRET_KEY: обязателен в .env. Без него приложение не стартует.
     SECRET_KEY = os.environ.get('SECRET_KEY')
     if not SECRET_KEY:
-        warnings.warn(
-            "SECRET_KEY не задан в .env — используется небезопасный дефолт. "
-            "Создайте .env (см. .env.example) и задайте SECRET_KEY.",
-            RuntimeWarning,
+        raise RuntimeError(
+            "SECRET_KEY не задан. Создайте .env (см. .env.example) "
+            "и задайте SECRET_KEY. Пример генерации:\n"
+            "  python -c \"import secrets; print(secrets.token_hex(32))\""
         )
-        SECRET_KEY = 'insecure-dev-key-change-me'
 
+    # --- Безопасность cookie и сессий ---
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    # SESSION_COOKIE_SECURE = True  # включите, если работает только по HTTPS
+    # Включите True, если приложение работает только по HTTPS:
+    SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', False)
+    SESSION_COOKIE_NAME = 'journal_session'
+    PERMANENT_SESSION_LIFETIME = 60 * 60 * 12  # 12 часов
+    SESSION_REFRESH_EACH_REQUEST = True
 
+    # Максимальный размер загружаемого файла (20 МБ)
+    MAX_CONTENT_LENGTH = 20 * 1024 * 1024
+
+    # --- CSRF ---
+    WTF_CSRF_TIME_LIMIT = 60 * 60 * 8  # 8 часов
+    WTF_CSRF_ENABLED = True
+
+    # --- Пути ---
     DATABASE = os.path.join(BASE_DIR, 'journal.db')
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
     STATIC_FOLDER = os.path.join(BASE_DIR, 'static')

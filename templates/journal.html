@@ -512,6 +512,7 @@
                 </div>
 
                 <form id="editEntryForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" id="edit_entry_id" name="entry_id">
 
                     <div class="mb-3 text-center">
@@ -568,6 +569,7 @@
                 </div>
 
                 <form id="editLessonTimeForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" id="editTimeDateInput" name="date">
                     <input type="hidden" id="editTimeOldInput" name="old_time">
                     <input type="hidden" name="semester" value="{{ current_semester }}">
@@ -626,6 +628,7 @@
                 </div>
 
                 <form id="editLessonTypeForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" id="editTypeGsid" name="gsid">
                     <input type="hidden" id="editTypeDateInput" name="date">
                     <input type="hidden" id="editTypeTimeInput" name="time_interval">

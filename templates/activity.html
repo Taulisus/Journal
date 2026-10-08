@@ -289,6 +289,7 @@
                   action="{{ url_for('main.manual_backup') }}"
                   onsubmit="return confirm('Создать резервную копию БД?\n\nФайл будет сохранён в папку backups/.');"
                   class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-outline-info btn-sm">
                     <i class="bi bi-download"></i>
                     Создать бэкап
@@ -325,6 +326,7 @@
                   action="{{ url_for('main.activity_cleanup') }}"
                   onsubmit="return confirm('Удалить {{ cleanup_stats.old_count }} записей старше 90 дней?\n\nДействие необратимо.');"
                   class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="days" value="90">
                 <button type="submit"
                         class="btn btn-outline-warning btn-sm"

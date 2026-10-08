@@ -27,6 +27,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('subjects.add') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="input-group">
                         <input type="text" name="name" class="form-control no-emoji"
                                placeholder="Например, Математика" required>
@@ -57,6 +58,7 @@
                             <td>
                                 <form method="POST" action="{{ url_for('subjects.edit', sid=s.id) }}"
                                       class="d-flex gap-2 align-items-center">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="text" name="name" class="form-control form-control-sm no-emoji"
                                            value="{{ s.name }}" required>
                                     <button type="submit" class="btn btn-sm btn-outline-primary" title="Сохранить">

@@ -18,6 +18,7 @@ from flask import (
 from decorators import login_required, permission_required
 from models import (
     Group, Student, GroupSubject, get_db, SemesterGrade,
+    Permission, TeacherJournal, Curator,
 )
 from journal_manager import JournalManager
 from utils import import_students_from_xlsx, generate_student_chart
@@ -30,6 +31,23 @@ from ._helpers import has_emoji, _make_db_backup
 # другой — без префикса, для /student/<id>.
 students_bp = Blueprint('students', __name__, url_prefix='/students')
 student_card_bp = Blueprint('student_card', __name__, url_prefix='/student')
+
+
+def _can_manage_student(uid, student):
+    """
+    Может ли пользователь управлять (редактировать/удалять) этим студентом.
+    Админ — всегда; иначе — куратор группы ИЛИ ведёт журнал по группе студента.
+    """
+    if Permission.has_permission(uid, 'manage_users'):
+        return True
+    gid = student['group_id']
+    if Curator.is_curator(uid, gid):
+        return True
+    teaches = any(
+        j['group_id'] == gid
+        for j in TeacherJournal.get_user_journals(uid)
+    )
+    return teaches
 
 
 # ============================================================
@@ -83,6 +101,17 @@ def add():
 @students_bp.route('/edit/<int:sid>', methods=['POST'])
 @permission_required('add_students')
 def edit(sid):
+    uid = session['user_id']
+    st = Student.get_by_id(sid)
+    if not st:
+        flash('Студент не найден', 'danger')
+        return redirect(url_for('students.index'))
+
+    # ЭТАП 5.2: проверка группы
+    if not _can_manage_student(uid, st):
+        flash('Нет прав на редактирование студента из этой группы', 'danger')
+        return redirect(url_for('students.index'))
+
     gid = request.form['group_id']
     name = request.form['full_name'].strip()
     if not name:
@@ -95,7 +124,7 @@ def edit(sid):
     s, m = Student.update(sid, gid, name)
     if s:
         log_activity(
-            session['user_id'], 'edit_student',
+            uid, 'edit_student',
             f'Изменён студент #{sid} → «{name}»',
             'student', sid,
         )
@@ -107,13 +136,22 @@ def edit(sid):
 @students_bp.route('/delete/<int:sid>')
 @permission_required('delete_student')
 def delete(sid):
+    uid = session['user_id']
     st = Student.get_by_id(sid)
-    st_name = st['full_name'] if st else f'#{sid}'
+    if not st:
+        flash('Студент не найден', 'danger')
+        return redirect(url_for('students.index'))
 
+    # ЭТАП 5.1: проверка группы
+    if not _can_manage_student(uid, st):
+        flash('Нет прав на удаление студента из этой группы', 'danger')
+        return redirect(url_for('students.index'))
+
+    st_name = st['full_name']
     s, m = Student.delete(sid)
     if s:
         log_activity(
-            session['user_id'], 'delete_student',
+            uid, 'delete_student',
             f'Удалён студент «{st_name}»',
             'student', sid,
         )

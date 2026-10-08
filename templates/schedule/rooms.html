@@ -26,6 +26,7 @@
             </div>
             <div class="card-body">
                 <form method="post" action="{{ url_for('schedule.room_add') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label small mb-1">Название</label>
                         <input type="text" name="name" class="form-control no-emoji" required>
@@ -78,6 +79,7 @@
                                 <form method="post"
                                       action="{{ url_for('schedule.room_edit', rid=r.id) }}"
                                       class="d-flex gap-2 align-items-center">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="text" name="name"
                                            class="form-control form-control-sm no-emoji"
                                            value="{{ r.name }}" required>
@@ -117,6 +119,7 @@
                                       action="{{ url_for('schedule.room_delete', rid=r.id) }}"
                                       style="display:inline;"
                                       onsubmit="return confirm('Удалить аудиторию?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="bi bi-trash"></i>
                                     </button>

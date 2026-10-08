@@ -22,6 +22,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('users.add') }}" id="addUserForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label fw-bold">Логин *</label>
                         <input type="text" class="form-control no-emoji" name="username"
@@ -29,9 +30,9 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Пароль * (минимум 6 символов)</label>
+                        <label class="form-label fw-bold">Пароль * (минимум 8 символов)</label>
                         <input type="password" class="form-control" name="password"
-                               minlength="6" placeholder="Минимум 6 символов" required>
+                               minlength="8" placeholder="Минимум 8 символов" required>
                     </div>
 
                     <div class="mb-3">
@@ -193,6 +194,7 @@
                                               action="{{ url_for('users.delete', uid=user.id) }}"
                                               style="display:inline;"
                                               onsubmit="return confirm('Удалить пользователя {{ user.username }}?\nЭто действие нельзя отменить!')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-outline-danger"
                                                     title="Удалить пользователя">
                                                 <i class="bi bi-trash"></i>
@@ -228,6 +230,7 @@
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" id="editUserForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header bg-light">
                     <h5 class="modal-title">
                         <i class="bi bi-pencil-square"></i>
@@ -258,9 +261,9 @@
                             <div class="mb-3">
                                 <label class="form-label fw-bold">Новый пароль</label>
                                 <input type="password" class="form-control"
-                                       name="password" minlength="6"
+                                       name="password" minlength="8"
                                        placeholder="Оставьте пустым, чтобы не менять">
-                                <small class="text-muted">Минимум 6 символов</small>
+                                <small class="text-muted">Минимум 8 символов</small>
                             </div>
 
                             <div class="mb-3">

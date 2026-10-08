@@ -33,6 +33,7 @@
             </div>
             <div class="card-body">
                 <form method="post" action="{{ url_for('schedule.alias_add') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label small mb-1">Группа</label>
                         <select name="group_id" class="form-select" required>
@@ -75,6 +76,7 @@
                                 <form method="post"
                                       action="{{ url_for('schedule.alias_delete', alias_id=a.id) }}"
                                       onsubmit="return confirm('Удалить алиас?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="bi bi-trash"></i>
                                     </button>

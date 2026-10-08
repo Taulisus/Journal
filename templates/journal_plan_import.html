@@ -53,6 +53,8 @@
                          role="tabpanel" aria-labelledby="paste-tab">
                         <form method="POST"
                               action="{{ url_for('journals.plan_import', gsid=pair.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="source" value="paste">
                             <input type="hidden" name="source" value="paste">
 
                             <div class="alert alert-info small">
@@ -105,6 +107,7 @@
                         <form method="POST"
                               action="{{ url_for('journals.plan_import', gsid=pair.id) }}"
                               enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="source" value="file">
 
                             <div class="alert alert-info small">
@@ -173,6 +176,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <form method="POST"
       action="{{ url_for('journals.plan_import_commit', gsid=pair.id) }}"
       id="importForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <div class="card shadow-sm">
         <div class="table-responsive">

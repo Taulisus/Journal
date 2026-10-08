@@ -75,8 +75,8 @@ def add():
     if not username or not password:
         flash('Введите логин и пароль', 'danger')
         return redirect(url_for('users.index'))
-    if len(password) < 6:
-        flash('Пароль должен быть не менее 6 символов', 'danger')
+    if len(password) < 8:
+        flash('Пароль должен быть не менее 8 символов', 'danger')
         return redirect(url_for('users.index'))
     if has_emoji(username) or has_emoji(full_name):
         flash('Эмодзи запрещены', 'danger')
@@ -118,6 +118,11 @@ def edit(uid):
 
     phone = re.sub(r'[^\d]', '', phone)[:11] if phone else ''
 
+    # ЭТАП 7.4: проверяем длину пароля ДО открытия соединения
+    if password and len(password) < 8:
+        flash('Пароль должен быть не менее 8 символов', 'danger')
+        return redirect(url_for('users.index'))
+
     if uid == session['user_id']:
         admin_pos = next(
             (p for p in Position.get_all() if p['code'] == 'admin'), None
@@ -143,7 +148,7 @@ def edit(uid):
         "UPDATE user_profiles SET full_name=?, phone=? WHERE user_id=?",
         (full_name, phone, uid),
     )
-    if password and len(password) >= 6:
+    if password:
         conn.execute(
             "UPDATE users SET password_hash=? WHERE id=?",
             (generate_password_hash(password), uid),

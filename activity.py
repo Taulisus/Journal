@@ -12,6 +12,25 @@ from models import get_db
 
 
 # ============================================================
+#                 ЭКРАНИРОВАНИЕ ДЛЯ CSV
+# ============================================================
+
+def _csv_safe(value):
+    """
+    Экранирует значение для CSV, чтобы предотвратить CSV-injection
+    (формулы, начинающиеся с =, +, -, @, таб, CR).
+
+    Excel/Google Sheets воспринимают такие значения как формулы при
+    открытии файла — это может привести к утечке данных или запуску
+    внешних ссылок. Префикс "'" нейтрализует формулу.
+    """
+    s = '' if value is None else str(value)
+    if s and s[0] in ('=', '+', '-', '@', '\t', '\r'):
+        s = "'" + s
+    return s
+
+
+# ============================================================
 #                 ЛОГИРОВАНИЕ
 # ============================================================
 
@@ -25,6 +44,10 @@ def log_activity(user_id, action, description='', target_type=None, target_id=No
             else:
                 ip = request.remote_addr
 
+        # Ограничения длины: защита от раздувания БД и порчи CSV-экспорта.
+        action = (action or '')[:64]
+        description = (description or '')[:1000]
+
         conn = get_db()
         try:
             conn.execute(
@@ -34,7 +57,7 @@ def log_activity(user_id, action, description='', target_type=None, target_id=No
                 (
                     user_id,
                     action,
-                    description or '',
+                    description,
                     target_type,
                     target_id,
                     ip,
@@ -219,16 +242,19 @@ def activity_to_csv(items):
     ])
 
     for a in items:
+        # _csv_safe применяется ко всем полям, включая числовые:
+        # id, target_id и т.п. тоже могут прийти из БД как строки,
+        # которые Excel воспримет как формулу.
         writer.writerow([
-            a.get('id', ''),
-            a.get('created_at', ''),
-            a.get('display_name', ''),
-            a.get('username', ''),
-            a.get('action', ''),
-            a.get('description', ''),
-            a.get('target_type', '') or '',
-            a.get('target_id', '') or '',
-            a.get('ip', '') or '',
+            _csv_safe(a.get('id', '')),
+            _csv_safe(a.get('created_at', '')),
+            _csv_safe(a.get('display_name', '')),
+            _csv_safe(a.get('username', '')),
+            _csv_safe(a.get('action', '')),
+            _csv_safe(a.get('description', '')),
+            _csv_safe(a.get('target_type', '') or ''),
+            _csv_safe(a.get('target_id', '') or ''),
+            _csv_safe(a.get('ip', '') or ''),
         ])
 
     return output.getvalue()
@@ -239,6 +265,11 @@ def activity_to_csv(items):
 # ============================================================
 
 def get_target_url(target_type, target_id):
+    """
+    Возвращает URL к объекту лога или None.
+    Исправлены имена эндпоинтов:
+      groups.index, subjects.index, student_card.card, journals.journal.
+    """
     if not target_type or not target_id:
         return None
     try:
@@ -252,13 +283,13 @@ def get_target_url(target_type, target_id):
         if target_type == 'user':
             return url_for('main.profile_view', uid=tid)
         if target_type == 'group':
-            return url_for('main.groups')
+            return url_for('groups.index')
         if target_type == 'subject':
-            return url_for('main.subjects')
+            return url_for('subjects.index')
         if target_type == 'student':
-            return url_for('main.student_card', sid=tid)
+            return url_for('student_card.card', sid=tid)
         if target_type == 'journal':
-            return url_for('main.journal', gsid=tid)
+            return url_for('journals.journal', gsid=tid)
     except Exception:
         return None
 

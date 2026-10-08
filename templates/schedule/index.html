@@ -215,6 +215,7 @@
                                           action="{{ url_for('schedule.delete_lesson', lesson_id=l.id) }}"
                                           style="display:inline;"
                                           onsubmit="return confirm('Удалить занятие?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-sm btn-outline-danger"
                                                 title="Удалить">
                                             <i class="bi bi-trash"></i>
