@@ -137,17 +137,8 @@ def delete_group_subject(gsid):
 @journals_bp.route('/group-subjects/<int:gsid>/copy-to-groups', methods=['POST'])
 @permission_required('add_journal')
 def copy_journal_to_groups(gsid):
-    """
-    Копирует базовый набор журнала (предмет + часы) в выбранные группы.
-
-    POST-параметры:
-      group_ids[]        — список id групп (обязательно)
-      teacher_id         — id преподавателя из справочника teachers (опционально)
-      copy_hours         — '1'/'0', копировать ли часы (по умолчанию '1')
-    """
     uid = session['user_id']
 
-    # Проверка доступа к исходному журналу
     resp = _require_journal_access(uid, gsid)
     if resp:
         return resp
@@ -170,7 +161,6 @@ def copy_journal_to_groups(gsid):
     subject_id = source['subject_id']
     subject_name = source['subject_name']
 
-    # Часы исходного журнала (по семестрам)
     source_semesters = GroupSubject.get_semesters(gsid)
     source_hours = {}
     if copy_hours:
@@ -183,19 +173,15 @@ def copy_journal_to_groups(gsid):
                 'exam': h.get('exam_hours', 0),
             }
 
-    # Найти пользователя-преподавателя, если teacher_id задан
     teacher_user_id = None
     if teacher_id:
         conn = get_db()
-        try:
-            row = conn.execute(
-                "SELECT id FROM users WHERE teacher_id = ? LIMIT 1",
-                (teacher_id,)
-            ).fetchone()
-            if row:
-                teacher_user_id = row['id']
-        finally:
-            conn.close()
+        row = conn.execute(
+            "SELECT id FROM users WHERE teacher_id = ? LIMIT 1",
+            (teacher_id,)
+        ).fetchone()
+        if row:
+            teacher_user_id = row['id']
 
     created = 0
     skipped = []
@@ -207,21 +193,16 @@ def copy_journal_to_groups(gsid):
             errors.append(f'Группа #{gid} не найдена')
             continue
 
-        # Проверка: у группы уже есть журнал по этому предмету?
         conn = get_db()
-        try:
-            existing = conn.execute(
-                "SELECT id FROM group_subjects WHERE group_id = ? AND subject_id = ?",
-                (gid, subject_id)
-            ).fetchone()
-        finally:
-            conn.close()
+        existing = conn.execute(
+            "SELECT id FROM group_subjects WHERE group_id = ? AND subject_id = ?",
+            (gid, subject_id)
+        ).fetchone()
 
         if existing:
             skipped.append(f'{grp["name"]}: журнал по «{subject_name}» уже есть (сначала удалите его)')
             continue
 
-        # Формируем данные семестров для нового журнала
         semesters_data = None
         if source_hours:
             semesters_data = []
@@ -234,13 +215,11 @@ def copy_journal_to_groups(gsid):
                     'exam': h['exam'],
                 })
 
-        # Создаём журнал
         ok, msg, new_gsid = GroupSubject.create(gid, subject_id, semesters_data)
         if not ok:
             errors.append(f'{grp["name"]}: {msg}')
             continue
 
-        # Назначаем преподавателя
         if teacher_user_id:
             try:
                 TeacherJournal.assign(teacher_user_id, new_gsid)
@@ -256,7 +235,6 @@ def copy_journal_to_groups(gsid):
         'journal', gsid,
     )
 
-    # Формируем сообщение
     parts = [f'Создано журналов: {created}']
     if skipped:
         parts.append(f'пропущено: {len(skipped)}')
@@ -292,7 +270,6 @@ def get_group_subject_hours(gsid):
 @permission_required('add_journal')
 def edit_group_subject_hours():
     uid = session['user_id']
-    # ЭТАП 5.4: безопасный парсинг gsid через type=int
     gsid = request.form.get('gsid', type=int)
     if not gsid:
         flash('Некорректный журнал', 'danger')
@@ -329,8 +306,6 @@ def edit_group_subject_hours():
     except Exception as e:
         conn.rollback()
         flash(f'Ошибка: {str(e)}', 'danger')
-    finally:
-        conn.close()
 
     return redirect(url_for('journals.index'))
 
@@ -370,6 +345,25 @@ def journal(gsid):
     for g in semester_grades_list:
         semester_grades[g['student_id']] = g['grade']
 
+    avg_acc = {}
+    for entry in journal_data:
+        for student_id, cell in entry.get('entries', {}).items():
+            grade = cell.get('grade')
+            if grade in ('2', '3', '4', '5'):
+                if student_id not in avg_acc:
+                    avg_acc[student_id] = {'sum': 0, 'count': 0}
+                avg_acc[student_id]['sum'] += int(grade)
+                avg_acc[student_id]['count'] += 1
+
+    students_avg = {}
+    for st in students:
+        sid = st['id']
+        data = avg_acc.get(sid)
+        if data and data['count'] > 0:
+            students_avg[sid] = round(data['sum'] / data['count'], 2)
+        else:
+            students_avg[sid] = None
+
     return render_template(
         'journal.html',
         pair=pair,
@@ -380,6 +374,43 @@ def journal(gsid):
         semesters=semesters,
         current_semester=current_semester,
         semester_grades=semester_grades,
+        students_avg=students_avg,
+    )
+
+
+@journals_bp.route('/journal/<int:gsid>/semester-grades')
+@permission_required('view_journals')
+def semester_grades_modal(gsid):
+    uid = session['user_id']
+
+    resp = _require_journal_access(uid, gsid)
+    if resp:
+        return '<div class="alert alert-danger">Нет доступа</div>', 403
+
+    pair = GroupSubject.get_by_id(gsid)
+    if not pair:
+        return '<div class="alert alert-danger">Журнал не найден</div>', 404
+
+    semesters = GroupSubject.get_semesters(gsid)
+    semester = request.args.get('semester', semesters[0] if semesters else 1, type=int)
+
+    students = Student.get_by_group(pair['group_id'])
+    semester_grades_list = SemesterGrade.get_grades(gsid, semester)
+    grades_map = {g['student_id']: g['grade'] for g in semester_grades_list}
+
+    rows = []
+    for st in students:
+        rows.append({
+            'id': st['id'],
+            'name': st['full_name'],
+            'grade': grades_map.get(st['id']),
+        })
+
+    return render_template(
+        '_semester_grades_rows.html',
+        rows=rows,
+        gsid=gsid,
+        semester=semester,
     )
 
 
@@ -401,7 +432,6 @@ def add_lesson(gsid):
     semesters = GroupSubject.get_semesters(gsid)
     current_semester = request.args.get('semester', semesters[0] if semesters else 1, type=int)
 
-    # Все неиспользованные пункты плана (без фильтра по типу)
     plan_unused = JournalPlan.get_unused_for_journal(gsid)
 
     if request.method == 'POST':
@@ -438,21 +468,16 @@ def add_lesson(gsid):
 
         s, m = JournalManager.add_lesson(gsid, date, ti, topic, ltype, semester, students_data)
         if s:
-            # Если был выбран пункт из плана — отметим его использованным
             if plan_id:
-                # Найдём id первой созданной записи в журнале
                 conn = get_db()
-                try:
-                    table_name = JournalManager.get_table_name(gsid)
-                    row = conn.execute(
-                        f"SELECT id FROM {table_name} "
-                        f"WHERE date = ? AND time_interval = ? LIMIT 1",
-                        (date, ti)
-                    ).fetchone()
-                    if row:
-                        JournalPlan.mark_used(plan_id, row['id'])
-                finally:
-                    conn.close()
+                table_name = JournalManager.get_table_name(gsid)
+                row = conn.execute(
+                    f"SELECT id FROM {table_name} "
+                    f"WHERE date = ? AND time_interval = ? LIMIT 1",
+                    (date, ti)
+                ).fetchone()
+                if row:
+                    JournalPlan.mark_used(plan_id, row['id'])
 
             log_activity(uid, 'add_lesson',
                          f'Добавлено занятие: {pair["group_name"]} / {pair["subject_name"]} '
@@ -516,17 +541,6 @@ def update_entry(gsid):
 @journals_bp.route('/journal/<int:gsid>/update-grades-batch', methods=['POST'])
 @permission_required('view_journals')
 def update_grades_batch(gsid):
-    """
-    Массовое обновление оценок в журнале.
-
-    Ожидает JSON:
-    {
-        "updates": [
-            {"entry_id": 1, "attendance": "present", "grade": "5"},
-            {"entry_id": 2, "attendance": "absent", "grade": null}
-        ]
-    }
-    """
     uid = session['user_id']
 
     resp = _require_journal_access_json(uid, gsid)
@@ -539,7 +553,6 @@ def update_grades_batch(gsid):
     if not isinstance(updates, list):
         return jsonify({'success': False, 'message': 'Некорректный формат'}), 400
 
-    # Проверяем, что все entry_id принадлежат этому журналу
     for item in updates:
         entry_id = item.get('entry_id')
         if not entry_id:
@@ -598,7 +611,6 @@ def update_lesson_type():
                 (semester, date, time_interval),
             ).fetchone()
             if exam_exists['c'] > 0:
-                conn.close()
                 return jsonify({
                     'success': False,
                     'message': 'Экзамен в этом семестре уже существует!',
@@ -611,7 +623,6 @@ def update_lesson_type():
         ''', (new_type, date, time_interval, semester))
 
         conn.commit()
-        conn.close()
 
         log_activity(
             uid, 'edit_lesson_type',
@@ -622,7 +633,6 @@ def update_lesson_type():
         return jsonify({'success': True, 'message': 'Тип занятия обновлен'})
     except Exception as e:
         conn.rollback()
-        conn.close()
         return jsonify({'success': False, 'message': f'Ошибка: {str(e)}'})
 
 
@@ -644,10 +654,6 @@ def delete_lesson(gsid, date, ti):
     flash(m, 'success' if s else 'danger')
     return redirect(url_for('journals.journal', gsid=gsid, semester=semester))
 
-
-# ============================================================
-#                 ИЗМЕНЕНИЕ ВРЕМЕНИ ЗАНЯТИЯ
-# ============================================================
 
 @journals_bp.route('/journal/<int:gsid>/update-lesson-time', methods=['POST'])
 @permission_required('view_journals')
@@ -712,13 +718,7 @@ def update_lesson_time(gsid):
     except Exception as e:
         conn.rollback()
         return jsonify({'success': False, 'message': f'Ошибка: {e}'}), 500
-    finally:
-        conn.close()
 
-
-# ============================================================
-#                 ЭКСПОРТ ЖУРНАЛА В EXCEL
-# ============================================================
 
 @journals_bp.route('/journal/<int:gsid>/export')
 @permission_required('create_report')
@@ -746,7 +746,6 @@ def export_journal(gsid):
     tmp_dir = os.path.join(Config.UPLOAD_FOLDER, 'exports')
     os.makedirs(tmp_dir, exist_ok=True)
 
-    # Очищаем старые экспорты (старше 24 часов)
     cleanup_old_exports(tmp_dir, max_age_hours=24)
 
     save_path = os.path.join(tmp_dir, secure_filename(filename))
@@ -780,10 +779,6 @@ def export_journal(gsid):
     )
 
 
-# ============================================================
-#                 ОЦЕНКА ЗА СЕМЕСТР
-# ============================================================
-
 @journals_bp.route('/journal/<int:gsid>/set-semester-grade', methods=['POST'])
 @permission_required('set_semester_grade')
 def set_semester_grade(gsid):
@@ -816,7 +811,6 @@ def set_semester_grade(gsid):
 @journals_bp.route('/group-subjects/<int:gsid>/plan')
 @permission_required('view_journals')
 def plan_view(gsid):
-    """Страница тематического плана журнала."""
     uid = session['user_id']
 
     resp = _require_journal_access(uid, gsid)
@@ -829,11 +823,7 @@ def plan_view(gsid):
         return redirect(url_for('journals.index'))
 
     plan = JournalPlan.get_for_journal(gsid)
-
-    # Для селектов
     lesson_types = Config.LESSON_TYPES
-
-    # Сколько пунктов уже использовано
     used_count = sum(1 for p in plan if p.get('used_lesson_id'))
 
     return render_template(
@@ -932,15 +922,6 @@ def plan_clear(gsid):
 # ============================================================
 
 def _parse_plan_tsv(text):
-    """
-    Разбирает TSV-текст (Word/Excel → Ctrl+C → вставка в textarea).
-
-    Формат: строки, разделённые \\n, колонки — \\t.
-    Шапка может быть многострочной (merged cells в Word).
-    Ищем заголовки накопительно по первым ~15 строкам.
-
-    Возвращает список dict-ов.
-    """
     if not text:
         return []
 
@@ -957,20 +938,15 @@ def _parse_plan_tsv(text):
     if not lines:
         return []
 
-    # ============================================================
-    #  1. Определяем индексы колонок
-    # ============================================================
     header_map = {}
     header_row_idx = None
 
     def _norm(s):
-        """Нормализует текст: lower, убирает дефисы, лишние пробелы."""
         s = str(s).strip().lower()
         s = s.replace('-', '').replace('–', '').replace('—', '')
         s = ' '.join(s.split())
         return s
 
-    # Шапка может быть до 15 строк
     for i in range(min(15, len(lines))):
         cols = lines[i]
         found_here = 0
@@ -980,19 +956,16 @@ def _parse_plan_tsv(text):
             if not cell_norm:
                 continue
 
-            # № п/п
             if 'order_number' not in header_map:
                 if cell_norm in ('№', '№ п/п', 'п/п', 'n', '№п/п'):
                     header_map['order_number'] = j
                     found_here += 1
 
-            # Тема / наименование
             if 'topic' not in header_map:
                 if 'наименование' in cell_norm and ('тем' in cell_norm or 'раздел' in cell_norm):
                     header_map['topic'] = j
                     found_here += 1
 
-            # Часы
             if 'hours' not in header_map:
                 if 'количество' in cell_norm and 'час' in cell_norm:
                     header_map['hours'] = j
@@ -1001,7 +974,6 @@ def _parse_plan_tsv(text):
                     header_map.setdefault('hours', j)
                     found_here += 1
 
-            # Вид занятия
             if 'lesson_type' not in header_map:
                 if 'вид' in cell_norm and 'занят' in cell_norm:
                     header_map['lesson_type'] = j
@@ -1060,10 +1032,6 @@ def _parse_plan_tsv(text):
                 data_start += 1
                 continue
             break
-
-    # ============================================================
-    #  2. Парсим строки данных
-    # ============================================================
 
     parsed = []
     last_order = 0
@@ -1160,10 +1128,6 @@ def _parse_plan_tsv(text):
 
 
 def _parse_plan_xlsx(file):
-    """
-    Разбирает Excel-файл и возвращает список строк в том же формате,
-    что _parse_plan_tsv.
-    """
     import pandas as pd
 
     df = pd.read_excel(file, header=None)
@@ -1187,14 +1151,6 @@ def _parse_plan_xlsx(file):
 @journals_bp.route('/group-subjects/<int:gsid>/plan/import', methods=['GET', 'POST'])
 @permission_required('add_journal')
 def plan_import(gsid):
-    """
-    Импорт плана.
-
-    GET  — форма: вкладка «Вставить из Word/Excel» и вкладка «Загрузить .xlsx».
-    POST — с параметром source:
-        source=paste → берём textarea
-        source=file  → берём файл .xlsx
-    """
     uid = session['user_id']
 
     resp = _require_journal_access(uid, gsid)
@@ -1212,9 +1168,9 @@ def plan_import(gsid):
             pair=pair,
             step='upload',
             parsed=None,
+            lesson_types=Config.LESSON_TYPES,
         )
 
-    # POST — разбор
     source = request.form.get('source', 'paste')
     parsed = []
     filename = ''
@@ -1224,14 +1180,12 @@ def plan_import(gsid):
         if not text:
             flash('Вставьте таблицу из Word или Excel', 'danger')
             return redirect(url_for('journals.plan_import', gsid=gsid))
-        # ЭТАП 6.4: ограничение на размер вставки
         if len(text) > 2_000_000:
             flash('Слишком большой объём вставки (макс. 2 МБ)', 'danger')
             return redirect(url_for('journals.plan_import', gsid=gsid))
         parsed = _parse_plan_tsv(text)
         filename = 'вставка из буфера'
     else:
-        # source == 'file'
         if 'file' not in request.files:
             flash('Файл не выбран', 'danger')
             return redirect(url_for('journals.plan_import', gsid=gsid))
@@ -1268,13 +1222,13 @@ def plan_import(gsid):
         step='preview',
         parsed=parsed,
         filename=filename,
+        lesson_types=Config.LESSON_TYPES,
     )
 
 
 @journals_bp.route('/group-subjects/<int:gsid>/plan/import/commit', methods=['POST'])
 @permission_required('add_journal')
 def plan_import_commit(gsid):
-    """Сохраняет пункты плана после предпросмотра."""
     uid = session['user_id']
 
     resp = _require_journal_access(uid, gsid)

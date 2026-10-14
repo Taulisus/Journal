@@ -134,7 +134,6 @@ def edit(uid):
                 "JOIN positions p ON up.position_id=p.id "
                 "WHERE p.code='admin'"
             ).fetchone()
-            conn.close()
             if cnt['c'] <= 1:
                 flash(
                     'Нельзя снять с себя должность администратора, '
@@ -154,7 +153,6 @@ def edit(uid):
             (generate_password_hash(password), uid),
         )
     conn.commit()
-    conn.close()
 
     Position.save(uid, position_ids)
     Permission.save(uid, permission_ids)
@@ -179,7 +177,6 @@ def delete(uid):
 
     conn = get_db()
     cnt = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()
-    conn.close()
 
     if cnt['c'] <= 1:
         flash('Нельзя удалить последнего пользователя', 'danger')
@@ -271,14 +268,11 @@ def assign_journals(uid):
         except Exception as e:
             conn.rollback()
             flash(f'Ошибка сохранения: {str(e)}', 'danger')
-        finally:
-            conn.close()
 
         return redirect(url_for('users.index'))
 
     conn = get_db()
     user = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
-    conn.close()
 
     if not user:
         flash('Пользователь не найден', 'danger')

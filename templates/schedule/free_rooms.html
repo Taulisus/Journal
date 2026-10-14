@@ -12,53 +12,67 @@
 
 {% block content %}
 
-<h2 class="mb-4">
-    <i class="bi bi-door-open"></i> Свободные аудитории
-</h2>
+<div class="page-head">
+    <h2>
+        <i class="bi bi-door-open text-primary me-2"></i>Свободные аудитории
+    </h2>
+</div>
 
-<div class="card shadow-sm mb-3">
+{# ============================================================
+   ФОРМА ФИЛЬТРА
+   ============================================================ #}
+<div class="card mb-3">
     <div class="card-body">
-        <form method="get" class="row g-2 align-items-end">
-            <div class="col-12 col-md-3">
-                <label class="form-label small mb-1">Дата</label>
-                <input type="date" name="date" class="form-control form-control-sm" value="{{ date }}">
-            </div>
-            <div class="col-6 col-md-3">
-                <label class="form-label small mb-1">Начало</label>
-                <input type="time" name="time_start" class="form-control form-control-sm"
-                       value="{{ time_start }}">
-            </div>
-            <div class="col-6 col-md-3">
-                <label class="form-label small mb-1">Конец</label>
-                <input type="time" name="time_end" class="form-control form-control-sm"
-                       value="{{ time_end }}">
-            </div>
-            <div class="col-12 col-md-3 d-flex gap-2">
-                <button type="submit" class="btn btn-primary btn-sm w-100">
-                    <i class="bi bi-search"></i> Найти
-                </button>
+        <form method="get">
+            <div class="filters-row">
+                <div>
+                    <label class="form-label" for="fr_date">Дата</label>
+                    <input type="date" name="date" id="fr_date"
+                           class="form-control" value="{{ date }}">
+                </div>
+
+                <div>
+                    <label class="form-label" for="fr_time_start">Начало</label>
+                    <input type="time" name="time_start" id="fr_time_start"
+                           class="form-control" value="{{ time_start }}">
+                </div>
+
+                <div>
+                    <label class="form-label" for="fr_time_end">Конец</label>
+                    <input type="time" name="time_end" id="fr_time_end"
+                           class="form-control" value="{{ time_end }}">
+                </div>
+
+                <div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> Найти
+                    </button>
+                </div>
             </div>
         </form>
     </div>
 </div>
 
+{# ============================================================
+   РЕЗУЛЬТАТ
+   ============================================================ #}
 {% if time_start and time_end %}
     {% if rooms %}
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
                     Свободно {{ rooms|length }} аудиторий
                     на {{ date }} {{ time_start }}–{{ time_end }}
-                </h6>
+                </h5>
             </div>
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
+                <table class="table mb-0">
+                    <thead>
                         <tr>
                             <th>Название</th>
                             <th>Корпус</th>
-                            <th class="text-center">Вместимость</th>
-                            <th>Тип</th>
+                            <th style="width:120px;" class="text-center">Вместимость</th>
+                            <th style="width:180px;">Тип</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -67,7 +81,11 @@
                             <td class="fw-semibold">{{ r.name }}</td>
                             <td>{{ r.building or '—' }}</td>
                             <td class="text-center">{{ r.capacity or '—' }}</td>
-                            <td><span class="badge bg-secondary">{{ r.room_type }}</span></td>
+                            <td>
+                                <span class="badge bg-secondary">
+                                    {{ r.room_type or 'classroom' }}
+                                </span>
+                            </td>
                         </tr>
                     {% endfor %}
                     </tbody>
@@ -76,14 +94,18 @@
         </div>
     {% else %}
         <div class="alert alert-warning">
-            <i class="bi bi-exclamation-triangle"></i>
-            На указанное время свободных аудиторий не найдено.
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>
+                На указанное время свободных аудиторий не найдено.
+            </span>
         </div>
     {% endif %}
 {% else %}
     <div class="alert alert-info">
-        <i class="bi bi-info-circle"></i>
-        Укажите дату и время, чтобы увидеть свободные аудитории.
+        <i class="bi bi-info-circle-fill"></i>
+        <span>
+            Укажите дату и время, чтобы увидеть свободные аудитории.
+        </span>
     </div>
 {% endif %}
 

@@ -11,47 +11,66 @@
 
 {% block content %}
 
-<h2 class="mb-3"><i class="bi bi-people-fill"></i> Управление пользователями</h2>
+<div class="page-head">
+    <h2>
+        <i class="bi bi-people-fill text-primary me-2"></i>Управление пользователями
+    </h2>
+    <div class="text-muted small">Всего: <strong>{{ users | length }}</strong></div>
+</div>
 
 <div class="row">
-    <!-- Форма добавления -->
-    <div class="col-md-5 mb-3">
-        <div class="card shadow-sm">
-            <div class="card-header bg-light">
-                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Добавить пользователя</h5>
+
+    {# ============================================================
+       ЛЕВАЯ КОЛОНКА: форма добавления
+       ============================================================ #}
+    <div class="col-12 col-lg-5 mb-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-plus-circle text-primary me-2"></i>Добавить пользователя
+                </h5>
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('users.add') }}" id="addUserForm">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Логин *</label>
-                        <input type="text" class="form-control no-emoji" name="username"
+                        <label class="form-label" for="addUsername">Логин *</label>
+                        <input type="text" class="form-control no-emoji"
+                               name="username" id="addUsername"
                                placeholder="Введите логин" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Пароль * (минимум 8 символов)</label>
-                        <input type="password" class="form-control" name="password"
+                        <label class="form-label" for="addPassword">
+                            Пароль * (минимум 8 символов)
+                        </label>
+                        <input type="password" class="form-control"
+                               name="password" id="addPassword"
                                minlength="8" placeholder="Минимум 8 символов" required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">ФИО</label>
-                        <input type="text" class="form-control no-emoji" name="full_name"
+                        <label class="form-label" for="addFullName">ФИО</label>
+                        <input type="text" class="form-control no-emoji"
+                               name="full_name" id="addFullName"
                                placeholder="Иванов Иван Иванович">
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Телефон (только цифры, макс. 11)</label>
-                        <input type="text" class="form-control phone-input no-emoji" name="phone"
+                        <label class="form-label" for="addPhone">
+                            Телефон (только цифры, макс. 11)
+                        </label>
+                        <input type="text" class="form-control phone-input no-emoji"
+                               name="phone" id="addPhone"
                                maxlength="11" placeholder="79991234567" inputmode="numeric">
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">
+                        <label class="form-label" for="addTeacher">
                             <i class="bi bi-person-badge"></i> Преподаватель (справочник)
                         </label>
-                        <select name="teacher_id" class="form-select">
+                        <select name="teacher_id" id="addTeacher" class="form-select">
                             <option value="">— Не связан —</option>
                             {% for t in teachers %}
                                 <option value="{{ t.id }}">
@@ -59,15 +78,15 @@
                                 </option>
                             {% endfor %}
                         </select>
-                        <small class="text-muted">
+                        <div class="form-text">
                             Свяжите пользователя с преподавателем, чтобы он мог
-                            добавлять свои занятия в расписание и видеть только свои пары.
-                        </small>
+                            добавлять свои занятия в расписание.
+                        </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Должности</label>
-                        <div class="border rounded p-3">
+                        <label class="form-label">Должности</label>
+                        <div class="border rounded p-3" style="border-color:var(--border);">
                             {% for pos in positions %}
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"
@@ -79,12 +98,11 @@
                             </div>
                             {% endfor %}
                         </div>
-                        <small class="text-muted">Можно выбрать несколько должностей</small>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Права доступа</label>
-                        <div class="border rounded p-3" style="max-height: 250px; overflow-y: auto;">
+                        <label class="form-label">Права доступа</label>
+                        <div class="border rounded p-3" style="border-color:var(--border);max-height:250px;overflow-y:auto;">
                             {% for perm in permissions %}
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox"
@@ -109,26 +127,31 @@
         </div>
     </div>
 
-    <!-- Список пользователей -->
-    <div class="col-md-7">
-        <div class="card shadow-sm">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+    {# ============================================================
+       ПРАВАЯ КОЛОНКА: список пользователей
+       ============================================================ #}
+    <div class="col-12 col-lg-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
                 <h5 class="mb-0">
-                    <i class="bi bi-people"></i> Пользователи
-                    <span class="badge bg-primary ms-2">{{ users|length }}</span>
+                    <i class="bi bi-people me-2"></i>Пользователи
+                    <span class="badge bg-primary ms-1">{{ users|length }}</span>
                 </h5>
-                <input type="text" id="userSearch" class="form-control form-control-sm"
-                       style="max-width: 250px;" placeholder="🔍 Поиск по имени или логину...">
+                <input type="text" id="userSearch"
+                       class="form-control form-control-sm"
+                       style="max-width:240px;"
+                       placeholder="Поиск по имени или логину...">
             </div>
+
             <div class="card-body p-0">
                 {% if users %}
                 <div class="table-responsive">
-                    <table class="table table-hover table-striped mb-0" id="usersTable">
-                        <thead class="table-light">
+                    <table class="table mb-0" id="usersTable">
+                        <thead>
                             <tr>
-                                <th style="width: 40%;">Пользователь</th>
-                                <th style="width: 25%;">Должности</th>
-                                <th style="width: 35%;">Действия</th>
+                                <th style="width:45%;">Пользователь</th>
+                                <th style="width:25%;">Должности</th>
+                                <th style="width:30%;" class="text-end">Действия</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -136,40 +159,49 @@
                             <tr data-search="{{ user.username }} {{ user.full_name or '' }}">
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
-                                        <div>
-                                            <strong>{{ user.full_name or 'Без имени' }}</strong>
-                                            {% if user.id == session.user_id %}
-                                            <span class="badge bg-success ms-1">Вы</span>
+                                        <span class="app-avatar" data-avatar="{{ user.full_name or user.username }}">
+                                            {{ (user.full_name or user.username)[0] | upper }}
+                                        </span>
+                                        <div class="min-width-0">
+                                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                                <strong>{{ user.full_name or 'Без имени' }}</strong>
+                                                {% if user.id == session.user_id %}
+                                                    <span class="badge bg-success">Вы</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="text-muted small">
+                                                <i class="bi bi-at"></i> {{ user.username }}
+                                            </div>
+                                            {% if user.phone %}
+                                            <div class="text-muted small">
+                                                <i class="bi bi-phone"></i> {{ user.phone }}
+                                            </div>
+                                            {% endif %}
+                                            {% if user.teacher_full_name %}
+                                            <div class="mt-1">
+                                                <span class="badge bg-light"
+                                                      title="Связан с преподавателем">
+                                                    <i class="bi bi-person-badge"></i>
+                                                    {{ user.teacher_short_name or user.teacher_full_name }}
+                                                </span>
+                                            </div>
                                             {% endif %}
                                         </div>
                                     </div>
-                                    <div class="text-muted small">
-                                        <i class="bi bi-at"></i> {{ user.username }}
-                                    </div>
-                                    {% if user.phone %}
-                                    <div class="text-muted small">
-                                        <i class="bi bi-phone"></i> {{ user.phone }}
-                                    </div>
-                                    {% endif %}
-                                    {% if user.teacher_full_name %}
-                                    <div class="small mt-1">
-                                        <span class="badge bg-secondary" title="Связан с преподавателем">
-                                            <i class="bi bi-person-badge"></i>
-                                            {{ user.teacher_short_name or user.teacher_full_name }}
-                                        </span>
-                                    </div>
-                                    {% endif %}
                                 </td>
+
                                 <td>
                                     {% for pos in user.positions %}
-                                    <span class="badge bg-info me-1 mb-1">{{ pos.name }}</span>
+                                        <span class="badge bg-info me-1 mb-1">{{ pos.name }}</span>
                                     {% else %}
-                                    <span class="text-muted small">Нет должностей</span>
+                                        <span class="text-muted small">Нет должностей</span>
                                     {% endfor %}
                                 </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary edit-user-btn"
+
+                                <td class="text-end">
+                                    <div class="d-flex gap-1 justify-content-end flex-wrap">
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary edit-user-btn"
                                                 data-user-id="{{ user.id }}"
                                                 data-username="{{ user.username }}"
                                                 data-fullname="{{ user.full_name or '' }}"
@@ -177,16 +209,15 @@
                                                 data-teacher-id="{{ user.teacher_id or '' }}"
                                                 data-positions='{{ user.position_ids|tojson }}'
                                                 data-permissions='{{ user.perm_ids|tojson }}'
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#editUserModal"
-                                                title="Редактировать профиль">
+                                                data-modal-open="editUserModal"
+                                                data-tooltip="Редактировать">
                                             <i class="bi bi-pencil"></i>
                                         </button>
 
                                         <a href="{{ url_for('users.assign_journals', uid=user.id) }}"
-                                           class="btn btn-outline-info"
-                                           title="Назначить журналы и часы">
-                                            <i class="bi bi-journal-bookmark"></i> Журналы
+                                           class="btn btn-sm btn-outline-info"
+                                           data-tooltip="Назначить журналы">
+                                            <i class="bi bi-journal-bookmark"></i>
                                         </a>
 
                                         {% if user.id != session.user_id %}
@@ -195,8 +226,9 @@
                                               style="display:inline;"
                                               onsubmit="return confirm('Удалить пользователя {{ user.username }}?\nЭто действие нельзя отменить!')">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="btn btn-outline-danger"
-                                                    title="Удалить пользователя">
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                    data-tooltip="Удалить">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </form>
@@ -209,13 +241,14 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="text-center py-5 text-muted">
-                    <i class="bi bi-people" style="font-size: 4rem;"></i>
-                    <p class="mt-3">Нет зарегистрированных пользователей</p>
-                    <p class="small">Добавьте первого пользователя через форму слева</p>
+                <div class="empty">
+                    <div class="empty__icon"><i class="bi bi-people"></i></div>
+                    <div class="empty__title">Нет зарегистрированных пользователей</div>
+                    <div class="empty__desc">Добавьте первого пользователя через форму слева</div>
                 </div>
                 {% endif %}
             </div>
+
             {% if users %}
             <div class="card-footer text-muted small">
                 <i class="bi bi-info-circle"></i> Всего пользователей: {{ users|length }}
@@ -225,50 +258,57 @@
     </div>
 </div>
 
-<!-- Модальное окно редактирования пользователя -->
-<div class="modal fade" id="editUserModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+{# ============================================================
+   МОДАЛКА РЕДАКТИРОВАНИЯ ПОЛЬЗОВАТЕЛЯ
+   ============================================================ #}
+<div class="modal" id="editUserModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="POST" id="editUserForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header bg-light">
+
+                <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="bi bi-pencil-square"></i>
+                        <i class="bi bi-pencil-square text-primary me-2"></i>
                         Редактирование: <span id="edit_username_display" class="text-primary"></span>
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="app-icon-btn"
+                            data-modal-close="editUserModal" aria-label="Закрыть">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
 
                 <div class="modal-body">
                     <div class="row">
-                        <!-- Левая колонка -->
-                        <div class="col-md-6">
+                        {# --- Левая колонка --- #}
+                        <div class="col-12 col-md-6">
                             <div class="mb-3">
-                                <label class="form-label fw-bold">ФИО</label>
+                                <label class="form-label" for="edit_full_name">ФИО</label>
                                 <input type="text" class="form-control no-emoji"
                                        name="full_name" id="edit_full_name"
                                        placeholder="Иванов Иван Иванович">
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Телефон</label>
+                                <label class="form-label" for="edit_phone">Телефон</label>
                                 <input type="text" class="form-control phone-input no-emoji"
                                        name="phone" id="edit_phone"
                                        maxlength="11" placeholder="79991234567" inputmode="numeric">
-                                <small class="text-muted">Только цифры, максимум 11 символов</small>
+                                <div class="form-text">Только цифры, максимум 11</div>
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Новый пароль</label>
+                                <label class="form-label" for="edit_password">Новый пароль</label>
                                 <input type="password" class="form-control"
-                                       name="password" minlength="8"
+                                       name="password" id="edit_password"
+                                       minlength="8"
                                        placeholder="Оставьте пустым, чтобы не менять">
-                                <small class="text-muted">Минимум 8 символов</small>
+                                <div class="form-text">Минимум 8 символов</div>
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label fw-bold">
-                                    <i class="bi bi-person-badge"></i> Преподаватель (справочник)
+                                <label class="form-label" for="edit_teacher_id">
+                                    <i class="bi bi-person-badge"></i> Преподаватель
                                 </label>
                                 <select name="teacher_id" id="edit_teacher_id" class="form-select">
                                     <option value="">— Не связан —</option>
@@ -278,17 +318,14 @@
                                         </option>
                                     {% endfor %}
                                 </select>
-                                <small class="text-muted">
-                                    Связь позволяет пользователю редактировать свои занятия в расписании.
-                                </small>
                             </div>
                         </div>
 
-                        <!-- Правая колонка -->
-                        <div class="col-md-6">
+                        {# --- Правая колонка --- #}
+                        <div class="col-12 col-md-6">
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Должности</label>
-                                <div class="border rounded p-3">
+                                <label class="form-label">Должности</label>
+                                <div class="border rounded p-3" style="border-color:var(--border);">
                                     {% for pos in positions %}
                                     <div class="form-check">
                                         <input class="form-check-input edit-position" type="checkbox"
@@ -300,12 +337,11 @@
                                     </div>
                                     {% endfor %}
                                 </div>
-                                <small class="text-muted">Снимите все галочки, чтобы убрать все должности</small>
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Права доступа</label>
-                                <div class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                                <label class="form-label">Права доступа</label>
+                                <div class="border rounded p-3" style="border-color:var(--border);max-height:300px;overflow-y:auto;">
                                     {% for perm in permissions %}
                                     <div class="form-check">
                                         <input class="form-check-input edit-permission" type="checkbox"
@@ -326,9 +362,8 @@
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="bi bi-x-circle"></i> Отмена
-                    </button>
+                    <button type="button" class="btn btn-secondary"
+                            data-modal-close="editUserModal">Отмена</button>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-check-circle"></i> Сохранить изменения
                     </button>
@@ -338,140 +373,9 @@
     </div>
 </div>
 
-<style>
-    .table-hover tbody tr:hover {
-        background-color: #f0f8ff;
-    }
-    .badge {
-        font-size: 0.85rem;
-    }
-
-    /* ============ ОПТИМИЗАЦИЯ ПОД iPHONE 12 MINI (375px) ============ */
-    @media (max-width: 575.98px) {
-        /* Поиск на всю ширину — переносится вниз */
-        .card-header.d-flex {
-            flex-direction: column;
-            align-items: stretch !important;
-            gap: 0.5rem;
-        }
-        #userSearch {
-            max-width: 100% !important;
-            width: 100%;
-        }
-
-        /* Кнопки в таблице — крупнее для пальца */
-        .btn-group.btn-group-sm {
-            flex-wrap: wrap;
-            gap: 2px;
-        }
-        .btn-group.btn-group-sm .btn {
-            min-width: 40px;
-            min-height: 40px;
-            padding: 0.4rem;
-            font-size: 0.85rem;
-        }
-        .btn-group .btn-outline-info {
-            padding: 0.4rem 0.5rem;
-        }
-        .btn-group .btn-outline-info i {
-            margin-right: 0;
-        }
-
-        /* Модалка почти на всю ширину */
-        .modal-dialog.modal-lg {
-            max-width: calc(100% - 1rem);
-            margin: 0.5rem;
-        }
-        .modal-footer .btn {
-            min-height: 44px;
-            padding: 0.5rem 1rem;
-        }
-
-        /* Чекбоксы чуть крупнее для тапа */
-        .form-check-input {
-            width: 1.15em;
-            height: 1.15em;
-            margin-top: 0.15em;
-        }
-        .form-check {
-            padding-top: 4px;
-            padding-bottom: 4px;
-        }
-
-        /* Заголовок страницы компактнее */
-        h2 {
-            font-size: 1.25rem;
-        }
-        h5 {
-            font-size: 1.05rem;
-        }
-    }
-</style>
 {% endblock %}
 
+
 {% block scripts %}
-<script>
-// Поиск по таблице
-document.getElementById('userSearch').addEventListener('input', function() {
-    const searchText = this.value.toLowerCase().trim();
-    const rows = document.querySelectorAll('#usersTable tbody tr');
-
-    rows.forEach(row => {
-        const searchData = row.dataset.search.toLowerCase();
-        if (searchText === '' || searchData.includes(searchText)) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    });
-});
-
-// Открытие модального окна редактирования
-document.querySelectorAll('.edit-user-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        // Заполняем основные поля
-        document.getElementById('edit_username_display').textContent = this.dataset.username;
-        document.getElementById('edit_full_name').value = this.dataset.fullname;
-        document.getElementById('edit_phone').value = this.dataset.phone;
-
-        // Преподаватель
-        const teacherId = this.dataset.teacherId;
-        const teacherSelect = document.getElementById('edit_teacher_id');
-        if (teacherSelect) {
-            teacherSelect.value = teacherId || '';
-        }
-
-        // Сбрасываем все чекбоксы
-        document.querySelectorAll('.edit-position, .edit-permission').forEach(cb => {
-            cb.checked = false;
-        });
-
-        // Отмечаем должности
-        const positions = JSON.parse(this.dataset.positions);
-        positions.forEach(function(pid) {
-            const checkbox = document.getElementById('edit_pos_' + pid);
-            if (checkbox) checkbox.checked = true;
-        });
-
-        // Отмечаем права
-        const permissions = JSON.parse(this.dataset.permissions);
-        permissions.forEach(function(pid) {
-            const checkbox = document.getElementById('edit_perm_' + pid);
-            if (checkbox) checkbox.checked = true;
-        });
-
-        // Устанавливаем action формы
-        document.getElementById('editUserForm').action = '/users/edit/' + this.dataset.userId;
-    });
-});
-
-// Валидация при отправке формы добавления
-document.getElementById('addUserForm').addEventListener('submit', function(e) {
-    const phone = this.querySelector('input[name="phone"]').value;
-    if (phone && !/^\d{1,11}$/.test(phone.replace(/[^\d]/g, ''))) {
-        e.preventDefault();
-        alert('Телефон должен содержать только цифры (максимум 11)');
-    }
-});
-</script>
+<script src="{{ url_for('static', filename='js/users.js') }}"></script>
 {% endblock %}

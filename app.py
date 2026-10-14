@@ -4,7 +4,7 @@ from flask import Flask, session
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 
 from config import Config, FLASK_HOST, FLASK_PORT, FLASK_DEBUG
-from models import init_db, GroupSubject, Permission
+from models import init_db, GroupSubject, Permission, close_db
 from auth import auth_bp, init_auth_limiter
 from routes import main_bp
 from blueprints.groups import groups_bp
@@ -31,8 +31,11 @@ def create_app():
     os.makedirs(os.path.join(Config.UPLOAD_FOLDER, 'exports'), exist_ok=True)
     os.makedirs(os.path.join(os.path.dirname(Config.DATABASE), 'backups'), exist_ok=True)
 
-    # Инициализируем БД
+    # Инициализируем БД (вне HTTP-контекста — открывает своё соединение)
     init_db()
+
+    # Закрытие соединения с БД в конце каждого HTTP-запроса
+    app.teardown_appcontext(close_db)
 
     # CSRF-защита (до регистрации blueprint'ов)
     csrf.init_app(app)
@@ -44,6 +47,10 @@ def create_app():
     @app.context_processor
     def utility_processor():
         def has_permission(permission_code):
+            """
+            Проверка права. Результат кэшируется в g на время запроса
+            (см. Permission.get_user_permissions).
+            """
             if 'user_id' in session:
                 return Permission.has_permission(session['user_id'], permission_code)
             return False

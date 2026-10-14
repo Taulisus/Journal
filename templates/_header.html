@@ -1,0 +1,174 @@
+<header class="app-header" id="shell-header">
+    <div class="app-header__inner">
+
+        {# ---------- Логотип ---------- #}
+        <a href="{{ url_for('main.dashboard') }}" class="app-brand">
+            <span class="app-brand__logo"><i class="bi bi-journal-bookmark-fill"></i></span>
+            <span class="app-brand__name d-none d-sm-inline">Журнал</span>
+        </a>
+
+        {# ---------- Основная навигация ---------- #}
+        <nav class="app-nav" aria-label="Основная навигация">
+
+            {# --- Главная --- #}
+            <a href="{{ url_for('main.dashboard') }}"
+               class="app-nav__link {% if request.endpoint == 'main.dashboard' %}is-active{% endif %}">
+                <i class="bi bi-speedometer2"></i><span>Главная</span>
+            </a>
+
+            {% if has_permission('view_journals') %}
+                {# --- Журналы (dropdown) --- #}
+                <div class="dropdown">
+                    <button type="button"
+                            class="app-nav__link dropdown-toggle {% if request.endpoint and request.endpoint.startswith('journals.') %}is-active{% endif %}"
+                            data-dropdown
+                            aria-haspopup="true"
+                            aria-expanded="false">
+                        <i class="bi bi-journal-text"></i>
+                        <span>Журналы</span>
+                        <i class="bi bi-chevron-down" style="font-size:11px;opacity:.7"></i>
+                    </button>
+                    <div class="dropdown-menu">
+                        <a href="{{ url_for('journals.index') }}"
+                           class="dropdown-item {% if request.endpoint == 'journals.index' %}is-active{% endif %}">
+                            <i class="bi bi-folder2-open"></i>
+                            <span>Все журналы</span>
+                        </a>
+                        <a href="{{ url_for('main.teacher_hours_stats') }}"
+                           class="dropdown-item {% if request.endpoint == 'main.teacher_hours_stats' %}is-active{% endif %}">
+                            <i class="bi bi-clock-history"></i>
+                            <span>Мои часы</span>
+                        </a>
+                    </div>
+                </div>
+
+                {# --- Расписание --- #}
+                <a href="{{ url_for('schedule.index') }}"
+                   class="app-nav__link {% if request.endpoint and request.endpoint.startswith('schedule.') %}is-active{% endif %}">
+                    <i class="bi bi-calendar-week"></i><span>Расписание</span>
+                </a>
+            {% endif %}
+
+            {# --- Студенты --- #}
+            {% if has_permission('view_student_card') %}
+                <a href="{{ url_for('students.index') }}"
+                   class="app-nav__link {% if request.endpoint and request.endpoint.startswith('students.') %}is-active{% endif %}">
+                    <i class="bi bi-person-lines-fill"></i><span>Студенты</span>
+                </a>
+            {% endif %}
+
+            {# --- Отчёты --- #}
+            {% if has_permission('create_report') %}
+                <a href="{{ url_for('main.reports') }}"
+                   class="app-nav__link {% if request.endpoint == 'main.reports' %}is-active{% endif %}">
+                    <i class="bi bi-graph-up"></i><span>Отчёты</span>
+                </a>
+            {% endif %}
+
+            {# --- Справочники (dropdown) --- #}
+            <div class="dropdown">
+                <button type="button"
+                        class="app-nav__link dropdown-toggle {% if request.endpoint in ['groups.index', 'subjects.index', 'schedule.teachers_list', 'schedule.rooms_list', 'schedule.aliases_list'] %}is-active{% endif %}"
+                        data-dropdown
+                        aria-haspopup="true"
+                        aria-expanded="false">
+                    <i class="bi bi-gear"></i>
+                    <span>Справочники</span>
+                    <i class="bi bi-chevron-down" style="font-size:11px;opacity:.7"></i>
+                </button>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('groups.index') }}"
+                       class="dropdown-item {% if request.endpoint == 'groups.index' %}is-active{% endif %}">
+                        <i class="bi bi-people"></i><span>Группы</span>
+                    </a>
+                    <a href="{{ url_for('subjects.index') }}"
+                       class="dropdown-item {% if request.endpoint == 'subjects.index' %}is-active{% endif %}">
+                        <i class="bi bi-book"></i><span>Предметы</span>
+                    </a>
+                    <a href="{{ url_for('students.index') }}"
+                       class="dropdown-item {% if request.endpoint == 'students.index' %}is-active{% endif %}">
+                        <i class="bi bi-person-plus"></i><span>Студенты</span>
+                    </a>
+                    {% if has_permission('manage_users') %}
+                        <a href="{{ url_for('schedule.teachers_list') }}"
+                           class="dropdown-item {% if request.endpoint == 'schedule.teachers_list' %}is-active{% endif %}">
+                            <i class="bi bi-person-badge"></i><span>Преподаватели</span>
+                        </a>
+                        <a href="{{ url_for('schedule.rooms_list') }}"
+                           class="dropdown-item {% if request.endpoint == 'schedule.rooms_list' %}is-active{% endif %}">
+                            <i class="bi bi-door-open"></i><span>Аудитории</span>
+                        </a>
+                        <a href="{{ url_for('schedule.aliases_list') }}"
+                           class="dropdown-item {% if request.endpoint == 'schedule.aliases_list' %}is-active{% endif %}">
+                            <i class="bi bi-tags"></i><span>Алиасы групп</span>
+                        </a>
+                    {% endif %}
+                    {% if has_permission('add_journal') %}
+                        <hr class="dropdown-divider">
+                        <a href="{{ url_for('journals.index') }}" class="dropdown-item">
+                            <i class="bi bi-plus-circle"></i><span>Создать журнал</span>
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# --- Администрирование (dropdown, если есть права) --- #}
+            {% if has_permission('manage_users') or has_permission('manage_permissions') %}
+                <div class="dropdown">
+                    <button type="button"
+                            class="app-nav__link dropdown-toggle {% if request.endpoint in ['users.index', 'main.activity_log_page', 'roles.index'] %}is-active{% endif %}"
+                            data-dropdown
+                            aria-haspopup="true"
+                            aria-expanded="false">
+                        <i class="bi bi-shield-lock"></i>
+                        <span>Администрирование</span>
+                        <i class="bi bi-chevron-down" style="font-size:11px;opacity:.7"></i>
+                    </button>
+                    <div class="dropdown-menu">
+                        {% if has_permission('manage_users') %}
+                            <a href="{{ url_for('users.index') }}"
+                               class="dropdown-item {% if request.endpoint and request.endpoint.startswith('users.') %}is-active{% endif %}">
+                                <i class="bi bi-shield-lock"></i><span>Пользователи</span>
+                            </a>
+                            <a href="{{ url_for('main.activity_log_page') }}"
+                               class="dropdown-item {% if request.endpoint == 'main.activity_log_page' %}is-active{% endif %}">
+                                <i class="bi bi-activity"></i><span>Действия</span>
+                            </a>
+                        {% endif %}
+                        {% if has_permission('manage_permissions') %}
+                            <a href="{{ url_for('roles.index') }}"
+                               class="dropdown-item {% if request.endpoint == 'roles.index' %}is-active{% endif %}">
+                                <i class="bi bi-shield-check"></i><span>Роли и права</span>
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
+        </nav>
+
+        {# ---------- Действия справа ---------- #}
+        <div class="app-header__actions">
+
+            <button type="button" class="app-icon-btn" id="themeToggle" aria-label="Сменить тему">
+                <i class="bi bi-moon-stars"></i>
+            </button>
+
+            <a href="{{ url_for('main.profile') }}" class="app-user" title="Профиль">
+                <span class="app-avatar" data-avatar="{{ session.username }}">{{ session.username[0] | upper }}</span>
+                <span class="app-user__name">{{ session.username }}</span>
+            </a>
+
+            <a href="{{ url_for('auth.logout') }}" class="app-icon-btn app-icon-btn--danger"
+               title="Выйти" data-tooltip="Выйти">
+                <i class="bi bi-box-arrow-right"></i>
+            </a>
+
+            <button type="button" class="app-burger" id="burger"
+                    aria-label="Меню" aria-expanded="false">
+                <i class="bi bi-list"></i>
+            </button>
+        </div>
+
+    </div>
+</header>

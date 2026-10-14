@@ -218,6 +218,32 @@ class Config:
             for day, pairs in cls.TIME_INTERVALS_BY_DAY.items()
         }
 
+    # ============================================================
+    #                 ТЕКУЩИЙ СЕМЕСТР
+    # ============================================================
+
+    @classmethod
+    def get_current_semester(cls, today=None):
+        """
+        Возвращает номер текущего семестра по месяцу.
+
+        Сентябрь–Декабрь → 1
+        Январь–Июнь    → 2
+        Июль–Август    → 1 (каникулы, fallback)
+
+        Параметр today можно передать для тестов (datetime.date).
+        """
+        from datetime import date as _date
+        if today is None:
+            today = _date.today()
+        month = today.month
+        if month in (9, 10, 11, 12):
+            return 1
+        if month in (1, 2, 3, 4, 5, 6):
+            return 2
+        # Июль, август — каникулы, отдаём 1
+        return 1
+
 
 # ============================================================
 #                 FLASK HOST / PORT / DEBUG

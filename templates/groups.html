@@ -12,44 +12,56 @@
 
 {% block content %}
 
-<h2 class="mb-4">
-    <i class="bi bi-people-fill"></i> Группы
-</h2>
+<div class="page-head">
+    <h2>
+        <i class="bi bi-people-fill text-primary me-2"></i>Группы
+    </h2>
+    <div class="text-muted small">Всего: <strong>{{ groups | length }}</strong></div>
+</div>
 
 <div class="row">
-    <div class="col-12 col-md-5 col-lg-4 mb-3">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-plus-circle text-primary"></i>
-                    Добавить группу
-                </h6>
+    {# ============================================================
+       ФОРМА ДОБАВЛЕНИЯ
+       ============================================================ #}
+    <div class="col-12 col-lg-4 mb-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-plus-circle text-primary me-2"></i>Добавить
+                </h5>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('groups.add') }}">
+                <form method="post" action="{{ url_for('groups.add') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="input-group">
-                        <input type="text" name="name" class="form-control no-emoji"
+
+                    <div class="mb-3">
+                        <label class="form-label" for="add_group_name">Название</label>
+                        <input type="text" name="name" id="add_group_name"
+                               class="form-control no-emoji"
                                placeholder="Например, ИСП 21-9" required>
-                        <button class="btn btn-primary" type="submit">
-                            <i class="bi bi-plus-lg"></i>
-                        </button>
                     </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-lg"></i> Добавить
+                    </button>
                 </form>
             </div>
         </div>
     </div>
 
-    <div class="col-12 col-md-7 col-lg-8">
-        <div class="card shadow-sm">
+    {# ============================================================
+       ТАБЛИЦА
+       ============================================================ #}
+    <div class="col-12 col-lg-8">
+        <div class="card">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
+                <table class="table mb-0">
+                    <thead>
                         <tr>
-                            <th style="width: 60px;">ID</th>
+                            <th style="width:70px;">ID</th>
                             <th>Название</th>
-                            <th style="width: 140px;" class="text-center">Расписание</th>
-                            <th class="text-end" style="width: 120px;">Действия</th>
+                            <th style="width:150px;" class="text-center">Расписание</th>
+                            <th style="width:120px;" class="text-end">Действия</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -57,12 +69,17 @@
                         <tr>
                             <td class="text-muted small">#{{ g.id }}</td>
                             <td>
-                                 <form method="POST" action="{{ url_for('groups.edit', gid=g.id) }}"
+                                <form method="post"
+                                      action="{{ url_for('groups.edit', gid=g.id) }}"
+                                      id="groupForm{{ g.id }}"
                                       class="d-flex gap-2 align-items-center">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="text" name="name" class="form-control form-control-sm no-emoji"
+                                    <input type="text" name="name"
+                                           class="form-control form-control-sm no-emoji"
                                            value="{{ g.name }}" required>
-                                    <button type="submit" class="btn btn-sm btn-outline-primary" title="Сохранить">
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-primary"
+                                            data-tooltip="Сохранить">
                                         <i class="bi bi-save"></i>
                                     </button>
                                 </form>
@@ -70,7 +87,7 @@
                             <td class="text-center">
                                 <a href="{{ url_for('schedule.group_schedule', group_id=g.id) }}"
                                    class="btn btn-sm btn-outline-info"
-                                   title="Показать расписание группы">
+                                   data-tooltip="Показать расписание группы">
                                     <i class="bi bi-calendar-week"></i>
                                     <span class="d-none d-md-inline">Расписание</span>
                                 </a>
@@ -78,6 +95,7 @@
                             <td class="text-end">
                                 <a href="{{ url_for('groups.delete', gid=g.id) }}"
                                    class="btn btn-sm btn-outline-danger"
+                                   data-tooltip="Удалить"
                                    onclick="return confirm('Удалить группу «{{ g.name }}»?');">
                                     <i class="bi bi-trash"></i>
                                 </a>
@@ -89,9 +107,10 @@
             </div>
 
             {% if not groups %}
-                <div class="text-center text-muted py-4">
-                    <i class="bi bi-inbox" style="font-size:2rem;"></i>
-                    <p class="mt-2 mb-0">Нет групп</p>
+                <div class="empty">
+                    <div class="empty__icon"><i class="bi bi-inbox"></i></div>
+                    <div class="empty__title">Нет групп</div>
+                    <div class="empty__desc">Добавьте первую через форму слева</div>
                 </div>
             {% endif %}
         </div>

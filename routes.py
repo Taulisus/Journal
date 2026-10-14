@@ -18,7 +18,12 @@ from utils import (
     create_backup,
 )
 from config import Config
-from stats import get_user_weekly_avg, refresh_user_weekly_avg, get_teacher_stats
+from stats import (
+    get_user_weekly_avg,
+    refresh_user_weekly_avg,
+    get_teacher_stats,
+    get_schedule_avg_per_week,
+)
 from activity import (
     log_activity,
     get_recent_activity,
@@ -89,6 +94,11 @@ def _get_week_schedule(uid, monday_str=None):
     Расписание недели для дашборда.
     Если у пользователя есть teacher_id — только его занятия.
     Иначе — все занятия недели.
+
+    Для каждого дня собирает:
+      - 'lessons'          — плоский список (для AJAX и на будущее),
+      - 'lessons_by_pair'  — dict {pair_number: lesson}, чтобы шаблон
+                             мог напрямую доставать пару по номеру 1..7.
     """
     from datetime import datetime, timedelta
 
@@ -124,6 +134,21 @@ def _get_week_schedule(uid, monday_str=None):
         lessons = week.get(ds, [])
         lessons = sorted(lessons, key=lambda l: (l['pair_number'], l['time_start']))
 
+        # Раскладываем занятия по номеру пары (1..7).
+        # Это позволяет шаблону просто итерироваться по range(1, 8)
+        # без вложенных {% for %} — у Jinja2 есть проблема со scoping,
+        # из-за которой {% set %} внутри вложенного цикла не «протекает»
+        # во внешний scope.
+        lessons_by_pair = {}
+        for l in lessons:
+            try:
+                pair_num = int(l['pair_number'])
+            except (TypeError, ValueError, KeyError):
+                continue
+            # На одну пару должно быть одно занятие; если вдруг несколько —
+            # берём первое (обычно так и есть).
+            lessons_by_pair.setdefault(pair_num, l)
+
         days.append({
             'date': ds,
             'date_label': f"{d.day:02d}.{d.month:02d}",
@@ -131,6 +156,7 @@ def _get_week_schedule(uid, monday_str=None):
             'day_full': ScheduleLesson.DAY_NAMES_FULL[i],
             'is_today': d == datetime.now().date(),
             'lessons': lessons,
+            'lessons_by_pair': lessons_by_pair,
         })
 
     return {
@@ -142,6 +168,124 @@ def _get_week_schedule(uid, monday_str=None):
     }
 
 
+def _find_next_lesson(teacher_id):
+    """
+    Находит ближайшую пару преподавателя (сегодня, начиная с текущего времени).
+    Если сегодня больше нет — ищет в следующие 7 дней.
+    Возвращает dict или None.
+
+    Дополнительно ищет journal_gsid — id журнала (group_subjects.id),
+    соответствующего этой паре (по group_id + subject_id), чтобы можно
+    было открыть журнал прямо из виджета.
+    """
+    from datetime import datetime, timedelta, time as _time
+
+    now = datetime.now()
+    today = now.date()
+    now_hhmm = now.strftime('%H:%M')
+
+    for offset in range(0, 8):
+        d = today + timedelta(days=offset)
+        date_str = d.isoformat()
+
+        lessons = ScheduleLesson.get_for_date(date_str, teacher_id=teacher_id)
+        if not lessons:
+            continue
+
+        def _key(l):
+            t = (l['time_start'] or '00:00')[:5]
+            return (l['pair_number'] or 0, t)
+
+        lessons = sorted(lessons, key=_key)
+
+        for l in lessons:
+            ts = (l['time_start'] or '')[:5]
+            te = (l['time_end'] or '')[:5]
+            if not ts:
+                continue
+
+            if offset == 0:
+                if te and te < now_hhmm:
+                    continue
+                is_now = bool(te) and ts <= now_hhmm <= te
+                try:
+                    h, m = ts.split(':')
+                    start_dt = datetime.combine(today, _time(int(h), int(m)))
+                    minutes_until = int((start_dt - now).total_seconds() // 60)
+                except (ValueError, TypeError):
+                    minutes_until = None
+
+                return {
+                    'date': date_str,
+                    'time_start': ts,
+                    'time_end': te,
+                    'pair_number': l['pair_number'],
+                    'group_id': l['group_id'],
+                    'group_name': l['group_name'],
+                    'subject_id': l['subject_id'],
+                    'subject_name': l['subject_name'],
+                    'room_name': l['room_resolved_name'],
+                    'journal_gsid': _find_journal_gsid(l['group_id'], l['subject_id']),
+                    'is_today': True,
+                    'is_now': is_now,
+                    'minutes_until': minutes_until,
+                }
+            else:
+                return {
+                    'date': date_str,
+                    'time_start': ts,
+                    'time_end': te,
+                    'pair_number': l['pair_number'],
+                    'group_id': l['group_id'],
+                    'group_name': l['group_name'],
+                    'subject_id': l['subject_id'],
+                    'subject_name': l['subject_name'],
+                    'room_name': l['room_resolved_name'],
+                    'journal_gsid': _find_journal_gsid(l['group_id'], l['subject_id']),
+                    'is_today': False,
+                    'is_now': False,
+                    'minutes_until': None,
+                }
+
+    return None
+
+
+def _find_journal_gsid(group_id, subject_id):
+    """
+    Находит id журнала (group_subjects.id) для пары (группа, предмет).
+    Возвращает id или None.
+    """
+    if not group_id or not subject_id:
+        return None
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM group_subjects "
+            "WHERE group_id = ? AND subject_id = ? LIMIT 1",
+            (group_id, subject_id),
+        ).fetchone()
+        return row['id'] if row else None
+    except Exception:
+        return None
+
+def _pick_greeting_name(full_name, username):
+    """
+    Из ФИО достаём только имя.
+    """
+    if full_name:
+        parts = full_name.split()
+        if len(parts) >= 3:
+            return parts[1]
+        if len(parts) == 2:
+            second = parts[1]
+            second_low = second.lower()
+            if second_low.endswith(('ович', 'евич', 'ич', 'овна', 'евна', 'ична')):
+                return parts[0]
+            return second
+        return parts[0]
+    return username or 'пользователь'
+
+
 # ============================================================
 #                 ГЛАВНАЯ
 # ============================================================
@@ -150,23 +294,121 @@ def _get_week_schedule(uid, monday_str=None):
 @login_required
 def dashboard():
     uid = session['user_id']
+    is_admin = Permission.has_permission(uid, 'manage_users')
 
-    groups_count = len(Group.get_all())
-    subjects_count = len(Subject.get_all())
-    students_count = len(Student.get_all())
-    pairs_count = len(GroupSubject.get_all())
+    current_semester = Config.get_current_semester()
+    teacher_id = User.get_teacher_id(uid)
 
-    weekly_avg = get_user_weekly_avg(uid, weeks=4)
+    # --- Приветствие ---
+    profile = User.get_profile(uid)
+    full_name = (profile.get('full_name') or '').strip() if profile else ''
+    username = (profile.get('username') or '') if profile else ''
+    greeting_name = _pick_greeting_name(full_name, username)
 
-    activity = None
-    if Permission.has_permission(uid, 'manage_users'):
-        activity = get_recent_activity(limit=20)
+    now = datetime.now()
+    hour = now.hour
+    if 5 <= hour < 12:
+        greeting_prefix = 'Доброе утро'
+    elif 12 <= hour < 18:
+        greeting_prefix = 'Добрый день'
+    elif 18 <= hour < 23:
+        greeting_prefix = 'Добрый вечер'
+    else:
+        greeting_prefix = 'Доброй ночи'
 
-    teacher_stats = None
-    has_journals = len(TeacherJournal.get_user_journals(uid)) > 0
-    if has_journals:
-        teacher_stats = get_teacher_stats(uid)
+    _months = [
+        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+    ]
+    _wdays = ['понедельник', 'вторник', 'среда', 'четверг',
+              'пятница', 'суббота', 'воскресенье']
+    today_str = f"{_wdays[now.weekday()]}, {now.day} {_months[now.month - 1]} {now.year}"
 
+    # --- Плитки ---
+    tiles = []
+
+    if is_admin:
+        tiles.append({
+            'key': 'groups', 'title': 'Группы',
+            'value': len(Group.get_all()),
+            'icon': 'bi-people-fill', 'color': 'primary',
+            'url': url_for('groups.index'),
+        })
+        tiles.append({
+            'key': 'subjects', 'title': 'Предметы',
+            'value': len(Subject.get_all()),
+            'icon': 'bi-book-fill', 'color': 'success',
+            'url': url_for('subjects.index'),
+        })
+        tiles.append({
+            'key': 'students', 'title': 'Студенты',
+            'value': len(Student.get_all()),
+            'icon': 'bi-person-lines-fill', 'color': 'info',
+            'url': url_for('students.index'),
+        })
+        tiles.append({
+            'key': 'journals', 'title': 'Журналы',
+            'value': len(GroupSubject.get_all()),
+            'icon': 'bi-journal-text', 'color': 'warning',
+            'url': url_for('journals.index'),
+        })
+
+        schedule_stat = get_schedule_avg_per_week(teacher_id=teacher_id, weeks=4)
+        tiles.append({
+            'key': 'schedule', 'title': 'Расписание',
+            'value': schedule_stat['avg'], 'suffix': '/нед',
+            'icon': 'bi-calendar-week', 'color': 'purple',
+            'url': url_for('schedule.index'),
+        })
+
+        tiles.append({
+            'key': 'teachers', 'title': 'Преподаватели',
+            'value': len(Teacher.get_all(active_only=True)),
+            'icon': 'bi-person-badge', 'color': 'teal',
+            'url': url_for('schedule.teachers_list'),
+        })
+        tiles.append({
+            'key': 'rooms', 'title': 'Аудитории',
+            'value': len(Room.get_all()),
+            'icon': 'bi-door-open', 'color': 'pink',
+            'url': url_for('schedule.rooms_list'),
+        })
+        tiles.append({
+            'key': 'users', 'title': 'Пользователи',
+            'value': len(User.get_all()),
+            'icon': 'bi-shield-lock', 'color': 'orange',
+            'url': url_for('users.index'),
+        })
+    else:
+        my_journals = TeacherJournal.get_user_journals(uid)
+        tiles.append({
+            'key': 'my_journals', 'title': 'Мои журналы',
+            'value': len(my_journals),
+            'icon': 'bi-journal-bookmark-fill', 'color': 'primary',
+            'url': url_for('journals.index'),
+        })
+
+        my_hours = get_teacher_stats(uid, semester=current_semester)
+        if my_hours['has_data'] and my_hours['total_planned'] > 0:
+            hours_value = f"{my_hours['total_actual']} / {my_hours['total_planned']}"
+        else:
+            hours_value = '—'
+        tiles.append({
+            'key': 'my_hours', 'title': 'Мои часы',
+            'value': hours_value, 'suffix': 'ч',
+            'icon': 'bi-clock-history', 'color': 'success',
+            'url': url_for('main.teacher_hours_stats'),
+        })
+
+        schedule_stat = get_schedule_avg_per_week(teacher_id=teacher_id, weeks=4)
+        tiles.append({
+            'key': 'schedule', 'title': 'Расписание',
+            'value': schedule_stat['avg'], 'suffix': '/нед',
+            'icon': 'bi-calendar-week', 'color': 'info',
+            'url': url_for('schedule.index'),
+        })
+
+    # --- Расписание недели ---
     week_param = request.args.get('week')
     schedule_week = None
     try:
@@ -174,24 +416,140 @@ def dashboard():
     except Exception as e:
         print(f"[dashboard] Не удалось получить расписание: {e}")
 
-    current_user_teacher_id = None
-    try:
-        current_user_teacher_id = User.get_teacher_id(uid)
-    except Exception:
-        pass
+    # --- Ближайшая пара ---
+    next_lesson = None
+    if teacher_id:
+        try:
+            next_lesson = _find_next_lesson(teacher_id)
+        except Exception as e:
+            print(f"[dashboard] next_lesson: {e}")
+
+    # --- Мои часы ---
+    teacher_stats = None
+    if is_admin:
+        if teacher_id:
+            teacher_stats = get_teacher_stats(uid, semester=current_semester)
+    else:
+        teacher_stats = get_teacher_stats(uid, semester=current_semester)
+
+    if teacher_stats and not teacher_stats['has_data']:
+        teacher_stats = None
+
+    # --- Данные для круговой диаграммы: разбивка проведённых часов по журналам ---
+    # Цвет сектора = цвет прогресс-бара в «Моих часах» (по проценту выполнения)
+    chart_data = []
+    if teacher_stats and teacher_stats.get('has_data'):
+        for item in teacher_stats['items']:
+            actual = item['actual_total']
+            if actual <= 0:
+                continue
+
+            pct = item['percent']
+            if pct >= 100:
+                color = '#10b981'   # success — зелёный
+            elif pct >= 50:
+                color = '#4f46e5'   # primary — индиго
+            elif pct >= 25:
+                color = '#f59e0b'   # warning — жёлтый
+            else:
+                color = '#ef4444'   # danger — красный
+
+            chart_data.append({
+                'label': f"{item['group_name']} · {item['subject_name']}",
+                'value': actual,
+                'color': color,
+                'planned': item['planned_total'],
+                'percent': pct,
+            })
+
+        # Добавляем серый сектор «Осталось»
+        if teacher_stats['total_remaining'] > 0:
+            chart_data.append({
+                'label': 'Осталось',
+                'value': teacher_stats['total_remaining'],
+                'color': '#cbd5e1',
+                'planned': 0,
+                'percent': 0,
+            })
+
+    # --- Последние действия ---
+    activity = None
+    if is_admin:
+        activity = get_recent_activity(limit=10)
+
+    # --- Мини-график посещаемости (админ) ---
+    attendance_stats = None
+    if is_admin:
+        try:
+            from stats import get_overall_attendance_stats
+            attendance_stats = get_overall_attendance_stats(weeks=8)
+        except Exception as e:
+            print(f"[dashboard] attendance_stats: {e}")
 
     return render_template(
         'dashboard.html',
-        groups_count=groups_count,
-        subjects_count=subjects_count,
-        students_count=students_count,
-        pairs_count=pairs_count,
-        weekly_avg=weekly_avg,
-        activity=activity,
-        teacher_stats=teacher_stats,
+        tiles=tiles,
+        is_admin=is_admin,
         schedule_week=schedule_week,
-        current_user_teacher_id=current_user_teacher_id,
+        teacher_stats=teacher_stats,
+        chart_data=chart_data,
+        activity=activity,
+        attendance_stats=attendance_stats,
+        next_lesson=next_lesson,
+        current_semester=current_semester,
+        current_user_teacher_id=teacher_id,
+        greeting_prefix=greeting_prefix,
+        greeting_name=greeting_name,
+        today_str=today_str,
     )
+
+@main_bp.route('/dashboard/week')
+@login_required
+def dashboard_week():
+    """
+    JSON для AJAX-перелистывания недель на дашборде.
+    Возвращает ту же структуру, что и schedule_week в dashboard().
+    """
+    uid = session['user_id']
+    monday_str = (request.args.get('week') or '').strip() or None
+
+    try:
+        data = _get_week_schedule(uid, monday_str)
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+    days = []
+    for d in data['days']:
+        days.append({
+            'date': d['date'],
+            'date_label': d['date_label'],
+            'day_short': d['day_short'],
+            'day_full': d['day_full'],
+            'is_today': d['is_today'],
+            'lessons': [
+                {
+                    'id': l['id'],
+                    'pair_number': l['pair_number'],
+                    'time_start': l['time_start'],
+                    'time_end': l['time_end'],
+                    'group_id': l['group_id'],
+                    'group_name': l['group_name'],
+                    'subject_name': l['subject_name'],
+                    'room_resolved_name': l['room_resolved_name'],
+                    'teacher_short_name': l['teacher_short_name'],
+                }
+                for l in d['lessons']
+            ],
+        })
+
+    return jsonify({
+        'success': True,
+        'week_start': data['week_start'],
+        'prev_week': data['prev_week'],
+        'next_week': data['next_week'],
+        'has_any': data['has_any'],
+        'days': days,
+    })
 
 
 @main_bp.route('/dashboard/refresh-stats', methods=['POST'])

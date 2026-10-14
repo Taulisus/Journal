@@ -1,10 +1,22 @@
 {% extends "base.html" %}
 
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Профиль' if is_self else ('Пользователь: ' ~ (profile_user.full_name or profile_user.username)), None),
+    ]) }}
+{% endblock %}
+
 {% block content %}
 
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-    <h2 class="mb-0">
-        <i class="bi bi-person-circle"></i>
+{# ============================================================
+   ЗАГОЛОВОК
+   ============================================================ #}
+<div class="page-head">
+    <h2>
+        <i class="bi bi-person-circle text-primary me-2"></i>
         {% if is_self %}
             Мой профиль
         {% else %}
@@ -12,23 +24,29 @@
         {% endif %}
     </h2>
     {% if not is_self %}
-        <a href="{{ url_for('users.index') }}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left"></i> Назад к пользователям
-        </a>
+        <div class="page-head__actions">
+            <a href="{{ url_for('users.index') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> К пользователям
+            </a>
+        </div>
     {% endif %}
 </div>
 
-<div class="row g-3">
+<div class="row">
 
-    <!-- ЛЕВАЯ КОЛОНКА -->
-    <div class="col-12 col-lg-4">
+    {# ============================================================
+       ЛЕВАЯ КОЛОНКА: карточка + роли + права
+       ============================================================ #}
+    <div class="col-12 col-lg-4 mb-3">
 
-        <div class="card shadow-sm mb-3">
+        {# ---- Карточка пользователя ---- #}
+        <div class="card mb-3">
             <div class="card-body text-center">
-                <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3"
-                     style="width:96px; height:96px; font-size:2.5rem; font-weight:700;">
-                    {{ (profile_user.full_name or profile_user.username)[0]|upper }}
-                </div>
+                <span class="app-avatar app-avatar--lg"
+                      style="width:96px;height:96px;font-size:2.5rem;display:inline-grid;margin-bottom:12px;"
+                      data-avatar="{{ profile_user.full_name or profile_user.username }}">
+                    {{ (profile_user.full_name or profile_user.username)[0] | upper }}
+                </span>
                 <h5 class="mb-1">{{ profile_user.full_name or 'Без имени' }}</h5>
                 <div class="text-muted small">
                     <i class="bi bi-at"></i> {{ profile_user.username }}
@@ -39,37 +57,37 @@
                     </div>
                 {% endif %}
             </div>
-
             {% if positions %}
-            <div class="card-footer bg-white">
-                <div class="small text-muted mb-1">Должности:</div>
-                {% for p in positions %}
-                    <span class="badge bg-primary me-1 mb-1">{{ p.name }}</span>
-                {% endfor %}
+            <div class="card-footer">
+                <div class="small text-muted mb-2">Должности:</div>
+                <div class="d-flex flex-wrap gap-1">
+                    {% for p in positions %}
+                        <span class="badge bg-primary">{{ p.name }}</span>
+                    {% endfor %}
+                </div>
             </div>
             {% endif %}
         </div>
 
-        <!-- Права от ролей -->
+        {# ---- Права от ролей ---- #}
         {% if positions_with_perms %}
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-shield-check text-primary"></i>
-                    Права от ролей
-                </h6>
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-shield-check text-primary me-2"></i>Права от ролей
+                </h5>
             </div>
             <div class="card-body">
                 {% for item in positions_with_perms %}
-                    <div class="mb-3">
+                    <div class="{% if not loop.last %}mb-3{% endif %}">
                         <div class="fw-semibold small mb-2">
-                            <i class="bi bi-person-badge text-primary"></i>
+                            <i class="bi bi-person-badge text-primary me-1"></i>
                             {{ item.position.name }}
                         </div>
                         {% if item.permission_codes %}
                             <div class="d-flex flex-wrap gap-1">
                                 {% for code in item.permission_codes %}
-                                    <span class="badge bg-light text-dark border small"
+                                    <span class="badge bg-light"
                                           title="{{ code }}">
                                         {{ perms_dict.get(code, code) }}
                                     </span>
@@ -86,20 +104,18 @@
         </div>
         {% endif %}
 
-        <!-- Личные права -->
+        {# ---- Личные права ---- #}
         {% if perms_personal %}
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-person-badge text-info"></i>
-                    Личные права
-                </h6>
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-person-badge text-info me-2"></i>Личные права
+                </h5>
             </div>
-            <div class="card-body p-2">
+            <div class="card-body">
                 <div class="d-flex flex-wrap gap-1">
                     {% for code in perms_personal %}
-                        <span class="badge bg-info text-dark small"
-                              title="{{ code }}">
+                        <span class="badge bg-info" title="{{ code }}">
                             {{ perms_dict.get(code, code) }}
                         </span>
                     {% endfor %}
@@ -110,161 +126,170 @@
 
     </div>
 
-    <!-- ПРАВАЯ КОЛОНКА -->
+    {# ============================================================
+       ПРАВАЯ КОЛОНКА: формы и активность
+       ============================================================ #}
     <div class="col-12 col-lg-8">
 
+        {# ---- Формы (только для своего профиля) ---- #}
         {% if is_self %}
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-pencil-square text-primary"></i>
-                    Личная информация
-                </h6>
+
+        {# --- Личная информация --- #}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-pencil-square text-primary me-2"></i>Личная информация
+                </h5>
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('main.profile_edit') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-                    <div class="row g-3">
-                        <div class="col-12 col-md-6">
-                            <label class="form-label small mb-1">Логин</label>
-                            <input type="text" name="username" class="form-control"
+                    <div class="row">
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label" for="profileUsername">Логин</label>
+                            <input type="text" name="username" id="profileUsername"
+                                   class="form-control no-emoji"
                                    value="{{ profile_user.username }}"
                                    minlength="3" required>
                             <div class="form-text">Не короче 3 символов</div>
                         </div>
 
-                        <div class="col-12 col-md-6">
-                            <label class="form-label small mb-1">Телефон</label>
-                            <input type="text" name="phone" class="form-control phone-input"
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label" for="profilePhone">Телефон</label>
+                            <input type="text" name="phone" id="profilePhone"
+                                   class="form-control phone-input"
                                    value="{{ profile_user.phone or '' }}"
                                    placeholder="Только цифры, до 11 символов">
                         </div>
 
-                        <div class="col-12">
-                            <label class="form-label small mb-1">ФИО</label>
-                            <input type="text" name="full_name" class="form-control no-emoji"
+                        <div class="col-12 mb-3">
+                            <label class="form-label" for="profileFullName">ФИО</label>
+                            <input type="text" name="full_name" id="profileFullName"
+                                   class="form-control no-emoji"
                                    value="{{ profile_user.full_name or '' }}"
                                    placeholder="Иванов Иван Иванович">
                         </div>
                     </div>
 
-                    <div class="mt-3">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-save"></i> Сохранить изменения
-                        </button>
-                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Сохранить изменения
+                    </button>
                 </form>
             </div>
         </div>
 
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-key text-warning"></i>
-                    Смена пароля
-                </h6>
+        {# --- Смена пароля --- #}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-key text-warning me-2"></i>Смена пароля
+                </h5>
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('main.profile_change_password') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label small mb-1">Текущий пароль</label>
-                            <input type="password" name="current_password" class="form-control" required>
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <label class="form-label" for="currentPassword">Текущий пароль</label>
+                            <input type="password" name="current_password"
+                                   id="currentPassword" class="form-control" required>
                         </div>
 
-                        <div class="col-12 col-md-6">
-                            <label class="form-label small mb-1">Новый пароль</label>
-                            <input type="password" name="new_password" class="form-control"
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label" for="newPassword">Новый пароль</label>
+                            <input type="password" name="new_password"
+                                   id="newPassword" class="form-control"
                                    minlength="8" required>
                             <div class="form-text">Не короче 8 символов</div>
                         </div>
 
-                        <div class="col-12 col-md-6">
-                            <label class="form-label small mb-1">Повторите новый пароль</label>
-                            <input type="password" name="new_password2" class="form-control"
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label" for="newPassword2">Повторите новый пароль</label>
+                            <input type="password" name="new_password2"
+                                   id="newPassword2" class="form-control"
                                    minlength="8" required>
                         </div>
                     </div>
 
-                    <div class="mt-3">
-                        <button type="submit" class="btn btn-warning">
-                            <i class="bi bi-key"></i> Сменить пароль
-                        </button>
-                    </div>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-key"></i> Сменить пароль
+                    </button>
                 </form>
             </div>
         </div>
+
         {% endif %}
 
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-graph-up-arrow text-primary"></i>
-                    Активность
-                </h6>
+        {# ---- Активность ---- #}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-graph-up-arrow text-primary me-2"></i>Активность
+                </h5>
             </div>
             <div class="card-body">
-                <div class="row g-3 text-center">
-
-                    <div class="col-6 col-md-4">
-                        <div class="border rounded p-3">
-                            <div class="fs-4 fw-bold">{{ journals|length }}</div>
+                <div class="row text-center">
+                    <div class="col-6 col-md-4 mb-3">
+                        <div class="border rounded p-3" style="border-color:var(--border)!important;">
+                            <div style="font-size:1.5rem;font-weight:700;">
+                                {{ journals|length }}
+                            </div>
                             <small class="text-muted">журналов</small>
                         </div>
                     </div>
 
-                    <div class="col-6 col-md-4">
-                        <div class="border rounded p-3">
+                    <div class="col-6 col-md-4 mb-3">
+                        <div class="border rounded p-3" style="border-color:var(--border)!important;">
                             {% if weekly_avg and weekly_avg.has_data %}
-                                <div class="fs-4 fw-bold">{{ weekly_avg.avg }}</div>
+                                <div style="font-size:1.5rem;font-weight:700;">
+                                    {{ weekly_avg.avg }}
+                                </div>
                                 <small class="text-muted">пар в неделю</small>
                             {% else %}
-                                <div class="fs-4 fw-bold text-muted">—</div>
+                                <div style="font-size:1.5rem;font-weight:700;color:var(--text-muted);">—</div>
                                 <small class="text-muted">пар в неделю</small>
                             {% endif %}
                         </div>
                     </div>
 
-                    <div class="col-12 col-md-4">
-                        <div class="border rounded p-3">
-                            <div class="fs-4 fw-bold">{{ recent_activity|length }}</div>
+                    <div class="col-12 col-md-4 mb-3">
+                        <div class="border rounded p-3" style="border-color:var(--border)!important;">
+                            <div style="font-size:1.5rem;font-weight:700;">
+                                {{ recent_activity|length }}
+                            </div>
                             <small class="text-muted">последних действий</small>
                         </div>
                     </div>
-
                 </div>
 
                 {% if journals %}
-                <div class="mt-3">
+                <div class="d-flex gap-2 flex-wrap">
                     <a href="{{ url_for('main.teacher_hours_stats') }}" class="btn btn-outline-primary btn-sm">
-                        <i class="bi bi-clock-history"></i>
-                        Мои часы
+                        <i class="bi bi-clock-history"></i> Мои часы
                     </a>
                     <a href="{{ url_for('journals.index') }}" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-journal-text"></i>
-                        Мои журналы
+                        <i class="bi bi-journal-text"></i> Мои журналы
                     </a>
                 </div>
                 {% endif %}
             </div>
         </div>
 
+        {# ---- Последние действия ---- #}
         {% if recent_activity %}
-        <div class="card shadow-sm">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">
-                    <i class="bi bi-activity text-danger"></i>
-                    Последние действия
-                </h6>
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-activity text-danger me-2"></i>Последние действия
+                </h5>
                 <span class="badge bg-secondary">{{ recent_activity|length }}</span>
             </div>
             <div class="list-group list-group-flush">
                 {% for a in recent_activity %}
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between gap-2">
+                    <div class="list-group-item" style="display:block;">
+                        <div class="d-flex justify-content-between gap-2 flex-wrap">
                             <div class="small">
                                 <i class="bi bi-dot"></i>
                                 {{ a.description or a.action }}
@@ -278,7 +303,6 @@
         {% endif %}
 
     </div>
-
 </div>
 
 {% endblock %}

@@ -4,7 +4,9 @@
 Функции:
   - get_user_weekly_avg(user_id, weeks=4, force=False)   — среднее число пар в неделю
   - refresh_user_weekly_avg(user_id, weeks=4)             — принудительный пересчёт
-  - get_teacher_stats(user_id)                            — план/факт/осталось по журналам
+  - get_teacher_stats(user_id, semester=None)             — план/факт/осталось по журналам
+  - get_schedule_avg_per_week(teacher_id=None, weeks=4)   — среднее занятий в неделю
+  - get_overall_attendance_stats(weeks=8)                 — сводная посещаемость
   - is_cache_stale(user_id, stat_key, max_age_minutes=60) — устарел ли кэш
 """
 
@@ -99,15 +101,11 @@ def _collect_user_lessons(user_id, weeks=4):
     """
     Возвращает список (date, time_interval) — все уникальные занятия
     из всех журналов пользователя за последние `weeks` недель.
-
-    Считает по журналам, где пользователь — преподаватель
-    (teacher_journals).
     """
     journals = TeacherJournal.get_user_journals(user_id)
     if not journals:
         return []
 
-    # Границы диапазона: последние N недель (включая текущую)
     today = datetime.now().date()
     start_date = today - timedelta(weeks=weeks)
     start_str = start_date.isoformat()
@@ -120,7 +118,6 @@ def _collect_user_lessons(user_id, weeks=4):
             gs_id = j['id']
             table = JournalManager.get_table_name(gs_id)
 
-            # Проверяем, существует ли таблица
             exists = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                 (table,)
@@ -128,7 +125,6 @@ def _collect_user_lessons(user_id, weeks=4):
             if not exists:
                 continue
 
-            # Уникальные пары (date, time_interval) за период
             rows = conn.execute(
                 f"SELECT DISTINCT date, time_interval FROM {table} "
                 f"WHERE date >= ? ORDER BY date",
@@ -149,16 +145,7 @@ def _collect_user_lessons(user_id, weeks=4):
 def refresh_user_weekly_avg(user_id, weeks=4):
     """
     Пересчитывает среднее число пар в неделю для пользователя
-    и записывает в кэш. Возвращает:
-      {
-        'avg': float,               # среднее число пар в неделю
-        'total_lessons': int,       # всего пар за период
-        'weeks': int,               # число недель
-        'period_start': str,        # YYYY-MM-DD
-        'period_end': str,          # YYYY-MM-DD
-        'updated_at': str,          # ISO timestamp
-        'has_data': bool,           # есть ли хоть одна пара
-      }
+    и записывает в кэш.
     """
     lessons = _collect_user_lessons(user_id, weeks=weeks)
 
@@ -185,38 +172,68 @@ def refresh_user_weekly_avg(user_id, weeks=4):
 def get_user_weekly_avg(user_id, weeks=4, force=False):
     """
     Возвращает кэшированное среднее число пар в неделю.
-    Если кэша нет или он старше 60 минут (или force=True) — пересчитывает.
     """
     if force or is_cache_stale(user_id, 'weekly_avg', max_age_minutes=60):
         return refresh_user_weekly_avg(user_id, weeks=weeks)
 
     value, _ = _cache_get(user_id, 'weekly_avg')
     if value is None:
-        # кэш был пустой/битый — пересчитываем
         return refresh_user_weekly_avg(user_id, weeks=weeks)
 
     return value
 
 
 # ============================================================
+#                 СРЕДНЕЕ ЗАНЯТИЙ В НЕДЕЛЮ (по расписанию)
+# ============================================================
+
+def get_schedule_avg_per_week(teacher_id=None, weeks=4):
+    """
+    Среднее число занятий в неделю за последние `weeks` недель.
+    teacher_id=None — по всем занятиям в БД.
+    """
+    today = datetime.now().date()
+    monday = today - timedelta(days=today.weekday())
+    start = monday - timedelta(weeks=weeks - 1)
+    start_str = start.isoformat()
+    end_str = today.isoformat()
+
+    conn = get_db()
+    try:
+        if teacher_id:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM schedule_lessons "
+                "WHERE date >= ? AND date <= ? AND teacher_id = ?",
+                (start_str, end_str, teacher_id)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM schedule_lessons "
+                "WHERE date >= ? AND date <= ?",
+                (start_str, end_str)
+            ).fetchone()
+    finally:
+        conn.close()
+
+    total = row['c'] if row else 0
+    avg = round(total / weeks, 1) if weeks > 0 else 0.0
+
+    return {
+        'avg': avg,
+        'total': total,
+        'weeks': weeks,
+        'has_data': total > 0,
+    }
+
+
+# ============================================================
 #                 СТАТИСТИКА ПРЕПОДАВАТЕЛЯ
 # ============================================================
 
-def get_teacher_stats(user_id):
+def get_teacher_stats(user_id, semester=None):
     """
-    Для каждого журнала пользователя и каждого семестра считает:
-      - план (из teacher_hours, fallback — group_subject_hours),
-      - факт (JournalManager.get_conducted_hours),
-      - осталось (план - факт).
-
-    Возвращает:
-      {
-        'items': [ {...}, ... ],
-        'total_planned': int,
-        'total_actual': int,
-        'total_remaining': int,
-        'has_data': bool,
-      }
+    Для каждого журнала пользователя и каждого семестра считает план/факт.
+    semester — если задан, только этот семестр.
     """
     journals = TeacherJournal.get_user_journals(user_id)
     items = []
@@ -228,8 +245,12 @@ def get_teacher_stats(user_id):
         gs_id = j['id']
         semesters = GroupSubject.get_semesters(gs_id)
 
+        if semester is not None:
+            semesters = [s for s in semesters if s == semester]
+            if not semesters:
+                continue
+
         for sem in semesters:
-            # План: сначала teacher_hours, если нет — group_subject_hours
             planned_row = _get_planned_hours(user_id, gs_id, sem)
             plan_total = (
                 planned_row.get('lecture_hours', 0)
@@ -238,7 +259,6 @@ def get_teacher_stats(user_id):
                 + planned_row.get('exam_hours', 0)
             )
 
-            # Факт
             actual = JournalManager.get_conducted_hours(gs_id, sem)
             actual_total = actual.get('total', 0)
 
@@ -282,11 +302,7 @@ def get_teacher_stats(user_id):
 
 def _get_planned_hours(user_id, gs_id, semester):
     """
-    Возвращает план часов для преподавателя:
-      - если есть запись в teacher_hours — берём её,
-      - иначе fallback на group_subject_hours.
-    Возвращает dict с ключами lecture_hours / practice_hours /
-    independent_hours / exam_hours.
+    План часов: teacher_hours или fallback на group_subject_hours.
     """
     from models import TeacherHours
 
@@ -300,7 +316,6 @@ def _get_planned_hours(user_id, gs_id, semester):
             'exam_hours': d.get('exam_hours', 0),
         }
 
-    # Fallback: общий план пары (group_subject_hours)
     gh = GroupSubject.get_hours(gs_id, semester)
     if isinstance(gh, dict):
         return {
@@ -315,4 +330,111 @@ def _get_planned_hours(user_id, gs_id, semester):
         'practice_hours': 0,
         'independent_hours': 0,
         'exam_hours': 0,
+    }
+
+
+# ============================================================
+#                 МИНИ-ГРАФИК ПОСЕЩАЕМОСТИ (админ)
+# ============================================================
+def get_overall_attendance_stats(weeks=8):
+    """
+    Сводная статистика посещаемости по всем журналам за последние N недель.
+
+    Защита: некоторые таблицы journal_* могут не иметь колонок date/attendance
+    (битые, осиротевшие, служебные) — их пропускаем.
+    """
+    from datetime import date, timedelta
+
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    start = monday - timedelta(weeks=weeks - 1)
+    start_str = start.isoformat()
+
+    conn = get_db()
+    tables = conn.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name LIKE 'journal_%'"
+    ).fetchall()
+
+    present = 0
+    absent = 0
+    total = 0
+    weekly = {}
+    skipped = []
+
+    for row in tables:
+        table = row['name']
+
+        # --- Проверка: есть ли в таблице нужные колонки ---
+        try:
+            cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        except Exception as e:
+            skipped.append((table, f"PRAGMA error: {e}"))
+            continue
+
+        col_names = {c['name'] for c in cols}
+        if not {'date', 'attendance'}.issubset(col_names):
+            skipped.append((table, "нет колонок date/attendance"))
+            continue
+
+        # --- Читаем отметки ---
+        try:
+            marks = conn.execute(
+                f"SELECT date, attendance FROM {table} WHERE date >= ?",
+                (start_str,)
+            ).fetchall()
+        except Exception as e:
+            skipped.append((table, f"SELECT error: {e}"))
+            continue
+
+        for m in marks:
+            d = m['date']
+            att = m['attendance']
+            if att not in ('present', 'absent'):
+                continue
+
+            total += 1
+            if att == 'present':
+                present += 1
+            else:
+                absent += 1
+
+            try:
+                dt = datetime.strptime(d, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                continue
+            wk_monday = dt - timedelta(days=dt.weekday())
+            key = wk_monday.isoformat()
+            if key not in weekly:
+                weekly[key] = {'present': 0, 'absent': 0, 'monday': wk_monday}
+            if att == 'present':
+                weekly[key]['present'] += 1
+            else:
+                weekly[key]['absent'] += 1
+
+    if skipped:
+        print(f"[stats] Пропущено битых таблиц: {len(skipped)}")
+        for t, reason in skipped[:10]:
+            print(f"    {t}: {reason}")
+
+    weekly_list = []
+    for i in range(weeks):
+        wk = start + timedelta(weeks=i)
+        key = wk.isoformat()
+        data = weekly.get(key, {'present': 0, 'absent': 0})
+        weekly_list.append({
+            'label': wk.strftime('%d.%m'),
+            'present': data['present'],
+            'absent': data['absent'],
+        })
+
+    present_percent = round(present / total * 100, 1) if total > 0 else 0.0
+
+    return {
+        'total_marks': total,
+        'present': present,
+        'absent': absent,
+        'present_percent': present_percent,
+        'weekly': weekly_list,
+        'has_data': total > 0,
     }

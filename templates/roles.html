@@ -2,54 +2,58 @@
 
 {% block content %}
 
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-    <h2 class="mb-0">
-        <i class="bi bi-shield-lock"></i>
-        Роли и права доступа
+{# ============================================================
+   ЗАГОЛОВОК
+   ============================================================ #}
+<div class="page-head">
+    <h2>
+        <i class="bi bi-shield-check text-primary me-2"></i>Роли и права доступа
     </h2>
-    <div class="text-muted small">
-        Всего ролей: <strong>{{ roles|length }}</strong>
-    </div>
+    <div class="text-muted small">Всего ролей: <strong>{{ roles|length }}</strong></div>
 </div>
 
 <div class="alert alert-info">
-    <i class="bi bi-info-circle"></i>
-    Права роли даются <strong>автоматически</strong> всем пользователям с этой ролью.
-    Итоговые права пользователя = права от ролей + личные права.
+    <i class="bi bi-info-circle-fill"></i>
+    <span>
+        Права роли даются <strong>автоматически</strong> всем пользователям с этой ролью.
+        Итоговые права пользователя = права от ролей + личные права.
+    </span>
 </div>
 
-<div class="row g-3">
+<div class="row">
     {% for role in roles %}
-    <div class="col-12 col-lg-6">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+    <div class="col-12 col-lg-6 mb-3">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
                 <div>
-                    <h5 class="mb-0">
-                        <i class="bi bi-person-badge"></i>
+                    <h5 class="mb-1">
+                        <i class="bi bi-person-badge text-primary me-2"></i>
                         {{ role.name }}
                         <small class="text-muted">({{ role.code }})</small>
                     </h5>
-                    <small class="text-muted">
+                    <div class="text-muted small">
                         Пользователей с этой ролью:
                         <strong>{{ role.users_count }}</strong>
-                    </small>
+                    </div>
                 </div>
-                <span class="badge bg-primary">
-                    {{ role.permissions|length }} прав
-                </span>
+                <span class="badge bg-primary">{{ role.permissions|length }} прав</span>
             </div>
-            <div class="card-body">
 
+            <div class="card-body">
                 {% if role.code == 'admin' %}
                     <div class="alert alert-warning small mb-3">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        Роль «Администратор» имеет все права. Изменения не рекомендуются.
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span>
+                            Роль «Администратор» имеет все права.
+                            Изменения не рекомендуются.
+                        </span>
                     </div>
                 {% endif %}
 
                 <form method="POST"
                       action="{{ url_for('roles.save_role', role_id=role.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
                     <div class="row">
                         {% for perm in permissions %}
                         <div class="col-12 mb-2">
@@ -70,9 +74,8 @@
                         {% endfor %}
                     </div>
 
-                    <button type="submit" class="btn btn-primary mt-3">
-                        <i class="bi bi-save"></i>
-                        Сохранить права роли
+                    <button type="submit" class="btn btn-primary mt-2">
+                        <i class="bi bi-save"></i> Сохранить права роли
                     </button>
                 </form>
             </div>

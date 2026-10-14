@@ -1,337 +1,344 @@
 {% extends "base.html" %}
+
+{% from "_breadcrumbs.html" import breadcrumbs %}
+
+{% block breadcrumbs %}
+    {{ breadcrumbs([
+        ('Главная', url_for('main.dashboard')),
+        ('Журналы', None),
+    ]) }}
+{% endblock %}
+
 {% block content %}
 
-<h2 class="mb-3">
-    <i class="bi bi-journal-text"></i>
-    Журналы
-</h2>
-
-<!-- ============ ФИЛЬТРЫ И ПОИСК ============ -->
-<div class="card shadow-sm mb-3">
-    <div class="card-body py-2">
-        <div class="row g-2">
-            <div class="col-12 col-md-6">
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text"><i class="bi bi-search"></i></span>
-                    <input type="text"
-                           id="journalSearch"
-                           class="form-control"
-                           placeholder="Поиск по группе или предмету...">
-                    <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()" id="clearSearchBtn" style="display:none;">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="col-12 col-md-6">
-                <select id="filterGroup" class="form-select form-select-sm" onchange="filterJournals()">
-                    <option value="">Все группы</option>
-                    {% for group in groups %}
-                    <option value="{{ group.name }}">{{ group.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+{# ============================================================
+   ЗАГОЛОВОК + ДЕЙСТВИЯ
+   ============================================================ #}
+<div class="page-head">
+    <h2>
+        <i class="bi bi-journal-text text-primary me-2"></i>Журналы
+        <span class="text-muted small ms-2">всего: <span id="totalBadge">{{ pairs | length }}</span></span>
+    </h2>
+    {% if has_permission('add_journal') %}
+        <div class="page-head__actions">
+            <button type="button" class="btn btn-primary"
+                    data-modal-open="createJournalModal">
+                <i class="bi bi-plus-circle"></i> Создать журнал
+            </button>
         </div>
-    </div>
-</div>
-
-<!-- ============ СПИСОК ЖУРНАЛОВ ============ -->
-<div class="card shadow-sm">
-    <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <h5 class="mb-0">
-            <i class="bi bi-folder2-open"></i>
-            <span class="d-none d-sm-inline">Все журналы</span>
-            <span class="d-sm-none">Журналы</span>
-            <span class="badge bg-primary ms-2" id="totalBadge">{{ pairs|length }}</span>
-        </h5>
-        {% if pairs %}
-        <small class="text-muted d-none d-md-inline">
-            <i class="bi bi-info-circle"></i>
-            Отсортировано по алфавиту
-        </small>
-        {% endif %}
-    </div>
-    <div class="card-body p-0">
-        {% if pairs %}
-        <div class="list-group list-group-flush" id="journalsList">
-            {% for pair in pairs %}
-            <div class="list-group-item journal-item"
-                 data-search="{{ pair.group_name }} {{ pair.subject_name }}"
-                 data-group="{{ pair.group_name }}">
-
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <div class="flex-grow-1" style="min-width: 0;">
-                        <div class="d-flex align-items-center flex-wrap gap-2 mb-1">
-                            <span class="badge bg-secondary">{{ pair.group_name }}</span>
-                            <span class="d-none d-sm-inline text-muted">•</span>
-                            <span class="badge bg-info">{{ pair.subject_name }}</span>
-                        </div>
-
-                        <div class="small">
-                            {% set pair_semesters = get_semesters(pair.id) %}
-                            {% if pair_semesters %}
-                                {% for sem in pair_semesters %}
-                                    {% set h = get_hours(pair.id, sem) %}
-                                    {% set total = h.lecture_hours + h.practice_hours + h.independent_hours + h.exam_hours %}
-                                    <span class="text-muted">
-                                        <strong>{{ sem }}с:</strong> {{ total }}ч
-                                    </span>
-                                    {% if not loop.last %}
-                                    <span class="text-muted">•</span>
-                                    {% endif %}
-                                {% endfor %}
-                            {% else %}
-                                <span class="text-muted">Часы не настроены</span>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="d-flex gap-1">
-                        <a href="{{ url_for('journals.journal', gsid=pair.id) }}"
-                           class="btn btn-sm btn-primary">
-                            <i class="bi bi-journal-bookmark-fill"></i>
-                            Открыть
-                        </a>
-
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-secondary"
-                                    type="button"
-                                    data-bs-toggle="dropdown"
-                                    data-bs-strategy="fixed"
-                                    aria-expanded="false"
-                                    style="padding: 0.25rem 0.5rem;">
-                                <i class="bi bi-three-dots-vertical"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <a class="dropdown-item" href="{{ url_for('main.view_report', gsid=pair.id) }}">
-                                        <i class="bi bi-graph-up"></i> Отчёт
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="{{ url_for('journals.plan_view', gsid=pair.id) }}">
-                                        <i class="bi bi-list-ol"></i> Тематический план
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="#"
-                                       onclick="openEditHoursModal({{ pair.id }}, '{{ pair.group_name }}', '{{ pair.subject_name }}'); return false;">
-                                        <i class="bi bi-clock"></i> Редактировать часы
-                                    </a>
-                                </li>
-                                {% if has_permission('add_journal') %}
-                                <li>
-                                    <a class="dropdown-item" href="#"
-                                       onclick="openCopyJournalModal({{ pair.id }}, '{{ pair.group_name }}', '{{ pair.subject_name }}', {{ pair.subject_id }}); return false;">
-                                        <i class="bi bi-files"></i> Копировать в группы
-                                    </a>
-                                </li>
-                                {% endif %}
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <a class="dropdown-item text-danger"
-                                       href="{{ url_for('journals.delete_group_subject', gsid=pair.id) }}"
-                                       onclick="return confirm('Удалить журнал {{ pair.group_name }} - {{ pair.subject_name }}?\n\nВНИМАНИЕ: Все данные журнала будут безвозвратно потеряны!')">
-                                        <i class="bi bi-trash"></i> Удалить журнал
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="text-center py-5">
-            <i class="bi bi-journal-x" style="font-size: 4rem; color: #ccc;"></i>
-            <h5 class="text-muted mt-3">Журналы еще не созданы</h5>
-            <p class="text-muted small">Нажмите кнопку ниже, чтобы создать первый журнал</p>
-        </div>
-        {% endif %}
-    </div>
-    {% if pairs %}
-    <div class="card-footer text-muted small d-flex justify-content-between align-items-center">
-        <span>
-            <span id="visibleCount">{{ pairs|length }}</span> из {{ pairs|length }} журналов
-        </span>
-        <span class="d-none d-md-inline">
-            <i class="bi bi-lightbulb"></i> Используйте меню "⋮" для дополнительных действий
-        </span>
-    </div>
     {% endif %}
 </div>
 
-<!-- ============ FLOATING ACTION BUTTON ============ -->
+{# ============================================================
+   ФИЛЬТР + ПОИСК
+   ============================================================ #}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="filters-row">
+            <div style="flex:2 1 280px;">
+                <label class="form-label" for="jSearch">Поиск</label>
+                <input type="text" class="form-control" id="jSearch"
+                       placeholder="Поиск по группе или предмету...">
+            </div>
+            <div style="flex:1 1 200px;">
+                <label class="form-label" for="jGroup">Группа</label>
+                <select class="form-select" id="jGroup">
+                    <option value="">Все группы</option>
+                    {% for group in groups %}
+                        <option value="{{ group.name }}">{{ group.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">&nbsp;</label>
+                <button type="button" class="btn btn-outline-secondary w-100" id="jReset">
+                    <i class="bi bi-x-circle"></i> Сбросить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ============================================================
+   СЕТКА КАРТОЧЕК ЖУРНАЛОВ
+   ============================================================ #}
+<div id="journalsList" class="journals-grid">
+    {% for pair in pairs %}
+        {% set pair_semesters = get_semesters(pair.id) %}
+        <div class="journal-card"
+             role="link"
+             tabindex="0"
+             data-href="{{ url_for('journals.journal', gsid=pair.id) }}"
+             data-search="{{ pair.group_name }} {{ pair.subject_name }}"
+             data-group="{{ pair.group_name }}">
+
+            {# ---------- Шапка: группа + кнопка меню ---------- #}
+            <div class="journal-card__head">
+                <div class="flex-grow-1 min-width-0">
+                    <div class="journal-card__group">{{ pair.group_name }}</div>
+                    <div class="journal-card__subject">{{ pair.subject_name }}</div>
+                </div>
+
+                <div class="dropdown">
+                    <button type="button"
+                            class="journal-card__menu-btn"
+                            data-dropdown
+                            aria-haspopup="true"
+                            aria-expanded="false"
+                            aria-label="Действия">
+                        <i class="bi bi-three-dots-vertical"></i>
+                    </button>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item"
+                           href="{{ url_for('main.view_report', gsid=pair.id) }}">
+                            <i class="bi bi-graph-up"></i><span>Отчёт</span>
+                        </a>
+                        <a class="dropdown-item"
+                           href="{{ url_for('journals.plan_view', gsid=pair.id) }}">
+                            <i class="bi bi-list-ol"></i><span>Тематический план</span>
+                        </a>
+                        <button type="button"
+                                class="dropdown-item edit-hours-btn"
+                                data-gsid="{{ pair.id }}"
+                                data-group="{{ pair.group_name }}"
+                                data-subject="{{ pair.subject_name }}">
+                            <i class="bi bi-clock"></i><span>Редактировать часы</span>
+                        </button>
+                        {% if has_permission('add_journal') %}
+                            <button type="button"
+                                    class="dropdown-item copy-journal-btn"
+                                    data-gsid="{{ pair.id }}"
+                                    data-group="{{ pair.group_name }}"
+                                    data-subject="{{ pair.subject_name }}"
+                                    data-subject-id="{{ pair.subject_id }}">
+                                <i class="bi bi-files"></i><span>Копировать в группы</span>
+                            </button>
+                        {% endif %}
+                        <hr class="dropdown-divider">
+                        <a class="dropdown-item text-danger"
+                           href="{{ url_for('journals.delete_group_subject', gsid=pair.id) }}"
+                           onclick="return confirm('Удалить журнал {{ pair.group_name }} — {{ pair.subject_name }}?\n\nВНИМАНИЕ: Все данные журнала будут безвозвратно потеряны!');">
+                            <i class="bi bi-trash"></i><span>Удалить журнал</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            {# ---------- Часы по семестрам ---------- #}
+            <div class="journal-card__hours">
+                {% if pair_semesters %}
+                    {% for sem in pair_semesters %}
+                        {% set h = get_hours(pair.id, sem) %}
+                        {% set total = h.lecture_hours + h.practice_hours + h.independent_hours + h.exam_hours %}
+                        <span class="journal-card__hour-chip">
+                            <i class="bi bi-calendar3"></i>
+                            {{ sem }}с: <strong>{{ total }}ч</strong>
+                        </span>
+                    {% endfor %}
+                {% else %}
+                    <span class="journal-card__hour-chip">Часы не настроены</span>
+                {% endif %}
+            </div>
+
+            {# ---------- Футер: подсказка «Открыть» ---------- #}
+            <div class="journal-card__footer">
+                <span class="journal-card__open-hint">
+                    <i class="bi bi-arrow-right-circle"></i> Открыть журнал
+                </span>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<div id="jEmpty" style="display:none;">
+    <div class="empty">
+        <div class="empty__icon"><i class="bi bi-journal-x"></i></div>
+        <div class="empty__title">Журналов не найдено</div>
+        <div class="empty__desc">Измените фильтры или создайте новый журнал</div>
+    </div>
+</div>
+
+{# ============================================================
+   FAB (мобильный)
+   ============================================================ #}
 {% if has_permission('add_journal') %}
-<button type="button"
-        class="fab-create-journal"
-        data-bs-toggle="modal"
-        data-bs-target="#createJournalModal"
-        title="Создать новый журнал">
+<button type="button" class="fab" id="jFab" title="Создать журнал">
     <i class="bi bi-plus-lg"></i>
 </button>
 {% endif %}
 
-<!-- ============ МОДАЛЬНОЕ ОКНО СОЗДАНИЯ ЖУРНАЛА ============ -->
-<div class="modal fade" id="createJournalModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+{# ============================================================
+   МОДАЛКА: СОЗДАТЬ ЖУРНАЛ
+   ============================================================ #}
+{% if has_permission('add_journal') %}
+<div class="modal" id="createJournalModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('journals.add_group_subject') }}" id="createJournalForm">
+            <form method="POST"
+                  action="{{ url_for('journals.add_group_subject') }}"
+                  id="createJournalForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header bg-primary text-white">
+
+                <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="bi bi-plus-circle"></i>
-                        Создать новый журнал
+                        <i class="bi bi-journal-plus text-primary me-2"></i>Создать журнал
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="app-icon-btn"
+                            data-modal-close="createJournalModal" aria-label="Закрыть">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
 
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="group_id" class="form-label fw-bold">
-                            Группа <span class="text-danger">*</span>
-                        </label>
-                        <select class="form-select" id="group_id" name="group_id" required>
-                            <option value="">— Выберите группу —</option>
-                            {% for group in groups %}
-                            <option value="{{ group.id }}">{{ group.name }}</option>
-                            {% endfor %}
-                        </select>
+                    <div class="row">
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label" for="cj_group">Группа *</label>
+                            <select class="form-select" name="group_id" id="cj_group" required>
+                                <option value="">— Выберите группу —</option>
+                                {% for group in groups %}
+                                    <option value="{{ group.id }}">{{ group.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label" for="cj_subject">Предмет *</label>
+                            <select class="form-select" name="subject_id" id="cj_subject" required>
+                                <option value="">— Выберите предмет —</option>
+                                {% for subject in subjects %}
+                                    <option value="{{ subject.id }}">{{ subject.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="subject_id" class="form-label fw-bold">
-                            Предмет <span class="text-danger">*</span>
-                        </label>
-                        <select class="form-select" id="subject_id" name="subject_id" required>
-                            <option value="">— Выберите предмет —</option>
-                            {% for subject in subjects %}
-                            <option value="{{ subject.id }}">{{ subject.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <hr>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">
-                            <i class="bi bi-calendar3"></i>
-                            В каких семестрах идет предмет?
-                        </label>
-                        <div class="border rounded p-2">
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input semester-checkbox" type="checkbox"
-                                       id="semester_1_check" checked onchange="updateSemesterVisibility()">
-                                <label class="form-check-label" for="semester_1_check">
+                        <label class="form-label">В каких семестрах идёт предмет?</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       id="cj_sem_1" checked>
+                                <label class="form-check-label" for="cj_sem_1">
                                     <strong>1 семестр</strong>
                                 </label>
                             </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input semester-checkbox" type="checkbox"
-                                       id="semester_2_check" checked onchange="updateSemesterVisibility()">
-                                <label class="form-check-label" for="semester_2_check">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       id="cj_sem_2" checked>
+                                <label class="form-check-label" for="cj_sem_2">
                                     <strong>2 семестр</strong>
                                 </label>
                             </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input semester-checkbox" type="checkbox"
-                                       id="semester_3_check" onchange="updateSemesterVisibility()">
-                                <label class="form-check-label" for="semester_3_check">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox"
+                                       id="cj_sem_3">
+                                <label class="form-check-label" for="cj_sem_3">
                                     <strong>3 семестр</strong>
                                 </label>
                             </div>
                         </div>
                     </div>
 
-                    <div id="semestersContainer">
-                        <div class="card mb-2 border-primary semester-card" id="semester_1_card">
-                            <div class="card-header bg-primary text-white py-2 d-flex justify-content-between align-items-center">
-                                <strong>Семестр 1</strong>
-                                <span class="badge bg-light text-primary" id="semester_1_total_badge">0 ч.</span>
+                    <div id="cj_semesters">
+                        <div class="semester-block" id="cj_block_1">
+                            <div class="semester-block__head" style="border-left:3px solid var(--brand-600);">
+                                <span>Семестр 1</span>
+                                <span class="badge" id="cj_total_1">0 ч</span>
                             </div>
-                            <div class="card-body py-2">
-                                <div class="row g-2">
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Лекции</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="1" name="semester_1_lecture" value="0" min="0">
+                            <div class="semester-block__body">
+                                <div class="hours-grid">
+                                    <div>
+                                        <label for="cj_h1_lecture">Лекции</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="1" id="cj_h1_lecture"
+                                               name="semester_1_lecture" value="0">
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Практические</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="1" name="semester_1_practice" value="0" min="0">
+                                    <div>
+                                        <label for="cj_h1_practice">Практические</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="1" id="cj_h1_practice"
+                                               name="semester_1_practice" value="0">
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Самостоятельные</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="1" name="semester_1_independent" value="0" min="0">
+                                    <div>
+                                        <label for="cj_h1_independent">Самостоятельные</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="1" id="cj_h1_independent"
+                                               name="semester_1_independent" value="0">
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Экзамен</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="1" name="semester_1_exam" value="0" min="0">
+                                    <div>
+                                        <label for="cj_h1_exam">Экзамен</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="1" id="cj_h1_exam"
+                                               name="semester_1_exam" value="0">
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="card mb-2 border-success semester-card" id="semester_2_card">
-                            <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
-                                <strong>Семестр 2</strong>
-                                <span class="badge bg-light text-success" id="semester_2_total_badge">0 ч.</span>
+                        <div class="semester-block" id="cj_block_2">
+                            <div class="semester-block__head" style="border-left:3px solid var(--success);">
+                                <span>Семестр 2</span>
+                                <span class="badge" id="cj_total_2">0 ч</span>
                             </div>
-                            <div class="card-body py-2">
-                                <div class="row g-2">
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Лекции</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="2" name="semester_2_lecture" value="0" min="0">
+                            <div class="semester-block__body">
+                                <div class="hours-grid">
+                                    <div>
+                                        <label for="cj_h2_lecture">Лекции</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="2" id="cj_h2_lecture"
+                                               name="semester_2_lecture" value="0">
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Практические</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="2" name="semester_2_practice" value="0" min="0">
+                                    <div>
+                                        <label for="cj_h2_practice">Практические</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="2" id="cj_h2_practice"
+                                               name="semester_2_practice" value="0">
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Самостоятельные</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="2" name="semester_2_independent" value="0" min="0">
+                                    <div>
+                                        <label for="cj_h2_independent">Самостоятельные</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="2" id="cj_h2_independent"
+                                               name="semester_2_independent" value="0">
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Экзамен</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="2" name="semester_2_exam" value="0" min="0">
+                                    <div>
+                                        <label for="cj_h2_exam">Экзамен</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="2" id="cj_h2_exam"
+                                               name="semester_2_exam" value="0">
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="card mb-2 border-warning semester-card" id="semester_3_card" style="display:none;">
-                            <div class="card-header bg-warning text-dark py-2 d-flex justify-content-between align-items-center">
-                                <strong>Семестр 3</strong>
-                                <span class="badge bg-dark text-warning" id="semester_3_total_badge">0 ч.</span>
+                        <div class="semester-block" id="cj_block_3" style="display:none;">
+                            <div class="semester-block__head" style="border-left:3px solid var(--warning);">
+                                <span>Семестр 3</span>
+                                <span class="badge" id="cj_total_3">0 ч</span>
                             </div>
-                            <div class="card-body py-2">
-                                <div class="row g-2">
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Лекции</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="3" name="semester_3_lecture" value="0" min="0">
+                            <div class="semester-block__body">
+                                <div class="hours-grid">
+                                    <div>
+                                        <label for="cj_h3_lecture">Лекции</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="3" id="cj_h3_lecture"
+                                               name="semester_3_lecture" value="0">
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Практические</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="3" name="semester_3_practice" value="0" min="0">
+                                    <div>
+                                        <label for="cj_h3_practice">Практические</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="3" id="cj_h3_practice"
+                                               name="semester_3_practice" value="0">
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Самостоятельные</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="3" name="semester_3_independent" value="0" min="0">
+                                    <div>
+                                        <label for="cj_h3_independent">Самостоятельные</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="3" id="cj_h3_independent"
+                                               name="semester_3_independent" value="0">
                                     </div>
-                                    <div class="col-6">
-                                        <label class="form-label small mb-1">Экзамен</label>
-                                        <input type="number" class="form-control form-control-sm semester-hour"
-                                               data-semester="3" name="semester_3_exam" value="0" min="0">
+                                    <div>
+                                        <label for="cj_h3_exam">Экзамен</label>
+                                        <input type="number" min="0" class="form-control semester-hour"
+                                               data-sem="3" id="cj_h3_exam"
+                                               name="semester_3_exam" value="0">
                                     </div>
                                 </div>
                             </div>
@@ -339,17 +346,15 @@
                     </div>
 
                     <div class="alert alert-info small mb-0 mt-3">
-                        <i class="bi bi-info-circle"></i>
-                        Укажите часы хотя бы для одного семестра.
-                        Экзамен указывается общей суммой (например, 12 часов).
+                        <i class="bi bi-info-circle-fill"></i>
+                        <span>Укажите часы хотя бы для одного семестра. Экзамен — общей суммой.</span>
                     </div>
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="bi bi-x-circle"></i> Отмена
-                    </button>
-                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <button type="button" class="btn btn-secondary"
+                            data-modal-close="createJournalModal">Отмена</button>
+                    <button type="submit" class="btn btn-primary" id="cjSubmit" disabled>
                         <i class="bi bi-check-circle"></i> Создать журнал
                     </button>
                 </div>
@@ -357,41 +362,78 @@
         </div>
     </div>
 </div>
+{% endif %}
 
-<!-- ============ МОДАЛЬНОЕ ОКНО КОПИРОВАНИЯ ЖУРНАЛА ============ -->
-<div class="modal fade" id="copyJournalModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+{# ============================================================
+   МОДАЛКА: РЕДАКТИРОВАТЬ ЧАСЫ
+   ============================================================ #}
+<div class="modal" id="editHoursModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="POST" id="copyJournalForm">
+            <form method="POST"
+                  action="{{ url_for('journals.edit_group_subject_hours') }}"
+                  id="editHoursForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header bg-info text-white">
+                <input type="hidden" name="gsid" id="eh_gsid">
+
+                <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="bi bi-files"></i>
-                        Копировать журнал в группы
+                        <i class="bi bi-clock text-warning me-2"></i>Редактировать часы
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="app-icon-btn"
+                            data-modal-close="editHoursModal" aria-label="Закрыть">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
 
                 <div class="modal-body">
-                    <div class="alert alert-light border mb-3">
-                        <div class="fw-bold" id="copySourceTitle">—</div>
-                        <div class="small text-muted" id="copySourceSubtitle">—</div>
+                    <div class="alert alert-info">
+                        <strong id="eh_title">—</strong>
+                    </div>
+                    <div id="eh_semesters"></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                            data-modal-close="editHoursModal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# ============================================================
+   МОДАЛКА: КОПИРОВАТЬ В ГРУППЫ
+   ============================================================ #}
+{% if has_permission('add_journal') %}
+<div class="modal" id="copyJournalModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" id="copyJournalForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-files text-info me-2"></i>Копировать журнал в группы
+                    </h5>
+                    <button type="button" class="app-icon-btn"
+                            data-modal-close="copyJournalModal" aria-label="Закрыть">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <div class="fw-bold" id="cj_src_title">—</div>
+                        <div class="small text-muted" id="cj_src_subtitle">—</div>
                     </div>
 
-                    <div class="alert alert-info small mb-3">
-                        <i class="bi bi-info-circle"></i>
-                        Копируются <strong>предмет</strong>, <strong>часы по семестрам</strong>
-                        и <strong>тематический план</strong> (если отмечено).
-                        Записи журнала, студенты и оценки <strong>не копируются</strong>.
-                    </div>
-
-                    <!-- Выбор преподавателя -->
                     <div class="mb-3">
-                        <label class="form-label fw-bold">
-                            <i class="bi bi-person-badge"></i>
-                            Назначить преподавателя (опционально)
-                        </label>
-                        <select name="teacher_id" class="form-select">
+                        <label class="form-label" for="cj_teacher">Назначить преподавателя (опц.)</label>
+                        <select name="teacher_id" id="cj_teacher" class="form-select">
                             <option value="">— Не назначать —</option>
                             {% for t in all_teachers %}
                                 <option value="{{ t.id }}">
@@ -399,69 +441,51 @@
                                 </option>
                             {% endfor %}
                         </select>
-                        <div class="form-text">
-                            Преподаватель будет назначен на все новые журналы.
-                        </div>
                     </div>
 
-                    <!-- Чекбоксы «что копировать» -->
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="checkbox"
-                               name="copy_hours" id="copyHoursCheck" value="1" checked>
-                        <label class="form-check-label" for="copyHoursCheck">
+                               name="copy_hours" id="cj_copy_hours" value="1" checked>
+                        <label class="form-check-label" for="cj_copy_hours">
                             <strong>Скопировать часы по семестрам</strong>
                         </label>
-                        <div class="form-text">
-                            Если снять галочку — журналы создадутся с нулевыми часами.
-                        </div>
                     </div>
 
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox"
-                               name="copy_plan" id="copyPlanCheck" value="1" checked>
-                        <label class="form-check-label" for="copyPlanCheck">
+                               name="copy_plan" id="cj_copy_plan" value="1" checked>
+                        <label class="form-check-label" for="cj_copy_plan">
                             <strong>Скопировать тематический план</strong>
                         </label>
-                        <div class="form-text">
-                            Пункты плана будут перенесены в новые журналы.
-                            Отметки о проведении не копируются.
-                        </div>
                     </div>
 
-                    <!-- Список групп -->
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label fw-bold mb-0">
-                            <i class="bi bi-people"></i>
-                            Группы для копирования
-                        </label>
-                        <div class="btn-group btn-group-sm">
-                            <button type="button" class="btn btn-outline-secondary" onclick="copyToggleAll(true)">
-                                <i class="bi bi-check-all"></i> Все доступные
+                        <label class="form-label mb-0">Группы для копирования</label>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    id="cj_copy_toggle_all">
+                                <i class="bi bi-check-all"></i> Все
                             </button>
-                            <button type="button" class="btn btn-outline-secondary" onclick="copyToggleAll(false)">
-                                <i class="bi bi-x-circle"></i> Снять все
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    id="cj_copy_toggle_none">
+                                <i class="bi bi-x-circle"></i> Снять
                             </button>
                         </div>
                     </div>
 
-                    <div class="border rounded p-2" style="max-height: 320px; overflow-y: auto;">
-                        <div id="copyGroupsList">
-                            {# Заполняется JS #}
-                        </div>
-                    </div>
+                    <div id="cj_groups_list" style="max-height:320px;overflow-y:auto;"></div>
 
-                    <div class="alert alert-warning small mt-3 mb-0" id="copyWarning" style="display:none;">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        <span id="copyWarningText"></span>
+                    <div class="alert alert-warning small mt-3 mb-0" id="cj_warning" style="display:none;">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span id="cj_warning_text"></span>
                     </div>
                 </div>
 
                 <div class="modal-footer">
-                    <div class="me-auto small text-muted" id="copySelectedCount">Выбрано: 0</div>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="bi bi-x-circle"></i> Отмена
-                    </button>
-                    <button type="submit" class="btn btn-info text-white" id="copySubmitBtn">
+                    <div class="me-auto small text-muted" id="cj_copy_count">Выбрано: 0</div>
+                    <button type="button" class="btn btn-secondary"
+                            data-modal-close="copyJournalModal">Отмена</button>
+                    <button type="submit" class="btn btn-info" id="cj_copy_submit">
                         <i class="bi bi-check-circle"></i> Создать журналы
                     </button>
                 </div>
@@ -469,503 +493,38 @@
         </div>
     </div>
 </div>
+{% endif %}
 
-<!-- ============ МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ЧАСОВ ============ -->
-<div class="modal fade" id="editHoursModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <form method="POST" id="editHoursForm" action="{{ url_for('journals.edit_group_subject_hours') }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header bg-warning">
-                    <h5 class="modal-title">
-                        <i class="bi bi-clock"></i>
-                        Редактировать часы
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-light border">
-                        <strong id="editHoursTitle">—</strong>
-                    </div>
-
-                    <input type="hidden" name="gsid" id="editHoursGsid">
-                    <div id="editHoursSemesters">
-                        <!-- Заполняется JS -->
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="bi bi-x-circle"></i> Отмена
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-circle"></i> Сохранить часы
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-{# Данные о существующих журналах для JS #}
-<script id="allPairsData" type="application/json">
+{# ============================================================
+   JSON-ДАННЫЕ ДЛЯ JS
+   ============================================================ #}
+<script id="gsAllPairs" type="application/json">
 [
-    {% for p in pairs %}
+{% for p in pairs %}
     {
         "group_id": {{ p.group_id }},
         "subject_id": {{ p.subject_id }},
-        "group_name": "{{ p.group_name|e }}",
-        "subject_name": "{{ p.subject_name|e }}"
+        "group_name": "{{ p.group_name | e }}",
+        "subject_name": "{{ p.subject_name | e }}"
     }{% if not loop.last %},{% endif %}
-    {% endfor %}
+{% endfor %}
 ]
 </script>
 
-<script id="allGroupsData" type="application/json">
+<script id="gsAllGroups" type="application/json">
 [
-    {% for g in groups %}
+{% for g in groups %}
     {
         "id": {{ g.id }},
-        "name": "{{ g.name|e }}"
+        "name": "{{ g.name | e }}"
     }{% if not loop.last %},{% endif %}
-    {% endfor %}
+{% endfor %}
 ]
 </script>
-
-<style>
-    #journalsList { overflow: visible !important; }
-    .journal-item {
-        transition: all 0.15s ease;
-        padding: 12px 16px;
-        position: relative;
-        overflow: visible !important;
-    }
-    .journal-item:hover { background-color: #f8f9fa; }
-    .journal-item.hidden { display: none; }
-    .list-group, .list-group-item, .card, .card-body { overflow: visible !important; }
-
-    .fab-create-journal {
-        position: fixed;
-        bottom: 24px;
-        right: 24px;
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        background-color: #198754;
-        color: #fff;
-        border: none;
-        box-shadow: 0 4px 12px rgba(25, 135, 84, 0.4);
-        font-size: 1.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1030;
-        transition: all 0.2s ease;
-    }
-    .fab-create-journal:hover {
-        background-color: #146c43;
-        transform: scale(1.05);
-    }
-    .fab-create-journal:active { transform: scale(0.95); }
-
-    @media (min-width: 768px) {
-        .fab-create-journal {
-            bottom: 32px;
-            right: 32px;
-            width: 60px;
-            height: 60px;
-        }
-    }
-    @media (max-width: 767px) {
-        .journal-item { padding: 10px 12px; }
-        body { padding-bottom: 90px; }
-        .fab-create-journal {
-            bottom: 16px;
-            right: 16px;
-            width: 52px;
-            height: 52px;
-        }
-    }
-    @media (max-width: 576px) {
-        .modal-dialog { margin: 0.5rem; max-width: calc(100% - 1rem); }
-        .modal-body { padding: 12px; }
-        .modal-header, .modal-footer { padding: 10px 12px; }
-    }
-    @media print {
-        .fab-create-journal, .dropdown, .card-header .btn, .btn, .modal { display: none !important; }
-    }
-
-    /* Копирование — группы */
-    .copy-group-item {
-        padding: 8px 10px;
-        border-radius: 6px;
-        border: 1px solid #e9ecef;
-        margin-bottom: 4px;
-        background-color: #fff;
-    }
-    .copy-group-item.available:hover {
-        background-color: #f8f9fa;
-        border-color: #0d6efd;
-    }
-    .copy-group-item.disabled {
-        background-color: #f8f9fa;
-        opacity: 0.75;
-    }
-    .copy-group-item .form-check-input {
-        margin-top: 0.25rem;
-    }
-    .copy-group-item .reason {
-        font-size: 0.75rem;
-        color: #dc3545;
-    }
-</style>
 
 {% endblock %}
 
+
 {% block scripts %}
-<script>
-// ==================== ПОИСК И ФИЛЬТР ====================
-document.querySelectorAll('.journal-item .dropdown').forEach(function(dropdown) {
-    dropdown.addEventListener('show.bs.dropdown', function() {
-        var item = this.closest('.journal-item');
-        if (item) { item.style.zIndex = '200'; }
-    });
-    dropdown.addEventListener('hidden.bs.dropdown', function() {
-        var item = this.closest('.journal-item');
-        if (item) { item.style.zIndex = ''; }
-    });
-});
-
-function filterJournals() {
-    var searchText = document.getElementById('journalSearch').value.toLowerCase().trim();
-    var filterGroup = document.getElementById('filterGroup').value;
-    var items = document.querySelectorAll('.journal-item');
-    var visibleCount = 0;
-
-    items.forEach(function(item) {
-        var searchData = item.dataset.search.toLowerCase();
-        var group = item.dataset.group;
-        var matchesSearch = !searchText || searchData.includes(searchText);
-        var matchesGroup = !filterGroup || group === filterGroup;
-
-        if (matchesSearch && matchesGroup) {
-            item.classList.remove('hidden');
-            visibleCount++;
-        } else {
-            item.classList.add('hidden');
-        }
-    });
-
-    document.getElementById('visibleCount').textContent = visibleCount;
-    var badge = document.getElementById('totalBadge');
-
-    if (visibleCount < items.length) {
-        badge.className = 'badge bg-warning ms-2';
-        badge.textContent = visibleCount + ' / ' + items.length;
-    } else {
-        badge.className = 'badge bg-primary ms-2';
-        badge.textContent = items.length;
-    }
-
-    var clearBtn = document.getElementById('clearSearchBtn');
-    clearBtn.style.display = searchText ? 'block' : 'none';
-}
-
-function clearSearch() {
-    document.getElementById('journalSearch').value = '';
-    filterJournals();
-}
-
-document.getElementById('journalSearch').addEventListener('input', filterJournals);
-
-// ==================== СОЗДАНИЕ ЖУРНАЛА ====================
-function updateSemesterVisibility() {
-    var check1 = document.getElementById('semester_1_check').checked;
-    var check2 = document.getElementById('semester_2_check').checked;
-    var check3 = document.getElementById('semester_3_check').checked;
-
-    document.getElementById('semester_1_card').style.display = check1 ? 'block' : 'none';
-    document.getElementById('semester_2_card').style.display = check2 ? 'block' : 'none';
-    document.getElementById('semester_3_card').style.display = check3 ? 'block' : 'none';
-
-    if (!check1) {
-        document.querySelectorAll('[data-semester="1"]').forEach(function(inp) { inp.value = 0; });
-    }
-    if (!check2) {
-        document.querySelectorAll('[data-semester="2"]').forEach(function(inp) { inp.value = 0; });
-    }
-    if (!check3) {
-        document.querySelectorAll('[data-semester="3"]').forEach(function(inp) { inp.value = 0; });
-    }
-
-    updateAllTotals();
-    validateForm();
-}
-
-function updateSemesterTotal(semesterNum) {
-    var inputs = document.querySelectorAll('[data-semester="' + semesterNum + '"]');
-    var total = 0;
-    inputs.forEach(function(inp) { total += parseInt(inp.value) || 0; });
-    var badge = document.getElementById('semester_' + semesterNum + '_total_badge');
-    if (badge) { badge.textContent = total + ' ч.'; }
-}
-
-function updateAllTotals() {
-    updateSemesterTotal(1);
-    updateSemesterTotal(2);
-    updateSemesterTotal(3);
-}
-
-function validateForm() {
-    var submitBtn = document.getElementById('submitBtn');
-    if (!submitBtn) return;
-    var hasHours = false;
-    document.querySelectorAll('.semester-hour').forEach(function(inp) {
-        if (parseInt(inp.value) > 0) hasHours = true;
-    });
-    submitBtn.disabled = !hasHours;
-    return hasHours;
-}
-
-document.querySelectorAll('.semester-hour').forEach(function(inp) {
-    inp.addEventListener('input', function() {
-        updateAllTotals();
-        validateForm();
-    });
-});
-
-var createForm = document.getElementById('createJournalForm');
-if (createForm) {
-    createForm.addEventListener('submit', function(e) {
-        if (!validateForm()) {
-            e.preventDefault();
-            alert('Пожалуйста, укажите часы хотя бы для одного семестра!');
-        }
-    });
-}
-
-// ==================== РЕДАКТИРОВАНИЕ ЧАСОВ ====================
-function openEditHoursModal(gsid, groupName, subjectName) {
-    document.getElementById('editHoursGsid').value = gsid;
-    document.getElementById('editHoursTitle').textContent = groupName + ' — ' + subjectName;
-
-    fetch('/group-subjects/get-hours/' + gsid)
-        .then(function(response) { return response.json(); })
-        .then(function(data) {
-            var container = document.getElementById('editHoursSemesters');
-            var html = '';
-
-            if (!data.semesters || data.semesters.length === 0) {
-                container.innerHTML = '<div class="alert alert-info">Нет настроенных семестров</div>';
-                return;
-            }
-
-            data.semesters.forEach(function(sem) {
-                var h = data.hours[sem] || {
-                    lecture_hours: 0, practice_hours: 0,
-                    independent_hours: 0, exam_hours: 0
-                };
-
-                html += '<div class="card mb-2 border-primary">';
-                html += '<div class="card-header bg-primary text-white py-2">';
-                html += '<strong>Семестр ' + sem + '</strong>';
-                html += '</div>';
-                html += '<div class="card-body py-2">';
-                html += '<div class="row g-2">';
-
-                html += '<div class="col-6 col-md-3">';
-                html += '<label class="form-label small mb-1">Лекции</label>';
-                html += '<input type="number" class="form-control form-control-sm" name="hours_' + sem + '_lecture" value="' + h.lecture_hours + '" min="0">';
-                html += '</div>';
-
-                html += '<div class="col-6 col-md-3">';
-                html += '<label class="form-label small mb-1">Практические</label>';
-                html += '<input type="number" class="form-control form-control-sm" name="hours_' + sem + '_practice" value="' + h.practice_hours + '" min="0">';
-                html += '</div>';
-
-                html += '<div class="col-6 col-md-3">';
-                html += '<label class="form-label small mb-1">Самостоятельные</label>';
-                html += '<input type="number" class="form-control form-control-sm" name="hours_' + sem + '_independent" value="' + h.independent_hours + '" min="0">';
-                html += '</div>';
-
-                html += '<div class="col-6 col-md-3">';
-                html += '<label class="form-label small mb-1">Экзамен</label>';
-                html += '<input type="number" class="form-control form-control-sm" name="hours_' + sem + '_exam" value="' + h.exam_hours + '" min="0">';
-                html += '</div>';
-
-                html += '</div></div></div>';
-            });
-
-            container.innerHTML = html;
-
-            var modal = new bootstrap.Modal(document.getElementById('editHoursModal'));
-            modal.show();
-        })
-        .catch(function(error) {
-            console.error('Ошибка:', error);
-            alert('Не удалось загрузить часы');
-        });
-}
-
-document.getElementById('createJournalModal').addEventListener('hidden.bs.modal', function() {
-    var form = document.getElementById('createJournalForm');
-    form.reset();
-    document.getElementById('semester_1_check').checked = true;
-    document.getElementById('semester_2_check').checked = true;
-    document.getElementById('semester_3_check').checked = false;
-    document.getElementById('semester_1_card').style.display = 'block';
-    document.getElementById('semester_2_card').style.display = 'block';
-    document.getElementById('semester_3_card').style.display = 'none';
-
-    document.querySelectorAll('.semester-hour').forEach(function(inp) { inp.value = 0; });
-    updateAllTotals();
-    validateForm();
-});
-
-// ==================== КОПИРОВАНИЕ ЖУРНАЛА ====================
-var ALL_GROUPS = JSON.parse(document.getElementById('allGroupsData').textContent);
-var ALL_PAIRS = JSON.parse(document.getElementById('allPairsData').textContent);
-
-var copySourceGsid = null;
-var copySourceSubjectId = null;
-
-function openCopyJournalModal(gsid, groupName, subjectName, subjectId) {
-    copySourceGsid = gsid;
-    copySourceSubjectId = subjectId;
-
-    document.getElementById('copySourceTitle').textContent =
-        groupName + ' — ' + subjectName;
-    document.getElementById('copySourceSubtitle').textContent =
-        'Исходный журнал #' + gsid;
-
-    document.getElementById('copyJournalForm').action =
-        '/group-subjects/' + gsid + '/copy-to-groups';
-
-    buildCopyGroupsList(gsid, subjectId, groupName);
-
-    document.getElementById('copyHoursCheck').checked = true;
-    document.getElementById('copyPlanCheck').checked = true;
-    document.getElementById('copyWarning').style.display = 'none';
-
-    var modal = new bootstrap.Modal(document.getElementById('copyJournalModal'));
-    modal.show();
-}
-
-function buildCopyGroupsList(sourceGsid, sourceSubjectId, sourceGroupName) {
-    var container = document.getElementById('copyGroupsList');
-    container.innerHTML = '';
-
-    if (!ALL_GROUPS || ALL_GROUPS.length === 0) {
-        container.innerHTML = '<div class="text-muted small">Нет групп</div>';
-        updateCopyCount();
-        return;
-    }
-
-    var busyBySubject = {};
-    ALL_PAIRS.forEach(function(p) {
-        if (p.subject_id === sourceSubjectId) {
-            busyBySubject[p.group_id] = true;
-        }
-    });
-
-    var sourceGroupId = null;
-    ALL_PAIRS.forEach(function(p) {
-        if (p.subject_id === sourceSubjectId && p.group_name === sourceGroupName) {
-            sourceGroupId = p.group_id;
-        }
-    });
-
-    ALL_GROUPS.forEach(function(g) {
-        var isSource = (g.id === sourceGroupId);
-        var isBusy = !!busyBySubject[g.id];
-        var disabled = isSource || isBusy;
-
-        var reason = '';
-        if (isSource) reason = 'Это исходная группа';
-        else if (isBusy) reason = 'Журнал по этому предмету уже есть — сначала удалите его';
-
-        var item = document.createElement('div');
-        item.className = 'copy-group-item ' + (disabled ? 'disabled' : 'available');
-
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.className = 'form-check-input me-2 copy-group-check';
-        cb.value = g.id;
-        cb.id = 'copy_g_' + g.id;
-        cb.name = 'group_ids';
-        cb.disabled = disabled;
-        cb.dataset.groupName = g.name;
-
-        var lbl = document.createElement('label');
-        lbl.className = 'form-check-label d-flex justify-content-between align-items-center w-100';
-        lbl.setAttribute('for', 'copy_g_' + g.id);
-
-        var nameSpan = document.createElement('span');
-        nameSpan.textContent = g.name;
-        if (disabled) {
-            nameSpan.classList.add('text-muted');
-        }
-        lbl.appendChild(nameSpan);
-
-        if (reason) {
-            var reasonSpan = document.createElement('span');
-            reasonSpan.className = 'reason';
-            reasonSpan.textContent = reason;
-            lbl.appendChild(reasonSpan);
-        }
-
-        var wrapper = document.createElement('div');
-        wrapper.className = 'd-flex align-items-start';
-        wrapper.appendChild(cb);
-        wrapper.appendChild(lbl);
-
-        item.appendChild(wrapper);
-        container.appendChild(item);
-    });
-
-    container.querySelectorAll('.copy-group-check').forEach(function(cb) {
-        cb.addEventListener('change', updateCopyCount);
-    });
-
-    updateCopyCount();
-}
-
-function updateCopyCount() {
-    var checks = document.querySelectorAll('.copy-group-check:checked');
-    var n = checks.length;
-    document.getElementById('copySelectedCount').textContent = 'Выбрано: ' + n;
-    document.getElementById('copySubmitBtn').disabled = (n === 0);
-
-    var busyCount = document.querySelectorAll('.copy-group-item.disabled .copy-group-check').length;
-    if (busyCount > 0) {
-        document.getElementById('copyWarningText').textContent =
-            busyCount + ' групп(ы) недоступны — там уже есть журнал по этому предмету. ' +
-            'Сначала удалите существующие журналы.';
-        document.getElementById('copyWarning').style.display = 'block';
-    } else {
-        document.getElementById('copyWarning').style.display = 'none';
-    }
-}
-
-function copyToggleAll(state) {
-    document.querySelectorAll('.copy-group-check:not(:disabled)').forEach(function(cb) {
-        cb.checked = state;
-    });
-    updateCopyCount();
-}
-
-document.getElementById('copyJournalModal').addEventListener('hidden.bs.modal', function() {
-    document.querySelectorAll('.copy-group-check').forEach(function(cb) {
-        cb.checked = false;
-    });
-    document.getElementById('copyHoursCheck').checked = true;
-    document.getElementById('copyPlanCheck').checked = true;
-    updateCopyCount();
-});
-
-// ==================== ИНИЦИАЛИЗАЦИЯ ====================
-document.addEventListener('DOMContentLoaded', function() {
-    updateAllTotals();
-    validateForm();
-});
-</script>
+<script src="{{ url_for('static', filename='js/group_subjects.js') }}"></script>
 {% endblock %}

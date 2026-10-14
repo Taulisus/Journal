@@ -2,19 +2,16 @@ import os
 import secrets
 import sqlite3
 
+from flask import g
+
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import Config
 from datetime import datetime
 
 
-def get_db():
-    """
-    Открывает соединение с БД.
-    - timeout=30 и busy_timeout=30000 — ждём до 30 секунд, если БД занята.
-    - journal_mode=WAL — параллельное чтение и запись без блокировок.
-    - check_same_thread=False — разрешает доступ из разных потоков Flask.
-    """
+def _make_conn():
+    """Создаёт новое соединение SQLite с нужными PRAGMA."""
     conn = sqlite3.connect(
         Config.DATABASE,
         timeout=30,
@@ -27,8 +24,51 @@ def get_db():
     return conn
 
 
+def get_db():
+    """
+    Открывает соединение с БД, привязанное к текущему HTTP-запросу (Flask g).
+    В рамках одного запроса соединение открывается один раз и переиспользуется.
+
+    Защита: если кто-то закрыл соединение вручную (старый код с conn.close()),
+    замечаем это и открываем новое. После полного рефакторинга проверка
+    станет ненужной, но она безвредна.
+    """
+    if 'db' not in g:
+        g.db = _make_conn()
+    else:
+        try:
+            g.db.execute("SELECT 1")
+        except sqlite3.ProgrammingError:
+            g.db = _make_conn()
+    return g.db
+
+
+def close_db(exc=None):
+    """Закрывает соединение с БД. Вызывается из teardown_appcontext."""
+    db = g.pop('db', None)
+    if db is not None:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
 def init_db():
-    conn = get_db()
+    """
+    Инициализирует БД.
+    ВАЖНО: вызывается из create_app() вне HTTP-контекста,
+    поэтому НЕ использует get_db() (там нет g) — открывает своё соединение.
+    """
+    conn = sqlite3.connect(
+        Config.DATABASE,
+        timeout=30,
+        check_same_thread=False,
+    )
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
+
     cursor = conn.cursor()
 
     cursor.executescript('''
@@ -282,6 +322,14 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_pos_perm_position ON position_permissions(position_id);
         CREATE INDEX IF NOT EXISTS idx_pos_perm_permission ON position_permissions(permission_id);
         CREATE INDEX IF NOT EXISTS idx_plan_gsid ON journal_plan(group_subject_id);
+
+        -- Дополнительные индексы для ускорения работы со студентами
+        CREATE INDEX IF NOT EXISTS idx_students_group ON students(group_id);
+        CREATE INDEX IF NOT EXISTS idx_students_name ON students(full_name);
+        CREATE INDEX IF NOT EXISTS idx_subjects_name ON subjects(name);
+        CREATE INDEX IF NOT EXISTS idx_groups_name ON groups(name);
+        CREATE INDEX IF NOT EXISTS idx_group_subjects_group ON group_subjects(group_id);
+        CREATE INDEX IF NOT EXISTS idx_group_subjects_subject ON group_subjects(subject_id);
     ''')
 
     # --- Миграция: гарантируем колонку users.teacher_id ---
@@ -309,7 +357,6 @@ def init_db():
         )
 
         if generated:
-            # Пишем в файл с правами 600, чтобы не светить в логах
             creds_path = os.path.join(
                 os.path.dirname(os.path.abspath(Config.DATABASE)),
                 'admin_initial_password.txt',
@@ -398,16 +445,16 @@ class User:
     @staticmethod
     def find_by_username(username):
         conn = get_db()
-        user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
-        conn.close()
-        return user
+        return conn.execute(
+            "SELECT * FROM users WHERE username = ?", (username,)
+        ).fetchone()
 
     @staticmethod
     def get_by_id(user_id):
         conn = get_db()
-        user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        conn.close()
-        return user
+        return conn.execute(
+            "SELECT * FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
 
     @staticmethod
     def check_password(user, password):
@@ -431,8 +478,6 @@ class User:
         except sqlite3.OperationalError as e:
             print(f"[User.get_teacher_id] {e}")
             return None
-        finally:
-            conn.close()
 
     @staticmethod
     def set_teacher_id(user_id, teacher_id):
@@ -450,19 +495,15 @@ class User:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}"
-        finally:
-            conn.close()
 
     @staticmethod
     def get_all():
         conn = get_db()
-        users = conn.execute('''
+        return conn.execute('''
             SELECT u.id, u.username, up.full_name, up.phone
             FROM users u LEFT JOIN user_profiles up ON u.id = up.user_id
             ORDER BY u.id
         ''').fetchall()
-        conn.close()
-        return users
 
     @staticmethod
     def get_all_with_teacher():
@@ -470,28 +511,23 @@ class User:
         Все пользователи + привязка к преподавателю (если есть).
         """
         conn = get_db()
-        try:
-            rows = conn.execute('''
-                SELECT u.id, u.username,
-                       up.full_name, up.phone,
-                       u.teacher_id,
-                       t.full_name AS teacher_full_name,
-                       t.short_name AS teacher_short_name
-                FROM users u
-                LEFT JOIN user_profiles up ON u.id = up.user_id
-                LEFT JOIN teachers t ON u.teacher_id = t.id
-                ORDER BY u.id
-            ''').fetchall()
-            return rows
-        finally:
-            conn.close()
+        return conn.execute('''
+            SELECT u.id, u.username,
+                   up.full_name, up.phone,
+                   u.teacher_id,
+                   t.full_name AS teacher_full_name,
+                   t.short_name AS teacher_short_name
+            FROM users u
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            LEFT JOIN teachers t ON u.teacher_id = t.id
+            ORDER BY u.id
+        ''').fetchall()
 
     @staticmethod
     def create(username, password, full_name='', phone='', position_ids=None, permission_ids=None):
         conn = get_db()
         try:
             if not password or len(password) < 8:
-                conn.close()
                 return False, "Пароль должен быть не короче 8 символов", None
 
             cur = conn.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
@@ -513,10 +549,9 @@ class User:
                     except Exception:
                         pass
             conn.commit()
-            conn.close()
             return True, f"Пользователь {username} создан", uid
         except sqlite3.IntegrityError:
-            conn.close()
+            conn.rollback()
             return False, "Пользователь с таким логином уже существует", None
 
     @staticmethod
@@ -524,7 +559,6 @@ class User:
         conn = get_db()
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
-        conn.close()
 
     @staticmethod
     def update_profile(user_id, username, full_name, phone):
@@ -554,8 +588,6 @@ class User:
         except Exception as e:
             conn.rollback()
             return False, f'Ошибка: {str(e)}'
-        finally:
-            conn.close()
 
     @staticmethod
     def change_password(user_id, current_password, new_password, new_password2):
@@ -584,22 +616,17 @@ class User:
         except Exception as e:
             conn.rollback()
             return False, f'Ошибка: {str(e)}'
-        finally:
-            conn.close()
 
     @staticmethod
     def get_profile(user_id):
         conn = get_db()
-        try:
-            row = conn.execute('''
-                SELECT u.id, u.username, up.full_name, up.phone
-                FROM users u
-                LEFT JOIN user_profiles up ON u.id = up.user_id
-                WHERE u.id = ?
-            ''', (user_id,)).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+        row = conn.execute('''
+            SELECT u.id, u.username, up.full_name, up.phone
+            FROM users u
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            WHERE u.id = ?
+        ''', (user_id,)).fetchone()
+        return dict(row) if row else None
 
     @staticmethod
     def find_or_create_teacher(user_id):
@@ -615,14 +642,12 @@ class User:
 
         conn = get_db()
         try:
-            # 1. Уже привязан?
             row = conn.execute(
                 "SELECT teacher_id FROM users WHERE id = ?", (user_id,)
             ).fetchone()
             if row and row['teacher_id']:
                 return row['teacher_id'], False, ''
 
-            # 2. Ищем ФИО пользователя
             profile = conn.execute(
                 "SELECT full_name FROM user_profiles WHERE user_id = ?",
                 (user_id,)
@@ -632,13 +657,11 @@ class User:
             full_name = full_name.strip()
 
             if not full_name:
-                # Нет ФИО — не можем создать преподавателя
                 return None, False, (
                     'У вас не заполнено ФИО в профиле. '
                     'Заполните его в разделе «Профиль», чтобы создавать занятия.'
                 )
 
-            # 3. Ищем преподавателя с таким ФИО (без учёта регистра)
             teacher = conn.execute(
                 "SELECT id FROM teachers WHERE LOWER(full_name) = LOWER(?)",
                 (full_name,)
@@ -650,7 +673,6 @@ class User:
             if teacher:
                 teacher_id = teacher['id']
             else:
-                # 4. Создаём нового преподавателя
                 short_name = User._make_short_name(full_name)
                 cur = conn.execute(
                     "INSERT INTO teachers (full_name, short_name, is_active) "
@@ -660,7 +682,6 @@ class User:
                 teacher_id = cur.lastrowid
                 was_created = True
 
-            # 5. Привязываем к пользователю
             conn.execute(
                 "UPDATE users SET teacher_id = ? WHERE id = ?",
                 (teacher_id, user_id)
@@ -672,8 +693,6 @@ class User:
         except Exception as e:
             conn.rollback()
             return None, False, f'Ошибка создания преподавателя: {e}'
-        finally:
-            conn.close()
 
     @staticmethod
     def _make_short_name(full_name):
@@ -700,16 +719,12 @@ class Group:
     @staticmethod
     def get_all():
         conn = get_db()
-        groups = conn.execute("SELECT * FROM groups ORDER BY name").fetchall()
-        conn.close()
-        return groups
+        return conn.execute("SELECT * FROM groups ORDER BY name").fetchall()
 
     @staticmethod
     def get_by_id(gid):
         conn = get_db()
-        group = conn.execute("SELECT * FROM groups WHERE id = ?", (gid,)).fetchone()
-        conn.close()
-        return group
+        return conn.execute("SELECT * FROM groups WHERE id = ?", (gid,)).fetchone()
 
     @staticmethod
     def get_by_name(name):
@@ -717,14 +732,10 @@ class Group:
         if not name:
             return None
         conn = get_db()
-        try:
-            row = conn.execute(
-                "SELECT * FROM groups WHERE LOWER(name) = LOWER(?)",
-                (name.strip(),)
-            ).fetchone()
-            return row
-        finally:
-            conn.close()
+        return conn.execute(
+            "SELECT * FROM groups WHERE LOWER(name) = LOWER(?)",
+            (name.strip(),)
+        ).fetchone()
 
     @staticmethod
     def create(name):
@@ -733,10 +744,9 @@ class Group:
             cur = conn.execute("INSERT INTO groups (name) VALUES (?)", (name,))
             new_id = cur.lastrowid
             conn.commit()
-            conn.close()
             return True, "Группа создана", new_id
         except sqlite3.IntegrityError:
-            conn.close()
+            conn.rollback()
             return False, "Группа с таким названием уже существует", None
 
     @staticmethod
@@ -745,10 +755,9 @@ class Group:
         try:
             conn.execute("UPDATE groups SET name = ? WHERE id = ?", (name, gid))
             conn.commit()
-            conn.close()
             return True, "Группа обновлена"
         except sqlite3.IntegrityError:
-            conn.close()
+            conn.rollback()
             return False, "Группа с таким названием уже существует"
 
     @staticmethod
@@ -796,8 +805,6 @@ class Group:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка удаления: {e}"
-        finally:
-            conn.close()
 
 
 # ============================================================
@@ -808,16 +815,12 @@ class Subject:
     @staticmethod
     def get_all():
         conn = get_db()
-        subjects = conn.execute("SELECT * FROM subjects ORDER BY name").fetchall()
-        conn.close()
-        return subjects
+        return conn.execute("SELECT * FROM subjects ORDER BY name").fetchall()
 
     @staticmethod
     def get_by_id(sid):
         conn = get_db()
-        subject = conn.execute("SELECT * FROM subjects WHERE id = ?", (sid,)).fetchone()
-        conn.close()
-        return subject
+        return conn.execute("SELECT * FROM subjects WHERE id = ?", (sid,)).fetchone()
 
     @staticmethod
     def get_by_name(name):
@@ -825,14 +828,10 @@ class Subject:
         if not name:
             return None
         conn = get_db()
-        try:
-            row = conn.execute(
-                "SELECT * FROM subjects WHERE LOWER(name) = LOWER(?)",
-                (name.strip(),)
-            ).fetchone()
-            return row
-        finally:
-            conn.close()
+        return conn.execute(
+            "SELECT * FROM subjects WHERE LOWER(name) = LOWER(?)",
+            (name.strip(),)
+        ).fetchone()
 
     @staticmethod
     def create(name):
@@ -840,7 +839,6 @@ class Subject:
         cur = conn.execute("INSERT INTO subjects (name) VALUES (?)", (name,))
         new_id = cur.lastrowid
         conn.commit()
-        conn.close()
         return True, "Предмет создан", new_id
 
     @staticmethod
@@ -848,7 +846,6 @@ class Subject:
         conn = get_db()
         conn.execute("UPDATE subjects SET name=? WHERE id=?", (name, sid))
         conn.commit()
-        conn.close()
         return True, "Предмет обновлен"
 
     @staticmethod
@@ -889,8 +886,6 @@ class Subject:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка удаления: {e}"
-        finally:
-            conn.close()
 
 
 # ============================================================
@@ -901,33 +896,29 @@ class Student:
     @staticmethod
     def get_all():
         conn = get_db()
-        students = conn.execute('''
+        return conn.execute('''
             SELECT s.*, g.name as group_name 
             FROM students s JOIN groups g ON s.group_id=g.id 
             ORDER BY g.name, s.full_name
         ''').fetchall()
-        conn.close()
-        return students
 
     @staticmethod
     def get_by_group(gid):
         conn = get_db()
-        students = conn.execute("SELECT * FROM students WHERE group_id = ? ORDER BY full_name", (gid,)).fetchall()
-        conn.close()
-        return students
+        return conn.execute(
+            "SELECT * FROM students WHERE group_id = ? ORDER BY full_name",
+            (gid,)
+        ).fetchall()
 
     @staticmethod
     def get_by_id(sid):
         conn = get_db()
-        student = conn.execute("SELECT * FROM students WHERE id = ?", (sid,)).fetchone()
-        conn.close()
-        return student
+        return conn.execute("SELECT * FROM students WHERE id = ?", (sid,)).fetchone()
 
     @staticmethod
     def get_group_id(sid):
         conn = get_db()
         row = conn.execute("SELECT group_id FROM students WHERE id = ?", (sid,)).fetchone()
-        conn.close()
         return row['group_id'] if row else None
 
     @staticmethod
@@ -973,11 +964,9 @@ class Student:
                     ))
 
             conn.commit()
-            conn.close()
             return True, "Студент добавлен", student_id
         except Exception as e:
             conn.rollback()
-            conn.close()
             return False, f"Ошибка: {str(e)}", None
 
     @staticmethod
@@ -985,7 +974,6 @@ class Student:
         conn = get_db()
         conn.execute("UPDATE students SET group_id=?, full_name=? WHERE id=?", (gid, name, sid))
         conn.commit()
-        conn.close()
         return True, "Данные обновлены"
 
     @staticmethod
@@ -993,7 +981,6 @@ class Student:
         conn = get_db()
         conn.execute("DELETE FROM students WHERE id = ?", (sid,))
         conn.commit()
-        conn.close()
         return True, "Студент удален"
 
     @staticmethod
@@ -1153,8 +1140,6 @@ class Student:
         except Exception as e:
             conn.rollback()
             stats['errors'].append(f'Критическая ошибка: {str(e)}')
-        finally:
-            conn.close()
 
         return stats
 
@@ -1167,7 +1152,7 @@ class StudentGroupHistory:
     @staticmethod
     def get_for_student(sid):
         conn = get_db()
-        rows = conn.execute('''
+        return conn.execute('''
             SELECT sgh.*, g.name AS group_name, ay.name AS academic_year_name
             FROM student_group_history sgh
             JOIN groups g ON sgh.group_id = g.id
@@ -1175,8 +1160,6 @@ class StudentGroupHistory:
             WHERE sgh.student_id = ?
             ORDER BY sgh.start_date DESC, sgh.id DESC
         ''', (sid,)).fetchall()
-        conn.close()
-        return rows
 
     @staticmethod
     def add(student_id, group_id, academic_year_id, start_date, end_date=None):
@@ -1193,8 +1176,6 @@ class StudentGroupHistory:
             conn.rollback()
             print(f"[StudentGroupHistory] Ошибка: {e}")
             return False
-        finally:
-            conn.close()
 
     @staticmethod
     def close_current(student_id, end_date):
@@ -1211,8 +1192,6 @@ class StudentGroupHistory:
             conn.rollback()
             print(f"[StudentGroupHistory] Ошибка: {e}")
             return False
-        finally:
-            conn.close()
 
 
 # ============================================================
@@ -1223,28 +1202,24 @@ class GroupSubject:
     @staticmethod
     def get_all():
         conn = get_db()
-        pairs = conn.execute('''
+        return conn.execute('''
             SELECT gs.*, g.name as group_name, s.name as subject_name
             FROM group_subjects gs
             JOIN groups g ON gs.group_id=g.id
             JOIN subjects s ON gs.subject_id=s.id
             ORDER BY g.name, s.name
         ''').fetchall()
-        conn.close()
-        return pairs
 
     @staticmethod
     def get_by_id(gsid):
         conn = get_db()
-        pair = conn.execute('''
+        return conn.execute('''
             SELECT gs.*, g.name as group_name, s.name as subject_name
             FROM group_subjects gs
             JOIN groups g ON gs.group_id=g.id
             JOIN subjects s ON gs.subject_id=s.id
             WHERE gs.id=?
         ''', (gsid,)).fetchone()
-        conn.close()
-        return pair
 
     @staticmethod
     def create(gid, sid, semesters_data=None):
@@ -1269,6 +1244,16 @@ class GroupSubject:
                 )
             ''')
 
+            # Индексы для нового журнала
+            conn.execute(f'''
+                CREATE INDEX IF NOT EXISTS idx_j{gsid}_student
+                ON journal_{gsid}(student_id)
+            ''')
+            conn.execute(f'''
+                CREATE INDEX IF NOT EXISTS idx_j{gsid}_date
+                ON journal_{gsid}(date)
+            ''')
+
             if semesters_data:
                 for sem in semesters_data:
                     conn.execute('''
@@ -1285,10 +1270,9 @@ class GroupSubject:
                 ''', (gsid,))
 
             conn.commit()
-            conn.close()
             return True, "Пара создана", gsid
         except sqlite3.IntegrityError:
-            conn.close()
+            conn.rollback()
             return False, "Такая пара уже существует", None
 
     @staticmethod
@@ -1299,7 +1283,6 @@ class GroupSubject:
                 "SELECT * FROM group_subject_hours WHERE group_subject_id=? AND semester=?",
                 (gsid, semester)
             ).fetchone()
-            conn.close()
             if hours:
                 return dict(hours)
             return {'lecture_hours': 0, 'practice_hours': 0, 'independent_hours': 0, 'exam_hours': 0,
@@ -1309,7 +1292,6 @@ class GroupSubject:
                 "SELECT * FROM group_subject_hours WHERE group_subject_id=? ORDER BY semester",
                 (gsid,)
             ).fetchall()
-            conn.close()
             return [dict(h) for h in hours]
 
     @staticmethod
@@ -1319,7 +1301,6 @@ class GroupSubject:
             "SELECT DISTINCT semester FROM group_subject_hours WHERE group_subject_id=? ORDER BY semester",
             (gsid,)
         ).fetchall()
-        conn.close()
         return [s['semester'] for s in semesters]
 
     @staticmethod
@@ -1330,7 +1311,6 @@ class GroupSubject:
         conn.execute("DELETE FROM student_semester_grades WHERE group_subject_id=?", (gsid,))
         conn.execute("DELETE FROM group_subjects WHERE id=?", (gsid,))
         conn.commit()
-        conn.close()
         return True, "Пара удалена"
 
 
@@ -1354,20 +1334,17 @@ class SemesterGrade:
                 (student_id, gsid, semester, grade)
             )
         conn.commit()
-        conn.close()
 
     @staticmethod
     def get_grades(gsid, semester):
         conn = get_db()
-        grades = conn.execute('''
+        return conn.execute('''
             SELECT ssg.*, s.full_name 
             FROM student_semester_grades ssg 
             JOIN students s ON ssg.student_id=s.id 
             WHERE ssg.group_subject_id=? AND ssg.semester=?
             ORDER BY s.full_name
         ''', (gsid, semester)).fetchall()
-        conn.close()
-        return grades
 
     @staticmethod
     def get_student_grade(student_id, gsid, semester):
@@ -1376,7 +1353,6 @@ class SemesterGrade:
             "SELECT * FROM student_semester_grades WHERE student_id=? AND group_subject_id=? AND semester=?",
             (student_id, gsid, semester)
         ).fetchone()
-        conn.close()
         return grade['grade'] if grade else None
 
 
@@ -1388,9 +1364,7 @@ class UserProfile:
     @staticmethod
     def get_by_user_id(uid):
         conn = get_db()
-        profile = conn.execute("SELECT * FROM user_profiles WHERE user_id = ?", (uid,)).fetchone()
-        conn.close()
-        return profile
+        return conn.execute("SELECT * FROM user_profiles WHERE user_id = ?", (uid,)).fetchone()
 
     @staticmethod
     def save(uid, full_name, phone):
@@ -1402,7 +1376,6 @@ class UserProfile:
             conn.execute("INSERT INTO user_profiles (user_id, full_name, phone) VALUES (?,?,?)",
                          (uid, full_name, phone))
         conn.commit()
-        conn.close()
 
 
 # ============================================================
@@ -1413,34 +1386,26 @@ class Position:
     @staticmethod
     def get_all():
         conn = get_db()
-        positions = conn.execute("SELECT * FROM positions ORDER BY id").fetchall()
-        conn.close()
-        return positions
+        return conn.execute("SELECT * FROM positions ORDER BY id").fetchall()
 
     @staticmethod
     def get_by_id(pid):
         conn = get_db()
-        position = conn.execute("SELECT * FROM positions WHERE id = ?", (pid,)).fetchone()
-        conn.close()
-        return position
+        return conn.execute("SELECT * FROM positions WHERE id = ?", (pid,)).fetchone()
 
     @staticmethod
     def get_by_code(code):
         conn = get_db()
-        position = conn.execute("SELECT * FROM positions WHERE code = ?", (code,)).fetchone()
-        conn.close()
-        return position
+        return conn.execute("SELECT * FROM positions WHERE code = ?", (code,)).fetchone()
 
     @staticmethod
     def get_user_positions(uid):
         conn = get_db()
-        positions = conn.execute('''
+        return conn.execute('''
             SELECT p.* FROM positions p
             JOIN user_positions up ON p.id=up.position_id
             WHERE up.user_id=?
         ''', (uid,)).fetchall()
-        conn.close()
-        return positions
 
     @staticmethod
     def save(uid, pids):
@@ -1452,7 +1417,6 @@ class Position:
             except Exception:
                 pass
         conn.commit()
-        conn.close()
 
     @staticmethod
     def count_users(pid):
@@ -1461,7 +1425,6 @@ class Position:
             "SELECT COUNT(*) as c FROM user_positions WHERE position_id = ?",
             (pid,)
         ).fetchone()['c']
-        conn.close()
         return cnt
 
 
@@ -1477,7 +1440,6 @@ class PositionPermission:
             "SELECT permission_id FROM position_permissions WHERE position_id = ?",
             (position_id,)
         ).fetchall()
-        conn.close()
         return [r['permission_id'] for r in rows]
 
     @staticmethod
@@ -1498,8 +1460,6 @@ class PositionPermission:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {str(e)}"
-        finally:
-            conn.close()
 
     @staticmethod
     def get_permissions_for_user_via_positions(uid):
@@ -1511,7 +1471,6 @@ class PositionPermission:
             JOIN permissions p ON p.id = pp.permission_id
             WHERE up.user_id = ?
         ''', (uid,)).fetchall()
-        conn.close()
         return [r['code'] for r in rows]
 
 
@@ -1523,9 +1482,7 @@ class Permission:
     @staticmethod
     def get_all():
         conn = get_db()
-        permissions = conn.execute("SELECT * FROM permissions ORDER BY id").fetchall()
-        conn.close()
-        return permissions
+        return conn.execute("SELECT * FROM permissions ORDER BY id").fetchall()
 
     @staticmethod
     def get_personal_permissions(uid):
@@ -1535,14 +1492,46 @@ class Permission:
             JOIN user_permissions up ON p.id=up.permission_id
             WHERE up.user_id=?
         ''', (uid,)).fetchall()
-        conn.close()
         return [p['code'] for p in permissions]
 
     @staticmethod
     def get_user_permissions(uid):
-        personal = set(Permission.get_personal_permissions(uid))
-        from_roles = set(PositionPermission.get_permissions_for_user_via_positions(uid))
-        return sorted(personal | from_roles)
+        """
+        Возвращает отсортированный список прав пользователя.
+        Результат кэшируется в g._perms_cache на время запроса.
+        """
+        if uid is None:
+            return []
+
+        cache = getattr(g, '_perms_cache', None)
+        if cache is None:
+            cache = {}
+            g._perms_cache = cache
+
+        if uid in cache:
+            return cache[uid]
+
+        # Один запрос вместо двух: UNION личных и ролевых прав
+        conn = get_db()
+        rows = conn.execute('''
+            SELECT DISTINCT code FROM (
+                SELECT p.code
+                FROM permissions p
+                JOIN user_permissions up ON p.id = up.permission_id
+                WHERE up.user_id = ?
+                UNION
+                SELECT p.code
+                FROM user_positions up
+                JOIN position_permissions pp ON pp.position_id = up.position_id
+                JOIN permissions p ON p.id = pp.permission_id
+                WHERE up.user_id = ?
+            )
+            ORDER BY code
+        ''', (uid, uid)).fetchall()
+
+        result = [r['code'] for r in rows]
+        cache[uid] = result
+        return result
 
     @staticmethod
     def has_permission(uid, code):
@@ -1559,7 +1548,10 @@ class Permission:
             except Exception:
                 pass
         conn.commit()
-        conn.close()
+        # Сбросить кэш для этого пользователя
+        cache = getattr(g, '_perms_cache', None)
+        if cache and uid in cache:
+            del cache[uid]
 
 
 # ============================================================
@@ -1573,10 +1565,9 @@ class TeacherJournal:
         try:
             conn.execute("INSERT INTO teacher_journals (user_id, group_subject_id) VALUES (?,?)", (uid, gsid))
             conn.commit()
-            conn.close()
             return True
         except sqlite3.IntegrityError:
-            conn.close()
+            conn.rollback()
             return False
 
     @staticmethod
@@ -1584,12 +1575,11 @@ class TeacherJournal:
         conn = get_db()
         conn.execute("DELETE FROM teacher_journals WHERE user_id=? AND group_subject_id=?", (uid, gsid))
         conn.commit()
-        conn.close()
 
     @staticmethod
     def get_user_journals(uid):
         conn = get_db()
-        journals = conn.execute('''
+        return conn.execute('''
             SELECT gs.*, g.name as group_name, s.name as subject_name
             FROM teacher_journals tj
             JOIN group_subjects gs ON tj.group_subject_id=gs.id
@@ -1598,8 +1588,6 @@ class TeacherJournal:
             WHERE tj.user_id=?
             ORDER BY g.name, s.name
         ''', (uid,)).fetchall()
-        conn.close()
-        return journals
 
 
 # ============================================================
@@ -1613,10 +1601,9 @@ class Curator:
         try:
             conn.execute("INSERT INTO curators (user_id, group_id) VALUES (?,?)", (uid, gid))
             conn.commit()
-            conn.close()
             return True
         except sqlite3.IntegrityError:
-            conn.close()
+            conn.rollback()
             return False
 
     @staticmethod
@@ -1624,24 +1611,23 @@ class Curator:
         conn = get_db()
         conn.execute("DELETE FROM curators WHERE user_id=? AND group_id=?", (uid, gid))
         conn.commit()
-        conn.close()
 
     @staticmethod
     def get_user_groups(uid):
         conn = get_db()
-        groups = conn.execute('''
+        return conn.execute('''
             SELECT g.* FROM groups g
             JOIN curators c ON g.id=c.group_id
             WHERE c.user_id=?
         ''', (uid,)).fetchall()
-        conn.close()
-        return groups
 
     @staticmethod
     def is_curator(uid, gid):
         conn = get_db()
-        count = conn.execute("SELECT COUNT(*) as c FROM curators WHERE user_id=? AND group_id=?", (uid, gid)).fetchone()
-        conn.close()
+        count = conn.execute(
+            "SELECT COUNT(*) as c FROM curators WHERE user_id=? AND group_id=?",
+            (uid, gid)
+        ).fetchone()
         return count['c'] > 0
 
 
@@ -1668,10 +1654,10 @@ class TeacherHours:
                 (uid, gsid, semester, lh, ph, ih, eh)
             )
         conn.commit()
-        conn.close()
 
     @staticmethod
     def save_with_conn(conn, uid, gsid, semester, lh, ph, ih, eh):
+        """Принимает conn извне — для транзакций."""
         ex = conn.execute(
             "SELECT id FROM teacher_hours WHERE user_id=? AND group_subject_id=? AND semester=?",
             (uid, gsid, semester)
@@ -1700,7 +1686,6 @@ class TeacherHours:
                 "SELECT * FROM teacher_hours WHERE user_id=? AND group_subject_id=? ORDER BY semester",
                 (uid, gsid)
             ).fetchall()
-        conn.close()
         return hours
 
 
@@ -1713,18 +1698,15 @@ class JournalPlan:
     def get_for_journal(gsid):
         """Возвращает все пункты плана для пары Группа-Предмет."""
         conn = get_db()
-        try:
-            rows = conn.execute('''
-                SELECT * FROM journal_plan
-                WHERE group_subject_id = ?
-                ORDER BY
-                    CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
-                    order_number,
-                    id
-            ''', (gsid,)).fetchall()
-            return [dict(r) for r in rows]
-        finally:
-            conn.close()
+        rows = conn.execute('''
+            SELECT * FROM journal_plan
+            WHERE group_subject_id = ?
+            ORDER BY
+                CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
+                order_number,
+                id
+        ''', (gsid,)).fetchall()
+        return [dict(r) for r in rows]
 
     @staticmethod
     def get_unused_for_journal(gsid, lesson_type=None):
@@ -1733,39 +1715,33 @@ class JournalPlan:
         Если lesson_type задан — фильтрует по типу занятия.
         """
         conn = get_db()
-        try:
-            sql = '''
-                SELECT * FROM journal_plan
-                WHERE group_subject_id = ?
-                  AND used_lesson_id IS NULL
-            '''
-            params = [gsid]
-            if lesson_type:
-                sql += " AND lesson_type = ?"
-                params.append(lesson_type)
+        sql = '''
+            SELECT * FROM journal_plan
+            WHERE group_subject_id = ?
+              AND used_lesson_id IS NULL
+        '''
+        params = [gsid]
+        if lesson_type:
+            sql += " AND lesson_type = ?"
+            params.append(lesson_type)
 
-            sql += '''
-                ORDER BY
-                    CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
-                    order_number,
-                    id
-            '''
+        sql += '''
+            ORDER BY
+                CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
+                order_number,
+                id
+        '''
 
-            rows = conn.execute(sql, params).fetchall()
-            return [dict(r) for r in rows]
-        finally:
-            conn.close()
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
 
     @staticmethod
     def get_by_id(plan_id):
         conn = get_db()
-        try:
-            row = conn.execute(
-                "SELECT * FROM journal_plan WHERE id = ?", (plan_id,)
-            ).fetchone()
-            return dict(row) if row else None
-        finally:
-            conn.close()
+        row = conn.execute(
+            "SELECT * FROM journal_plan WHERE id = ?", (plan_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
     @staticmethod
     def create(gsid, order_number, topic, hours, lesson_type):
@@ -1784,8 +1760,6 @@ class JournalPlan:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}", None
-        finally:
-            conn.close()
 
     @staticmethod
     def update(plan_id, order_number, topic, hours, lesson_type):
@@ -1801,8 +1775,6 @@ class JournalPlan:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}"
-        finally:
-            conn.close()
 
     @staticmethod
     def delete(plan_id):
@@ -1814,8 +1786,6 @@ class JournalPlan:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}"
-        finally:
-            conn.close()
 
     @staticmethod
     def delete_all_for_journal(gsid):
@@ -1829,8 +1799,6 @@ class JournalPlan:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}", 0
-        finally:
-            conn.close()
 
     @staticmethod
     def mark_used(plan_id, lesson_id):
@@ -1846,8 +1814,6 @@ class JournalPlan:
         except Exception as e:
             conn.rollback()
             return False
-        finally:
-            conn.close()
 
     @staticmethod
     def copy_to_journal(source_gsid, target_gsid):
@@ -1886,5 +1852,3 @@ class JournalPlan:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}", 0
-        finally:
-            conn.close()

@@ -74,8 +74,6 @@ class JournalManager:
             return dict(row) if row else None
         except Exception:
             return None
-        finally:
-            conn.close()
 
     @staticmethod
     def add_lesson(gs_id, date, time_interval, topic, lesson_type, semester, students_data):
@@ -94,7 +92,6 @@ class JournalManager:
                 (semester,)
             ).fetchone()
             if exam_exists['c'] > 0:
-                conn.close()
                 return False, "Нельзя добавить занятие после экзамена! Экзамен уже проведен в этом семестре."
 
         if lesson_type == 'exam':
@@ -103,7 +100,6 @@ class JournalManager:
                 (semester,)
             ).fetchone()
             if exam_exists['c'] > 0:
-                conn.close()
                 return False, "Экзамен в этом семестре уже проведен! Нельзя добавить второй экзамен."
 
         for student_id, data in students_data.items():
@@ -116,7 +112,6 @@ class JournalManager:
                 data.get('grade') if data.get('grade') else None
             ))
         conn.commit()
-        conn.close()
         return True, "Занятие добавлено"
 
     @staticmethod
@@ -164,7 +159,6 @@ class JournalManager:
                     date, 
                     id
             ''').fetchall()
-        conn.close()
 
         lessons_dict = {}
         for entry in entries:
@@ -209,7 +203,6 @@ class JournalManager:
             WHERE id = ?
         ''', (attendance, grade if grade else None, entry_id))
         conn.commit()
-        conn.close()
         return True, "Запись обновлена"
 
     @staticmethod
@@ -269,8 +262,6 @@ class JournalManager:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}", 0
-        finally:
-            conn.close()
 
     @staticmethod
     def update_lesson_type(gs_id, date, time_interval, semester, new_type):
@@ -285,7 +276,6 @@ class JournalManager:
                     (semester, date, time_interval)
                 ).fetchone()
                 if exam_exists['c'] > 0:
-                    conn.close()
                     return False, "Экзамен в этом семестре уже существует!"
 
             conn.execute(f'''
@@ -295,10 +285,9 @@ class JournalManager:
             ''', (new_type, date, time_interval, semester))
 
             conn.commit()
-            conn.close()
             return True, "Тип занятия обновлен"
         except Exception as e:
-            conn.close()
+            conn.rollback()
             return False, f"Ошибка: {str(e)}"
 
     @staticmethod
@@ -309,7 +298,6 @@ class JournalManager:
         conn.execute(f"DELETE FROM {table_name} WHERE date = ? AND time_interval = ?",
                      (date, time_interval))
         conn.commit()
-        conn.close()
         return True, "Занятие удалено"
 
     @staticmethod
@@ -364,7 +352,6 @@ class JournalManager:
                 GROUP BY student_id
             ''').fetchall()
 
-        conn.close()
         return {
             'total_lessons': stats['total_lessons'] or 0,
             'total_absences': stats['total_absences'] or 0,
@@ -401,8 +388,6 @@ class JournalManager:
                 ORDER BY date, time_interval
             ''', (student_id,)).fetchall()
 
-            conn.close()
-
             if len(grades) == 0:
                 return None
 
@@ -420,7 +405,6 @@ class JournalManager:
                 )
             }
         except Exception as e:
-            conn.close()
             print(f"Ошибка при получении статистики студента: {e}")
             return None
 
@@ -498,5 +482,3 @@ class JournalManager:
                 'lecture': 0, 'practice': 0, 'independent': 0,
                 'exam': 0, 'dictation': 0, 'diff_credit': 0, 'total': 0
             }
-        finally:
-            conn.close()

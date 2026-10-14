@@ -1,0 +1,21 @@
+{# Фрагмент модалки «Оценки за семестр» — строки таблицы. #}
+{% for st in rows %}
+<tr data-student-id="{{ st.id }}">
+    <td class="small">{{ st.name }}</td>
+    <td class="text-center">
+        <div class="d-flex justify-content-center gap-1 flex-wrap">
+            {% for val, label in [('5', '5'), ('4', '4'), ('3', '3'), ('2', '2'), ('passed', 'Зач'), ('', '—')] %}
+                <button type="button"
+                        class="btn btn-sm sem-grade-btn
+                        {% if st.grade == val %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                        data-value="{{ val }}"
+                        data-student-id="{{ st.id }}"
+                        data-semester="{{ semester }}"
+                        data-gsid="{{ gsid }}">
+                    {{ label }}
+                </button>
+            {% endfor %}
+        </div>
+    </td>
+</tr>
+{% endfor %}

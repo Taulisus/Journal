@@ -1,0 +1,164 @@
+/* ============================================================
+   AURORA UI · Design Tokens
+   ============================================================ */
+:root {
+  /* ---- Brand: indigo ---- */
+  --brand-50:  #eef2ff; --brand-100: #e0e7ff; --brand-200: #c7d2fe;
+  --brand-300: #a5b4fc; --brand-400: #818cf8; --brand-500: #6366f1;
+  --brand-600: #4f46e5; --brand-700: #4338ca; --brand-800: #3730a3;
+
+  /* ---- Нейтральные слои ---- */
+  --bg:            #f6f7fb;
+  --bg-grad-1:     rgba(99, 102, 241, .10);
+  --bg-grad-2:     rgba(16, 185, 129, .08);
+  --surface:       #ffffff;
+  --surface-alt:   #fafbfe;
+  --surface-hover: #f2f4f9;
+  --border:        #e8ebf3;
+  --border-strong: #d5dae6;
+
+  --text:          #0f1729;
+  --text-muted:    #64708a;
+  --text-subtle:   #98a1b5;
+
+  /* ---- Семантика ---- */
+  --success: #10b981; --success-bg: #d1fae5; --success-tx: #065f46;
+  --warning: #f59e0b; --warning-bg: #fef3c7; --warning-tx: #78350f;
+  --danger:  #ef4444; --danger-bg:  #fee2e2; --danger-tx:  #7f1d1d;
+  --info:    #06b6d4; --info-bg:    #cffafe; --info-tx:    #155e75;
+
+  /* ---- Радиусы — заметно круглее ---- */
+  --r-xs: 6px; --r-sm: 8px; --r: 10px; --r-lg: 14px;
+  --r-xl: 20px; --r-2xl: 28px; --r-pill: 999px;
+
+  /* ---- Слоистые мягкие тени ---- */
+  --sh-xs: 0 1px 2px rgba(15,23,42,.05);
+  --sh-sm: 0 2px 8px rgba(15,23,42,.06);
+  --sh:    0 8px 24px -8px rgba(15,23,42,.12), 0 2px 6px rgba(15,23,42,.04);
+  --sh-lg: 0 20px 40px -12px rgba(15,23,42,.16), 0 6px 16px -6px rgba(15,23,42,.08);
+  --sh-xl: 0 32px 64px -16px rgba(15,23,42,.22), 0 12px 24px -12px rgba(15,23,42,.10);
+
+  --ring: 0 0 0 4px rgba(99,102,241,.14);
+  --ring-danger: 0 0 0 4px rgba(239,68,68,.14);
+
+  /* ---- Стекло (glassmorphism) ---- */
+  --glass-bg:     rgba(255,255,255,.72);
+  --glass-border: rgba(255,255,255,.55);
+  --glass-blur:   20px;
+
+  /* ---- Градиенты ---- */
+  --grad-brand:   linear-gradient(135deg, #6366f1 0%, #4f46e5 60%, #4338ca 100%);
+  --grad-aurora:  linear-gradient(135deg, #6366f1 0%, #8b5cf6 45%, #06b6d4 100%);
+  --grad-success: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  --grad-warn:    linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  --grad-danger:  linear-gradient(135deg, #fb7185 0%, #ef4444 100%);
+
+  /* ---- Шрифты ---- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display: 'Manrope', 'Inter', -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Consolas, monospace;
+
+  /* ---- Ритм ---- */
+  --nav-h: 64px;
+  --container-max: 1360px;
+
+  /* ---- Плотность (comfortable по умолчанию) ---- */
+  --row-pad:   12px 18px;
+  --cell-pad:  10px 8px;
+  --pad-card:  24px;
+  --base-size: 14.5px;
+  --line-h:    1.55;
+  --gap-card:  20px;
+
+  /* ---- Тайминги анимаций ---- */
+  --ease:      cubic-bezier(.2,.8,.2,1);
+  --dur-fast:  .14s;
+  --dur:       .22s;
+  --dur-slow:  .34s;
+}
+
+/* ============================================================
+   Акценты (пресеты)
+   ============================================================ */
+[data-accent="violet"] {
+  --brand-50:#f5f3ff;--brand-100:#ede9fe;--brand-200:#ddd6fe;--brand-300:#c4b5fd;
+  --brand-400:#a78bfa;--brand-500:#8b5cf6;--brand-600:#7c3aed;--brand-700:#6d28d9;--brand-800:#5b21b6;
+  --ring: 0 0 0 4px rgba(124,58,237,.16);
+  --grad-brand: linear-gradient(135deg,#8b5cf6 0%,#7c3aed 60%,#6d28d9 100%);
+  --grad-aurora: linear-gradient(135deg,#8b5cf6 0%,#ec4899 50%,#06b6d4 100%);
+}
+[data-accent="emerald"] {
+  --brand-50:#ecfdf5;--brand-100:#d1fae5;--brand-200:#a7f3d0;--brand-300:#6ee7b7;
+  --brand-400:#34d399;--brand-500:#10b981;--brand-600:#059669;--brand-700:#047857;--brand-800:#065f46;
+  --ring: 0 0 0 4px rgba(5,150,105,.16);
+  --grad-brand: linear-gradient(135deg,#10b981 0%,#059669 60%,#047857 100%);
+  --grad-aurora: linear-gradient(135deg,#10b981 0%,#06b6d4 55%,#6366f1 100%);
+}
+[data-accent="rose"] {
+  --brand-50:#fff1f2;--brand-100:#ffe4e6;--brand-200:#fecdd3;--brand-300:#fda4af;
+  --brand-400:#fb7185;--brand-500:#f43f5e;--brand-600:#e11d48;--brand-700:#be123c;--brand-800:#9f1239;
+  --ring: 0 0 0 4px rgba(225,29,72,.16);
+  --grad-brand: linear-gradient(135deg,#f43f5e 0%,#e11d48 60%,#be123c 100%);
+  --grad-aurora: linear-gradient(135deg,#fb7185 0%,#a855f7 55%,#6366f1 100%);
+}
+[data-accent="amber"] {
+  --brand-50:#fffbeb;--brand-100:#fef3c7;--brand-200:#fde68a;--brand-300:#fcd34d;
+  --brand-400:#fbbf24;--brand-500:#f59e0b;--brand-600:#d97706;--brand-700:#b45309;--brand-800:#92400e;
+  --ring: 0 0 0 4px rgba(217,119,6,.16);
+  --grad-brand: linear-gradient(135deg,#fbbf24 0%,#f59e0b 60%,#d97706 100%);
+  --grad-aurora: linear-gradient(135deg,#fbbf24 0%,#f97316 55%,#ef4444 100%);
+}
+[data-accent="slate"] {
+  --brand-50:#f8fafc;--brand-100:#f1f5f9;--brand-200:#e2e8f0;--brand-300:#cbd5e1;
+  --brand-400:#94a3b8;--brand-500:#64748b;--brand-600:#475569;--brand-700:#334155;--brand-800:#1e293b;
+  --ring: 0 0 0 4px rgba(71,85,105,.16);
+  --grad-brand: linear-gradient(135deg,#64748b 0%,#475569 60%,#334155 100%);
+  --grad-aurora: linear-gradient(135deg,#64748b 0%,#0ea5e9 60%,#6366f1 100%);
+}
+
+/* ============================================================
+   Плотность
+   ============================================================ */
+[data-density="compact"] {
+  --row-pad:   8px 14px;
+  --cell-pad:  6px 6px;
+  --pad-card:  16px;
+  --base-size: 13.5px;
+  --line-h:    1.45;
+  --gap-card:  14px;
+  --nav-h:     56px;
+}
+
+/* ============================================================
+   Тёмная тема — «Aurora Night»
+   ============================================================ */
+[data-theme="dark"] {
+  --bg:            #0a0e1a;
+  --bg-grad-1:     rgba(99,102,241,.20);
+  --bg-grad-2:     rgba(6,182,212,.14);
+  --surface:       #111a2e;
+  --surface-alt:   #0e1729;
+  --surface-hover: #1a2542;
+  --border:        #1e293b;
+  --border-strong: #334155;
+
+  --text:          #e2e8f0;
+  --text-muted:    #94a3b8;
+  --text-subtle:   #64748b;
+
+  --success-bg:#052e16; --success-tx:#86efac;
+  --warning-bg:#451a03; --warning-tx:#fcd34d;
+  --danger-bg: #450a0a; --danger-tx: #fca5a5;
+  --info-bg:   #083344; --info-tx:   #67e8f9;
+
+  --glass-bg:     rgba(17,26,46,.72);
+  --glass-border: rgba(148,163,184,.14);
+
+  --sh-xs: 0 1px 2px rgba(0,0,0,.4);
+  --sh-sm: 0 2px 8px rgba(0,0,0,.4);
+  --sh:    0 8px 24px -8px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+  --sh-lg: 0 20px 40px -12px rgba(0,0,0,.6), 0 6px 16px -6px rgba(0,0,0,.4);
+  --sh-xl: 0 32px 64px -16px rgba(0,0,0,.7), 0 12px 24px -12px rgba(0,0,0,.5);
+
+  --ring: 0 0 0 4px rgba(99,102,241,.24);
+}

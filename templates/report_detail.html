@@ -13,57 +13,71 @@
 
 {% block content %}
 
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-    <h2 class="mb-0">
-        <i class="bi bi-graph-up"></i>
+{# ============================================================
+   ЗАГОЛОВОК
+   ============================================================ #}
+<div class="page-head">
+    <h2>
+        <i class="bi bi-graph-up text-primary me-2"></i>
         {{ pair.group_name }} — {{ pair.subject_name }}
     </h2>
-    <a href="{{ url_for('main.reports') }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> К отчётам
-    </a>
+    <div class="page-head__actions">
+        <a href="{{ url_for('main.reports') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> К отчётам
+        </a>
+    </div>
 </div>
 
-<div class="row g-3 mb-3">
-    <div class="col-6 col-md-3">
-        <div class="card text-white bg-primary">
+{# ============================================================
+   ПЛИТКИ
+   ============================================================ #}
+<div class="row mb-4">
+    <div class="col-6 col-md-3 mb-3">
+        <div class="card" style="background:var(--brand-600);color:#fff;border-color:var(--brand-600);">
             <div class="card-body text-center">
-                <div class="fs-4 fw-bold">{{ stats.total_lessons }}</div>
+                <div style="font-size:1.6rem;font-weight:700;">{{ stats.total_lessons }}</div>
                 <small>занятий</small>
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="card text-white bg-danger">
+
+    <div class="col-6 col-md-3 mb-3">
+        <div class="card" style="background:var(--danger);color:#fff;border-color:var(--danger);">
             <div class="card-body text-center">
-                <div class="fs-4 fw-bold">{{ stats.total_absences }}</div>
+                <div style="font-size:1.6rem;font-weight:700;">{{ stats.total_absences }}</div>
                 <small>пропусков</small>
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="card text-white bg-success">
+
+    <div class="col-6 col-md-3 mb-3">
+        <div class="card" style="background:var(--success);color:#fff;border-color:var(--success);">
             <div class="card-body text-center">
-                <div class="fs-4 fw-bold">{{ stats.avg_grade }}</div>
+                <div style="font-size:1.6rem;font-weight:700;">{{ stats.avg_grade }}</div>
                 <small>средний балл</small>
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="card text-white bg-info">
+
+    <div class="col-6 col-md-3 mb-3">
+        <div class="card" style="background:var(--info);color:#fff;border-color:var(--info);">
             <div class="card-body text-center">
-                <div class="fs-4 fw-bold">{{ stats.students|length }}</div>
+                <div style="font-size:1.6rem;font-weight:700;">{{ stats.students|length }}</div>
                 <small>студентов</small>
             </div>
         </div>
     </div>
 </div>
 
+{# ============================================================
+   ГРАФИК
+   ============================================================ #}
 {% if chart_filename %}
-<div class="card shadow-sm mb-3">
-    <div class="card-header bg-white">
-        <h6 class="mb-0">
-            <i class="bi bi-bar-chart"></i> График успеваемости
-        </h6>
+<div class="card mb-3">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-bar-chart text-primary me-2"></i>График успеваемости
+        </h5>
     </div>
     <div class="card-body text-center">
         <img src="{{ url_for('static', filename=chart_filename) }}"
@@ -72,19 +86,26 @@
 </div>
 {% endif %}
 
-<div class="card shadow-sm">
-    <div class="card-header bg-white">
-        <h6 class="mb-0">Детали по студентам</h6>
+{# ============================================================
+   ТАБЛИЦА
+   ============================================================ #}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="bi bi-people text-primary me-2"></i>Детали по студентам
+        </h5>
     </div>
+
+    {% if stats.students %}
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
+        <table class="table mb-0">
+            <thead>
                 <tr>
                     <th>Студент</th>
-                    <th class="text-center">Посещений</th>
-                    <th class="text-center">Пропусков</th>
-                    <th class="text-center">% пропусков</th>
-                    <th class="text-center">Средний балл</th>
+                    <th class="text-center" style="width:120px;">Посещений</th>
+                    <th class="text-center" style="width:120px;">Пропусков</th>
+                    <th class="text-center" style="width:140px;">% пропусков</th>
+                    <th class="text-center" style="width:130px;">Средний балл</th>
                 </tr>
             </thead>
             <tbody>
@@ -94,7 +115,7 @@
                     <tr>
                         <td>
                             <a href="{{ url_for('student_card.card', sid=s.student_id) }}"
-                               class="text-decoration-none">
+                               style="color:var(--text);font-weight:500;text-decoration:none;">
                                 {{ info.name }}
                             </a>
                         </td>
@@ -104,7 +125,7 @@
                             {% if info.absence_percent > 25 %}
                                 <span class="badge bg-danger">{{ info.absence_percent }}%</span>
                             {% elif info.absence_percent > 10 %}
-                                <span class="badge bg-warning text-dark">{{ info.absence_percent }}%</span>
+                                <span class="badge bg-warning">{{ info.absence_percent }}%</span>
                             {% else %}
                                 <span class="badge bg-success">{{ info.absence_percent }}%</span>
                             {% endif %}
@@ -122,12 +143,12 @@
             </tbody>
         </table>
     </div>
-
-    {% if not stats.students %}
-        <div class="text-center text-muted py-4">
-            <i class="bi bi-inbox" style="font-size:2rem;"></i>
-            <p class="mt-2 mb-0">Нет данных для отчёта</p>
-        </div>
+    {% else %}
+    <div class="empty">
+        <div class="empty__icon"><i class="bi bi-inbox"></i></div>
+        <div class="empty__title">Нет данных для отчёта</div>
+        <div class="empty__desc">Добавьте занятия в журнал, чтобы появился отчёт</div>
+    </div>
     {% endif %}
 </div>
 

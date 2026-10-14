@@ -12,19 +12,29 @@
 
 {% block content %}
 
-<h2 class="mb-4">
-    <i class="bi bi-file-earmark-pdf"></i>
-    Импорт расписания из PDF
-</h2>
+<div class="page-head">
+    <h2>
+        <i class="bi bi-file-earmark-pdf text-primary me-2"></i>Импорт расписания из PDF
+    </h2>
+    <div class="page-head__actions">
+        <a href="{{ url_for('schedule.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> К расписанию
+        </a>
+    </div>
+</div>
 
 {% if step == 'upload' %}
 
+{# ============================================================
+   ШАГ 1. ЗАГРУЗКА ФАЙЛА
+   ============================================================ #}
 <div class="row">
-    <div class="col-12 col-lg-8">
-        <div class="card shadow-sm">
+    <div class="col-12 col-lg-8 mb-3">
+        <div class="card">
             <div class="card-body">
                 <form method="post" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
                     <div class="mb-3">
                         <label class="form-label fw-bold">PDF-файл расписания</label>
                         <input type="file" name="file" class="form-control"
@@ -40,8 +50,7 @@
                             Шаблон ФИО преподавателя (regex)
                         </label>
                         <input type="text" name="teacher_pattern" class="form-control"
-                               value=".+"
-                               placeholder="Например: За[лд]яев или .+">
+                               value=".+" placeholder="Например: За[лд]яев или .+">
                         <div class="form-text">
                             <code>.+</code> — все преподаватели.
                             <code>За[лд]яев</code> — только Заляев или Задяев.
@@ -52,39 +61,44 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold">Учебный год</label>
                         <input type="number" name="year" class="form-control"
-                               value="{{ current_year or 2026 }}" min="2020" max="2100">
+                               value="{{ current_year or 2026 }}"
+                               min="2020" max="2100">
                     </div>
 
                     <div class="alert alert-info small">
-                        <i class="bi bi-info-circle"></i>
-                        Парсер ищет в PDF преподавателей по шаблону, для каждого
-                        находит: день, дату, номер пары, время, группу, предмет и
-                        аудиторию. Затем на следующем шаге вы сможете проверить
-                        и импортировать.
+                        <i class="bi bi-info-circle-fill"></i>
+                        <span>
+                            Парсер ищет в PDF преподавателей по шаблону, для каждого
+                            находит: день, дату, номер пары, время, группу, предмет и
+                            аудиторию. Затем на следующем шаге вы сможете проверить
+                            и импортировать.
+                        </span>
                     </div>
 
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-upload"></i> Загрузить и распарсить
-                    </button>
-                    <a href="{{ url_for('schedule.index') }}"
-                       class="btn btn-outline-secondary">
-                        Отмена
-                    </a>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Загрузить и распарсить
+                        </button>
+                        <a href="{{ url_for('schedule.index') }}"
+                           class="btn btn-outline-secondary">
+                            Отмена
+                        </a>
+                    </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <div class="col-12 col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-info-circle text-primary"></i>
+    <div class="col-12 col-lg-4 mb-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle text-primary me-2"></i>
                     Что произойдёт
-                </h6>
+                </h5>
             </div>
             <div class="card-body small">
-                <ol class="mb-0 ps-3">
+                <ol class="mb-0" style="padding-left:18px;">
                     <li>PDF сохранится в <code>uploads/schedules/</code></li>
                     <li>Парсер извлечёт все занятия</li>
                     <li>Вы увидите предпросмотр с чекбоксами</li>
@@ -95,8 +109,7 @@
                     <strong>Автосоздание:</strong><br>
                     Группы, предметы, преподаватели и аудитории, которых нет
                     в БД, будут созданы автоматически. Преподаватели
-                    сопоставляются через fuzzy-матчинг — если в БД уже есть
-                    «Ваганов М.А.», то «Ваганов М. А.» найдётся и не задублируется.
+                    сопоставляются через fuzzy-матчинг.
                 </div>
             </div>
         </div>
@@ -105,55 +118,60 @@
 
 {% elif step == 'preview' %}
 
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+{# ============================================================
+   ШАГ 2. ПРЕДПРОСМОТР
+   ============================================================ #}
+<div class="page-head">
     <div>
-        <h3 class="mb-0">
-            <i class="bi bi-list-check"></i>
+        <h2>
+            <i class="bi bi-list-check text-success me-2"></i>
             Предпросмотр: {{ filename }}
-        </h3>
+        </h2>
         <div class="text-muted small mt-1">
-            Найдено <strong>{{ lessons|length }}</strong> занятий
+            Найдено <strong>{{ preview_rows|length }}</strong> занятий
             {% if teacher_pattern and teacher_pattern != '.+' %}
                 • шаблон: <code>{{ teacher_pattern }}</code>
             {% endif %}
             • год: <strong>{{ year }}</strong>
         </div>
     </div>
-    <a href="{{ url_for('schedule.upload_pdf') }}"
-       class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> Загрузить другой
-    </a>
+    <div class="page-head__actions">
+        <a href="{{ url_for('schedule.upload_pdf') }}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Загрузить другой
+        </a>
+    </div>
 </div>
 
-<div class="row g-2 mb-3">
-    <div class="col-6 col-md-3">
-        <div class="card text-white bg-primary">
-            <div class="card-body text-center py-2">
-                <div class="fs-5 fw-bold">{{ lessons|length }}</div>
+<div class="row mb-3">
+    <div class="col-6 col-md-3 mb-3">
+        <div class="card" style="background:var(--brand-600);color:#fff;border-color:var(--brand-600);">
+            <div class="card-body text-center">
+                <div style="font-size:1.5rem;font-weight:700;">{{ preview_rows|length }}</div>
                 <small>занятий</small>
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="card text-white bg-info">
-            <div class="card-body text-center py-2">
-                <div class="fs-5 fw-bold">{{ groups|length }}</div>
-                <small>групп</small>
+    <div class="col-6 col-md-3 mb-3">
+        <div class="card" style="background:var(--info);color:#fff;border-color:var(--info);">
+            <div class="card-body text-center">
+                <div style="font-size:1.5rem;font-weight:700;">{{ groups|length }}</div>
+                <small>групп распознано</small>
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="card text-white bg-success">
-            <div class="card-body text-center py-2">
-                <div class="fs-5 fw-bold">{{ teachers|length }}</div>
+    <div class="col-6 col-md-3 mb-3">
+        <div class="card" style="background:var(--success);color:#fff;border-color:var(--success);">
+            <div class="card-body text-center">
+                <div style="font-size:1.5rem;font-weight:700;">{{ teachers|length }}</div>
                 <small>преподавателей</small>
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="card text-white bg-warning">
-            <div class="card-body text-center py-2">
-                <div class="fs-5 fw-bold">{{ subjects|length }}</div>
+    <div class="col-6 col-md-3 mb-3">
+        <div class="card" style="background:var(--warning);color:#fff;border-color:var(--warning);">
+            <div class="card-body text-center">
+                <div style="font-size:1.5rem;font-weight:700;">{{ subjects|length }}</div>
                 <small>предметов</small>
             </div>
         </div>
@@ -164,12 +182,11 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="preview_id" value="{{ preview_id }}">
 
-    <div class="card shadow-sm mb-3">
-        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <h6 class="mb-0">
-                <i class="bi bi-table"></i>
-                Занятия
-            </h6>
+    <div class="card mb-3">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h5 class="mb-0">
+                <i class="bi bi-table me-2"></i>Занятия
+            </h5>
             <div class="d-flex gap-2">
                 <button type="button" class="btn btn-sm btn-outline-secondary"
                         onclick="toggleAll(true)">
@@ -177,46 +194,77 @@
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary"
                         onclick="toggleAll(false)">
-                    <i class="bi bi-x"></i> Снять все
+                    <i class="bi bi-x-circle"></i> Снять все
                 </button>
             </div>
         </div>
+
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+            <table class="table mb-0">
+                <thead>
                     <tr>
-                        <th style="width: 40px;" class="text-center">
+                        <th style="width:44px;" class="text-center">
                             <i class="bi bi-check2-square"></i>
                         </th>
                         <th>День</th>
                         <th>Дата</th>
-                        <th>Пара</th>
+                        <th style="width:60px;" class="text-center">Пара</th>
                         <th>Время</th>
-                        <th>Группа</th>
-                        <th>Предмет</th>
+                        <th style="min-width:220px;">Группа</th>
+                        <th style="min-width:220px;">Предмет</th>
                         <th>Преподаватель</th>
-                        <th>Ауд.</th>
+                        <th style="width:80px;">Ауд.</th>
                     </tr>
                 </thead>
                 <tbody>
-                {% for l in lessons %}
+                {% for row in preview_rows %}
+                    {% set l = row.raw %}
+                    {% set i = row.index %}
                     <tr>
                         <td class="text-center">
                             <input type="checkbox" class="form-check-input lesson-check"
-                                   name="lesson_{{ loop.index0 }}" value="1" checked>
+                                   name="lesson_{{ i }}" value="1" checked>
                         </td>
                         <td class="small">{{ l.day or '—' }}</td>
                         <td class="small">{{ l.date or '—' }}</td>
                         <td class="text-center small">{{ l.pair or '—' }}</td>
                         <td class="small text-nowrap">{{ l.time or '—' }}</td>
-                        <td class="fw-semibold small">
-                            {% if l.group %}
-                                {{ l.group }}
-                            {% else %}
-                                <span class="text-danger">— нет —</span>
+
+                        <td class="small">
+                            <select name="group_choice_{{ i }}" class="form-select form-select-sm">
+                                <option value="__skip__">— Пропустить —</option>
+                                <option value="__new__" {% if row.group_choice == -1 %}selected{% endif %}>
+                                    ➕ Создать: «{{ row.group_raw or l.group or '—' }}»
+                                </option>
+                                {% for g in all_groups %}
+                                    <option value="{{ g.id }}"
+                                            {% if row.group_choice == g.id %}selected{% endif %}>
+                                        {{ g.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if row.group_raw and row.group_choice == -1 %}
+                                <div class="form-text" style="color:var(--danger);">
+                                    Не найдено в БД — будет создано
+                                </div>
                             {% endif %}
                         </td>
-                        <td class="small">{{ l.subject or '—' }}</td>
+
+                        <td class="small">
+                            <select name="subject_choice_{{ i }}" class="form-select form-select-sm">
+                                <option value="__skip__">— Пропустить —</option>
+                                <option value="__new__" {% if row.subject_choice == -1 %}selected{% endif %}>
+                                    ➕ Создать: «{{ row.subject_raw or l.subject or '—' }}»
+                                </option>
+                                {% for s in all_subjects %}
+                                    <option value="{{ s.id }}"
+                                            {% if row.subject_choice == s.id %}selected{% endif %}>
+                                        {{ s.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+
                         <td class="small">{{ l.teacher or '—' }}</td>
                         <td class="small">{{ l.room or '—' }}</td>
                     </tr>
@@ -226,7 +274,7 @@
         </div>
     </div>
 
-    <div class="d-flex gap-2 flex-wrap">
+    <div class="d-flex gap-2 flex-wrap align-items-center">
         <button type="submit" class="btn btn-success btn-lg">
             <i class="bi bi-download"></i> Импортировать выбранные
         </button>
@@ -234,9 +282,9 @@
            class="btn btn-outline-secondary btn-lg">
             Отмена
         </a>
-        <span class="ms-auto text-muted small align-self-center">
-            Выбрано: <strong id="selectedCount">{{ lessons|length }}</strong>
-            из {{ lessons|length }}
+        <span class="ms-auto text-muted small">
+            Выбрано: <strong id="selectedCount">{{ preview_rows|length }}</strong>
+            из {{ preview_rows|length }}
         </span>
     </div>
 </form>
@@ -258,7 +306,8 @@ function toggleAll(state) {
 
 function updateCount() {
     var n = document.querySelectorAll('.lesson-check:checked').length;
-    document.getElementById('selectedCount').textContent = n;
+    var el = document.getElementById('selectedCount');
+    if (el) el.textContent = n;
 }
 
 document.querySelectorAll('.lesson-check').forEach(function (cb) {

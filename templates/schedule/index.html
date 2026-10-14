@@ -11,137 +11,143 @@
 
 {% block content %}
 
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-    <h2 class="mb-0">
-        <i class="bi bi-calendar-week"></i>
-        Расписание
+{# ============================================================
+   ЗАГОЛОВОК + ДЕЙСТВИЯ
+   ============================================================ #}
+<div class="page-head">
+    <h2>
+        <i class="bi bi-calendar-week text-primary me-2"></i>Расписание
     </h2>
-    <div class="d-flex gap-2 flex-wrap">
+    <div class="page-head__actions">
         {% if can_edit_any %}
             <a href="{{ url_for('schedule.new_lesson', date=date) }}"
-               class="btn btn-sm btn-success">
+               class="btn btn-success">
                 <i class="bi bi-plus-circle"></i> Добавить занятие
             </a>
         {% endif %}
         {% if has_permission('add_journal') %}
             <a href="{{ url_for('schedule.upload_pdf') }}"
-               class="btn btn-sm btn-outline-primary">
+               class="btn btn-outline-primary">
                 <i class="bi bi-file-earmark-pdf"></i> Импорт PDF
             </a>
         {% endif %}
         {% if has_permission('manage_users') %}
             <div class="dropdown">
-                <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
-                        data-bs-toggle="dropdown">
+                <button type="button" class="btn btn-outline-secondary" data-dropdown aria-haspopup="true" aria-expanded="false">
                     <i class="bi bi-gear"></i> Справочники
+                    <i class="bi bi-chevron-down" style="font-size:11px;opacity:.7"></i>
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    <li><a class="dropdown-item" href="{{ url_for('schedule.teachers_list') }}">
-                        <i class="bi bi-person-badge"></i> Преподаватели
-                    </a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('schedule.rooms_list') }}">
-                        <i class="bi bi-door-open"></i> Аудитории
-                    </a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('schedule.aliases_list') }}">
-                        <i class="bi bi-tags"></i> Алиасы групп
-                    </a></li>
-                </ul>
+                <div class="dropdown-menu">
+                    <a class="dropdown-item" href="{{ url_for('schedule.teachers_list') }}">
+                        <i class="bi bi-person-badge"></i><span>Преподаватели</span>
+                    </a>
+                    <a class="dropdown-item" href="{{ url_for('schedule.rooms_list') }}">
+                        <i class="bi bi-door-open"></i><span>Аудитории</span>
+                    </a>
+                    <a class="dropdown-item" href="{{ url_for('schedule.aliases_list') }}">
+                        <i class="bi bi-tags"></i><span>Алиасы групп</span>
+                    </a>
+                </div>
             </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Переключатели и фильтры -->
-<div class="card shadow-sm mb-3">
+{# ============================================================
+   ФИЛЬТРЫ
+   ============================================================ #}
+<div class="card mb-3">
     <div class="card-body">
-        <form method="get" action="{{ url_for('schedule.index') }}" class="row g-2 align-items-end">
+        <form method="get" action="{{ url_for('schedule.index') }}">
+            <div class="filters-row">
 
-            <input type="hidden" name="view" value="{{ view }}">
+                <div>
+                    <label class="form-label">Вид</label>
+                    <select name="view" class="form-select" onchange="this.form.submit()">
+                        <option value="day" {% if view == 'day' %}selected{% endif %}>День</option>
+                        <option value="week" {% if view == 'week' %}selected{% endif %}>Неделя</option>
+                    </select>
+                </div>
 
-            <div class="col-6 col-md-2">
-                <label class="form-label small mb-1">Вид</label>
-                <select name="view" class="form-select form-select-sm"
-                        onchange="this.form.submit()">
-                    <option value="day" {% if view == 'day' %}selected{% endif %}>День</option>
-                    <option value="week" {% if view == 'week' %}selected{% endif %}>Неделя</option>
-                </select>
-            </div>
+                <div>
+                    <label class="form-label">Дата</label>
+                    <input type="date" name="date" class="form-control" value="{{ date }}">
+                </div>
 
-            <div class="col-6 col-md-3">
-                <label class="form-label small mb-1">Дата</label>
-                <input type="date" name="date" class="form-control form-control-sm"
-                       value="{{ date }}">
-            </div>
+                <div>
+                    <label class="form-label">Группа</label>
+                    <select name="group_id" class="form-select">
+                        <option value="">— Все —</option>
+                        {% for g in groups %}
+                            <option value="{{ g.id }}"
+                                    {% if filters.group_id == g.id %}selected{% endif %}>
+                                {{ g.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-            <div class="col-12 col-md-3">
-                <label class="form-label small mb-1">Группа</label>
-                <select name="group_id" class="form-select form-select-sm">
-                    <option value="">— Все —</option>
-                    {% for g in groups %}
-                        <option value="{{ g.id }}"
-                                {% if filters.group_id == g.id %}selected{% endif %}>
-                            {{ g.name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
+                <div>
+                    <label class="form-label">Преподаватель</label>
+                    <select name="teacher_id" class="form-select">
+                        <option value="">— Все —</option>
+                        {% for t in teachers %}
+                            <option value="{{ t.id }}"
+                                    {% if filters.teacher_id == t.id %}selected{% endif %}>
+                                {{ t.short_name or t.full_name }}
+                                {% if my_teacher_id == t.id %} (вы){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-            <div class="col-12 col-md-2">
-                <label class="form-label small mb-1">Преподаватель</label>
-                <select name="teacher_id" class="form-select form-select-sm">
-                    <option value="">— Все —</option>
-                    {% for t in teachers %}
-                        <option value="{{ t.id }}"
-                                {% if filters.teacher_id == t.id %}selected{% endif %}>
-                            {{ t.short_name or t.full_name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
+                <div>
+                    <label class="form-label">Аудитория</label>
+                    <select name="room_id" class="form-select">
+                        <option value="">— Все —</option>
+                        {% for r in rooms %}
+                            <option value="{{ r.id }}"
+                                    {% if filters.room_id == r.id %}selected{% endif %}>
+                                {{ r.name }}{% if r.building %} ({{ r.building }}){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-            <div class="col-12 col-md-2">
-                <label class="form-label small mb-1">Аудитория</label>
-                <select name="room_id" class="form-select form-select-sm">
-                    <option value="">— Все —</option>
-                    {% for r in rooms %}
-                        <option value="{{ r.id }}"
-                                {% if filters.room_id == r.id %}selected{% endif %}>
-                            {{ r.name }}{% if r.building %} ({{ r.building }}){% endif %}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-12 d-flex gap-2">
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="bi bi-funnel"></i> Применить
-                </button>
-                <a href="{{ url_for('schedule.index') }}"
-                   class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-x-circle"></i> Сбросить
-                </a>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-grow-1">
+                        <i class="bi bi-funnel"></i> Применить
+                    </button>
+                    <a href="{{ url_for('schedule.index') }}"
+                       class="btn btn-outline-secondary"
+                       data-tooltip="Сбросить">
+                        <i class="bi bi-x-circle"></i>
+                    </a>
+                </div>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Навигация по датам -->
-<div class="d-flex justify-content-between align-items-center mb-3">
+{# ============================================================
+   НАВИГАЦИЯ ПО ДАТАМ
+   ============================================================ #}
+<div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
     {% if view == 'week' %}
         <a href="{{ url_for('schedule.index', view='week', date=prev_week, group_id=filters.group_id, teacher_id=filters.teacher_id, room_id=filters.room_id) }}"
-           class="btn btn-outline-primary btn-sm">
+           class="btn btn-outline-primary">
             <i class="bi bi-chevron-left"></i> Пред. неделя
         </a>
         <div class="text-center">
             <strong>Неделя {{ week_start }} — {{ week_end }}</strong>
         </div>
         <a href="{{ url_for('schedule.index', view='week', date=next_week, group_id=filters.group_id, teacher_id=filters.teacher_id, room_id=filters.room_id) }}"
-           class="btn btn-outline-primary btn-sm">
+           class="btn btn-outline-primary">
             След. неделя <i class="bi bi-chevron-right"></i>
         </a>
     {% else %}
         <a href="{{ url_for('schedule.index', view='day', date=prev_day, group_id=filters.group_id, teacher_id=filters.teacher_id, room_id=filters.room_id) }}"
-           class="btn btn-outline-primary btn-sm">
+           class="btn btn-outline-primary">
             <i class="bi bi-chevron-left"></i> Пред. день
         </a>
         <div class="text-center">
@@ -149,22 +155,24 @@
             {% if is_today %}<span class="badge bg-success ms-1">Сегодня</span>{% endif %}
         </div>
         <a href="{{ url_for('schedule.index', view='day', date=next_day, group_id=filters.group_id, teacher_id=filters.teacher_id, room_id=filters.room_id) }}"
-           class="btn btn-outline-primary btn-sm">
+           class="btn btn-outline-primary">
             След. день <i class="bi bi-chevron-right"></i>
         </a>
     {% endif %}
 </div>
 
-<!-- Вид: ДЕНЬ -->
+{# ============================================================
+   ВИД: ДЕНЬ
+   ============================================================ #}
 {% if view == 'day' %}
     {% if lessons %}
-        <div class="card shadow-sm">
+        <div class="card">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
+                <table class="table mb-0">
+                    <thead>
                         <tr>
-                            <th style="width:60px;">Пара</th>
-                            <th style="width:120px;">Время</th>
+                            <th style="width:60px;" class="text-center">Пара</th>
+                            <th style="width:130px;">Время</th>
                             <th>Группа</th>
                             <th>Предмет</th>
                             <th>Преподаватель</th>
@@ -185,9 +193,7 @@
                             <td>{{ l.subject_name }}</td>
                             <td>
                                 {% if l.teacher_short_name %}
-                                    <span title="{{ l.teacher_full_name }}">
-                                        {{ l.teacher_short_name }}
-                                    </span>
+                                    <span title="{{ l.teacher_full_name }}">{{ l.teacher_short_name }}</span>
                                 {% elif l.teacher_name_raw %}
                                     <span class="text-muted">{{ l.teacher_name_raw }}</span>
                                 {% else %}
@@ -208,7 +214,7 @@
                                 {% if editable %}
                                     <a href="{{ url_for('schedule.edit_lesson', lesson_id=l.id) }}"
                                        class="btn btn-sm btn-outline-primary"
-                                       title="Редактировать">
+                                       data-tooltip="Редактировать">
                                         <i class="bi bi-pencil"></i>
                                     </a>
                                     <form method="post"
@@ -217,7 +223,7 @@
                                           onsubmit="return confirm('Удалить занятие?');">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-sm btn-outline-danger"
-                                                title="Удалить">
+                                                data-tooltip="Удалить">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </form>
@@ -233,33 +239,35 @@
         </div>
     {% else %}
         <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i>
-            На {{ day_label }} занятий не найдено.
-            {% if can_edit_any %}
-                <a href="{{ url_for('schedule.new_lesson', date=date) }}"
-                   class="alert-link">Добавить занятие</a>
-                или
-                <a href="{{ url_for('schedule.upload_pdf') }}"
-                   class="alert-link">импортировать из PDF</a>.
-            {% endif %}
+            <i class="bi bi-info-circle-fill"></i>
+            <span>
+                На {{ day_label }} занятий не найдено.
+                {% if can_edit_any %}
+                    <a href="{{ url_for('schedule.new_lesson', date=date) }}" class="alert-link">Добавить занятие</a>
+                    или
+                    <a href="{{ url_for('schedule.upload_pdf') }}" class="alert-link">импортировать из PDF</a>.
+                {% endif %}
+            </span>
         </div>
     {% endif %}
 {% endif %}
 
-<!-- Вид: НЕДЕЛЯ -->
+{# ============================================================
+   ВИД: НЕДЕЛЯ
+   ============================================================ #}
 {% if view == 'week' %}
-    <div class="row g-2">
+    <div class="row">
         {% for d in week_days %}
-            <div class="col-12 col-md-6 col-lg-4 col-xl-3">
-                <div class="card shadow-sm h-100 {% if d.is_today %}border-success border-2{% endif %}">
-                    <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
+            <div class="col-12 col-md-6 col-lg-4 mb-3">
+                <div class="card h-100 {% if d.is_today %}border-success{% endif %}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <div>
                             <strong>{{ d.day_short }}</strong>
                             <small class="text-muted ms-1">{{ d.label }}</small>
                         </div>
                         <a href="{{ url_for('schedule.index', view='day', date=d.date, group_id=filters.group_id, teacher_id=filters.teacher_id, room_id=filters.room_id) }}"
-                           class="btn btn-sm btn-outline-primary py-0 px-2"
-                           title="Открыть день">
+                           class="btn btn-sm btn-outline-primary"
+                           data-tooltip="Открыть день">
                             <i class="bi bi-box-arrow-up-right"></i>
                         </a>
                     </div>
@@ -267,7 +275,7 @@
                         {% if d.lessons %}
                             <div class="list-group list-group-flush">
                                 {% for l in d.lessons %}
-                                    <div class="list-group-item px-2 py-2">
+                                    <div class="list-group-item" style="padding:10px 12px;">
                                         <div class="d-flex justify-content-between align-items-start gap-1">
                                             <div class="fw-semibold small">{{ l.group_name }}</div>
                                             <span class="badge bg-secondary" style="font-size:0.7rem;">

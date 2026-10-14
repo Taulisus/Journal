@@ -13,15 +13,6 @@
 
 {% block content %}
 
-{% set type_names = {
-    'lecture': 'Лекция',
-    'practice': 'Практическая',
-    'independent': 'С/Р',
-    'dictation': 'Под запись',
-    'exam': 'Экзамен',
-    'diff_credit': 'Дифф. зачет'
-} %}
-
 {% set type_short = {
     'lecture': 'Лек',
     'practice': 'Пр',
@@ -29,6 +20,15 @@
     'dictation': 'ПЗ',
     'exam': 'Экз',
     'diff_credit': 'ДЗ'
+} %}
+
+{% set type_full = {
+    'lecture': 'Лекция',
+    'practice': 'Практическая',
+    'independent': 'С/Р',
+    'dictation': 'Под запись',
+    'exam': 'Экзамен',
+    'diff_credit': 'Дифф. зачёт'
 } %}
 
 {% set ns = namespace(has_exam=false) %}
@@ -40,91 +40,104 @@
     {% endfor %}
 {% endif %}
 
-<!-- Заголовок и кнопки -->
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h2 class="mb-0">
-        <i class="bi bi-journal-bookmark-fill"></i>
+{# ============================================================
+   ЗАГОЛОВОК + ДЕЙСТВИЯ
+   ============================================================ #}
+<div class="page-head no-print">
+    <h2>
+        <i class="bi bi-journal-bookmark-fill text-primary me-2"></i>
         {{ pair.group_name }} — {{ pair.subject_name }}
     </h2>
 
-    <div class="d-flex gap-2 flex-wrap">
+    <div class="journal-header-actions">
         <a href="{{ url_for('journals.plan_view', gsid=pair.id) }}"
-           class="btn btn-outline-info"
-           title="Тематический план">
+           class="btn btn-outline-info">
             <i class="bi bi-list-ol"></i>
-            <span class="d-none d-sm-inline">План</span>
+            <span>План</span>
         </a>
 
         {% if has_permission('create_report') %}
         <a href="{{ url_for('journals.export_journal', gsid=pair.id, semester=current_semester) }}"
-           class="btn btn-outline-success"
-           title="Экспорт в Excel">
+           class="btn btn-outline-success">
             <i class="bi bi-file-earmark-excel"></i>
-            <span class="d-none d-sm-inline">Excel</span>
+            <span>Excel</span>
         </a>
         {% endif %}
+
+        {% if has_permission('set_semester_grade') %}
+        <button type="button" class="btn btn-outline-warning"
+                id="btnSemesterGrades"
+                data-semester="{{ current_semester }}"
+                data-gsid="{{ pair.id }}">
+            <i class="bi bi-award"></i>
+            <span>Оценки за семестр</span>
+        </button>
+        {% endif %}
+
+        <a href="{{ url_for('journals.add_lesson', gsid=pair.id, semester=current_semester) }}"
+           class="btn btn-success">
+            <i class="bi bi-plus-circle"></i>
+            <span>Добавить занятие</span>
+        </a>
     </div>
 </div>
 
-<!-- Переключатель семестров + навигация по датам -->
+{# ============================================================
+   ПЕРЕКЛЮЧАТЕЛЬ СЕМЕСТРОВ
+   ============================================================ #}
 <div class="mb-3 d-flex flex-wrap align-items-center gap-2 no-print">
-    <div class="btn-group btn-group-sm">
+    <div class="segmented">
         {% for sem in semesters %}
-        <a href="{{ url_for('journals.journal', gsid=pair.id, semester=sem) }}"
-           class="btn btn-outline-primary {% if sem == current_semester %}active{% endif %}">
-            {{ sem }} сем.
-        </a>
+            <a href="{{ url_for('journals.journal', gsid=pair.id, semester=sem) }}"
+               class="segmented__item {% if sem == current_semester %}is-active{% endif %}">
+                {{ sem }} сем.
+            </a>
         {% endfor %}
     </div>
     {% if ns.has_exam %}
-    <span class="badge bg-danger">
-        <i class="bi bi-check-circle"></i> Экзамен
-    </span>
+        <span class="badge bg-danger">
+            <i class="bi bi-check-circle"></i> Экзамен проведён
+        </span>
     {% endif %}
 </div>
 
 {% if journal_data %}
 
-<!-- ============ ПАНЕЛЬ НАВИГАЦИИ ПО ДАТАМ ============ -->
-<div class="card shadow-sm mb-2 no-print" id="dateNavPanel">
-    <div class="card-body py-2">
-
+{# ============================================================
+   ПАНЕЛЬ ФИЛЬТРА ПО МЕСЯЦАМ
+   ============================================================ #}
+<div class="card mb-2 no-print" id="dateNavPanel">
+    <div class="card-body">
         <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
             <span class="text-muted small">
-                <i class="bi bi-calendar3"></i> Перейти к месяцу:
+                <i class="bi bi-funnel"></i> Показать:
             </span>
-            <div class="btn-group btn-group-sm" id="monthNav" role="group">
-                <!-- JS заполнит -->
-            </div>
-
-            <div class="d-flex gap-1 ms-auto">
-                <button type="button" class="btn btn-sm btn-outline-primary" id="navToToday" title="К ближайшему занятию">
-                    <i class="bi bi-calendar-event"></i> Сегодня
+            <div class="d-flex gap-1 flex-wrap" id="monthNav">
+                <button type="button" class="btn btn-sm is-active"
+                        data-month="all"
+                        style="background:var(--brand-600);color:#fff;border-color:var(--brand-600);">
+                    <i class="bi bi-calendar3"></i> Все даты
                 </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="navToStart" title="К первому занятию">
-                    <i class="bi bi-chevron-double-left"></i>
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="navToEnd" title="К последнему занятию">
-                    <i class="bi bi-chevron-double-right"></i>
-                </button>
+                {# Остальные кнопки вставит JS #}
             </div>
         </div>
 
         <div class="d-flex flex-wrap align-items-center gap-2">
             <input type="text"
-                   class="form-control form-control-sm"
+                   class="form-control"
                    id="dateSearchInput"
-                   placeholder="🔍 Найти дату (например 21.09)"
-                   style="max-width: 220px;">
+                   placeholder="Найти дату (например 21.09)"
+                   style="max-width:240px;">
             <span class="small text-muted" id="dateSearchStatus"></span>
         </div>
-
     </div>
 </div>
 
-<!-- ============ ДЕСКТОПНАЯ ТАБЛИЦА ============ -->
-<div class="card shadow-sm d-none d-md-block">
-    <div class="card-header bg-light py-2 no-print">
+{# ============================================================
+   ДЕСКТОПНАЯ ТАБЛИЦА
+   ============================================================ #}
+<div class="card d-none d-md-block">
+    <div class="card-header py-2 no-print">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <small class="text-muted">
                 <i class="bi bi-info-circle"></i>
@@ -132,110 +145,78 @@
             </small>
             <small class="text-muted">
                 <i class="bi bi-hand-index"></i>
-                Зажмите таблицу мышкой и потяните, чтобы прокрутить
+                Клик по ячейке — быстрая отметка
             </small>
         </div>
     </div>
 
     <div class="card-body p-0">
-        <div class="journal-scroll-container" id="journalScroll">
-            <table class="table table-bordered journal-table mb-0" id="journalTable">
+        <div class="journal-scroll" id="journalScroll">
+            <table class="journal-table" id="journalTable">
                 <thead>
                     <tr>
-                        <th class="fixed-left-col" style="min-width: 220px;">
-                            Студент
-                        </th>
-
-                        <th class="fixed-left-col-2" style="min-width: 110px;">
-                            За семестр
-                        </th>
+                        <th class="col-sticky-1">Студент</th>
+                        <th class="col-sticky-2">За семестр</th>
 
                         {% for lesson in journal_data %}
-                        <th class="lesson-column {% if lesson.type == 'exam' %}exam-column{% endif %}"
+                        <th class="lesson-head {% if lesson.type == 'exam' %}exam-col{% endif %}"
                             data-lesson-date="{{ lesson.date }}"
-                            data-lesson-month="{{ lesson.date[5:7] }}">
+                            data-lesson-month="{{ lesson.date[5:7] }}"
+                            data-lesson-idx="{{ loop.index0 }}">
 
-                            <!-- Дата + день недели -->
-                            <div class="lh-header-date">
-                                <span class="lh-date">{{ lesson.date_formatted }}</span>
+                            <div class="lesson-head__row">
+                                <span class="lesson-head__date">{{ lesson.date_formatted }}</span>
                                 {% if lesson.day_of_week %}
-                                <span class="lh-dow">{{ lesson.day_of_week }}</span>
+                                    <span class="lesson-head__dow">{{ lesson.day_of_week }}</span>
                                 {% endif %}
                             </div>
 
-                            <!-- Время + тип -->
-                            <div class="lh-header-time">
+                            <div class="lesson-head__row">
                                 {% if lesson.time_interval %}
-                                <span class="lh-time">{{ format_time(lesson.time_interval) }}</span>
+                                    <span class="lesson-head__time">{{ format_time(lesson.time_interval) }}</span>
                                 {% endif %}
-                                <span class="lh-type">{{ type_short.get(lesson.type, lesson.type) }}</span>
+                                <span class="lesson-head__type">{{ type_short.get(lesson.type, lesson.type) }}</span>
                             </div>
 
-                            <!-- Меню «⋮» -->
-                            <div class="dropdown lh-header-menu">
-                                <button class="btn btn-sm btn-link p-0 lh-menu-btn"
-                                        type="button"
-                                        data-bs-toggle="dropdown"
-                                        data-bs-strategy="fixed"
+                            <div class="lesson-head__menu">
+                                <button class="lesson-head__btn" type="button"
+                                        data-dropdown
+                                        aria-haspopup="true"
                                         aria-expanded="false"
                                         title="Действия">
                                     <i class="bi bi-three-dots-vertical"></i>
                                 </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li>
-                                        <button type="button"
-                                                class="dropdown-item mass-grade-btn"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#massGradeModal"
-                                                data-date="{{ lesson.date }}"
-                                                data-time="{{ lesson.time_interval }}">
-                                            <i class="bi bi-list-check text-success"></i>
-                                            Массовые оценки
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button type="button"
-                                                class="dropdown-item lesson-time-badge"
-                                                data-date="{{ lesson.date }}"
-                                                data-time="{{ lesson.time_interval }}"
-                                                data-time-formatted="{{ format_time(lesson.time_interval) }}"
-                                                data-semester="{{ lesson.semester }}"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#editLessonTimeModal">
-                                            <i class="bi bi-clock text-info"></i>
-                                            Изменить время
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button type="button"
-                                                class="dropdown-item"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#editLessonTypeModal"
-                                                data-gsid="{{ pair.id }}"
-                                                data-date="{{ lesson.date }}"
-                                                data-time="{{ lesson.time_interval }}"
-                                                data-semester="{{ lesson.semester }}"
-                                                data-current-type="{{ lesson.type }}"
-                                                data-date-formatted="{{ lesson.date_formatted }}"
-                                                data-time-formatted="{{ format_time(lesson.time_interval) }}">
-                                            <i class="bi bi-tag text-warning"></i>
-                                            Изменить тип
-                                        </button>
-                                    </li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li>
-                                        <a class="dropdown-item text-danger"
-                                           href="{{ url_for('journals.delete_lesson', gsid=pair.id, date=lesson.date, ti=lesson.time_interval, semester=current_semester) }}"
-                                           onclick="return confirm('Удалить занятие от {{ lesson.date_formatted }} {{ format_time(lesson.time_interval) }}?')">
-                                            <i class="bi bi-trash"></i>
-                                            Удалить занятие
-                                        </a>
-                                    </li>
-                                </ul>
+                                <div class="dropdown-menu">
+                                    <button type="button"
+                                            class="dropdown-item mass-grade-btn"
+                                            data-lesson-idx="{{ loop.index0 }}">
+                                        <i class="bi bi-list-check"></i>
+                                        <span>Массовые оценки</span>
+                                    </button>
+                                    <button type="button"
+                                            class="dropdown-item edit-time-btn"
+                                            data-lesson-idx="{{ loop.index0 }}">
+                                        <i class="bi bi-clock"></i>
+                                        <span>Изменить время</span>
+                                    </button>
+                                    <button type="button"
+                                            class="dropdown-item edit-type-btn"
+                                            data-lesson-idx="{{ loop.index0 }}">
+                                        <i class="bi bi-tag"></i>
+                                        <span>Изменить тип</span>
+                                    </button>
+                                    <hr class="dropdown-divider">
+                                    <a class="dropdown-item text-danger"
+                                       href="{{ url_for('journals.delete_lesson', gsid=pair.id, date=lesson.date, ti=lesson.time_interval, semester=current_semester) }}"
+                                       onclick="return confirm('Удалить занятие от {{ lesson.date_formatted }} {{ format_time(lesson.time_interval) }}?');">
+                                        <i class="bi bi-trash"></i>
+                                        <span>Удалить занятие</span>
+                                    </a>
+                                </div>
                             </div>
 
                             {% if lesson.topic %}
-                            <div class="lh-header-topic" title="{{ lesson.topic }}">
+                            <div class="lesson-head__topic" title="{{ lesson.topic }}">
                                 {{ lesson.topic }}
                             </div>
                             {% endif %}
@@ -246,81 +227,72 @@
                 <tbody>
                     {% for student in students %}
                     <tr>
-                        <td class="student-name fixed-left-col">
+                        <td class="col-sticky-1">
                             <a href="{{ url_for('student_card.card', sid=student.id) }}"
-                               class="text-decoration-none text-dark fw-bold"
-                               data-student-id="{{ student.id }}">
+                               style="color:var(--text);font-weight:600;text-decoration:none;">
                                 {{ student.full_name }}
                             </a>
+                            {% set avg = students_avg.get(student.id) %}
+                            {% if avg is not none %}
+                                {% if avg >= 4.5 %}
+                                    {% set avg_class = 'student-avg--excellent' %}
+                                {% elif avg >= 4.0 %}
+                                    {% set avg_class = 'student-avg--good' %}
+                                {% elif avg >= 3.0 %}
+                                    {% set avg_class = 'student-avg--satisf' %}
+                                {% else %}
+                                    {% set avg_class = 'student-avg--poor' %}
+                                {% endif %}
+                                <span class="student-avg {{ avg_class }}"
+                                      title="Средний балл по этому журналу за семестр">
+                                    <i class="bi bi-star-fill"></i> {{ avg }}
+                                </span>
+                            {% else %}
+                                <span class="student-avg" title="Нет оценок">
+                                    <i class="bi bi-star"></i> —
+                                </span>
+                            {% endif %}
                         </td>
 
-                        <td class="text-center align-middle fixed-left-col-2">
-                            <div class="semester-grade-cell"
-                                 data-student-id="{{ student.id }}"
-                                 data-gsid="{{ pair.id }}"
-                                 data-semester="{{ current_semester }}">
-
-                                {% set g = semester_grades.get(student.id) %}
-                                <span class="badge grade-display grade-cell
-                                    {% if g == 'passed' %}grade-cell-passed
-                                    {% elif g == '5' %}grade-cell-5
-                                    {% elif g == '4' %}grade-cell-4
-                                    {% elif g == '3' %}grade-cell-3
-                                    {% elif g == '2' %}grade-cell-2
-                                    {% else %}grade-cell-empty{% endif %}">
-                                    {% if g == 'passed' %}Зачтено
-                                    {% elif g %} {{ g }}
-                                    {% else %} — {% endif %}
-                                </span>
-
-                                {% if has_permission('set_semester_grade') %}
-                                <select class="form-select form-select-sm mt-1 semester-grade-select">
-                                    <option value="">—</option>
-                                    <option value="5" {% if g == '5' %}selected{% endif %}>5</option>
-                                    <option value="4" {% if g == '4' %}selected{% endif %}>4</option>
-                                    <option value="3" {% if g == '3' %}selected{% endif %}>3</option>
-                                    <option value="2" {% if g == '2' %}selected{% endif %}>2</option>
-                                    <option value="passed" {% if g == 'passed' %}selected{% endif %}>Зач</option>
-                                </select>
-                                {% endif %}
-                            </div>
+                        <td class="col-sticky-2">
+                            {% set g = semester_grades.get(student.id) %}
+                            <span class="badge
+                                {% if g == 'passed' %}bg-primary
+                                {% elif g == '5' %}bg-success
+                                {% elif g == '4' %}bg-info
+                                {% elif g == '3' %}bg-warning
+                                {% elif g == '2' %}bg-danger
+                                {% else %}bg-light{% endif %}">
+                                {% if g == 'passed' %}Зачтено
+                                {% elif g %}{{ g }}
+                                {% else %}—{% endif %}
+                            </span>
                         </td>
 
                         {% for lesson in journal_data %}
-                        <td class="text-center align-middle cell-hover
-                            {% if lesson.type == 'exam' %}exam-cell{% endif %}">
+                        <td class="journal-cell-clickable {% if lesson.type == 'exam' %}exam-cell{% endif %}"
+                            tabindex="0"
+                            data-lesson-month="{{ lesson.date[5:7] }}"
+                            data-lesson-date="{{ lesson.date }}"
+                            data-student-idx="{{ loop.index0 }}"
+                            data-lesson-idx="{{ loop.index0 }}"
+                            data-student-id="{{ student.id }}"
+                            data-lesson-time="{{ lesson.time_interval }}"
+                            data-entry-id="{% set e = lesson.entries.get(student.id) %}{{ e.id if e else '' }}"
+                            data-current="{% set e = lesson.entries.get(student.id) %}{% if e %}{{ e.attendance }}|{{ e.grade or '' }}{% endif %}">
                             {% set entry = lesson.entries.get(student.id) %}
 
                             {% if entry %}
                                 {% if entry.attendance == 'absent' %}
-                                    <span class="cell-mark cell-mark-absent" title="Отсутствовал">●</span>
+                                    <span class="mark mark-absent" title="Отсутствовал">✗</span>
                                 {% elif entry.grade %}
-                                    <span class="cell-mark
-                                        {% if entry.grade == 'passed' %}grade-cell-passed
-                                        {% elif entry.grade == '5' %}grade-cell-5
-                                        {% elif entry.grade == '4' %}grade-cell-4
-                                        {% elif entry.grade == '3' %}grade-cell-3
-                                        {% elif entry.grade == '2' %}grade-cell-2{% endif %}">
-                                        {% if entry.grade == 'passed' %}з{% else %}{{ entry.grade }}{% endif %}
+                                    <span class="mark mark-{{ entry.grade }}"
+                                          title="{% if entry.grade == 'passed' %}Зачтено{% else %}Оценка {{ entry.grade }}{% endif %}">
+                                        {% if entry.grade == 'passed' %}З{% else %}{{ entry.grade }}{% endif %}
                                     </span>
                                 {% else %}
-                                    <span class="cell-mark cell-mark-present" title="Присутствовал">●</span>
+                                    <span class="mark mark-present" title="Присутствовал">✓</span>
                                 {% endif %}
-
-                                <br>
-                                <small>
-                                    <button class="btn btn-sm btn-link edit-entry-btn"
-                                            data-entry-id="{{ entry.id }}"
-                                            data-attendance="{{ entry.attendance }}"
-                                            data-grade="{{ entry.grade or '' }}"
-                                            data-student-name="{{ student.full_name }}"
-                                            data-lesson-date="{{ lesson.date_formatted }}"
-                                            data-lesson-type="{{ type_names.get(lesson.type, lesson.type) }}"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#editEntryModal">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                </small>
                             {% else %}
                                 <span class="text-muted">—</span>
                             {% endif %}
@@ -334,20 +306,21 @@
     </div>
 </div>
 
-<!-- ============ МОБИЛЬНАЯ ВЕРСИЯ ============ -->
+{# ============================================================
+   МОБИЛЬНАЯ ВЕРСИЯ
+   ============================================================ #}
 <div class="d-md-none">
 
-    <div class="card shadow-sm mb-3 no-print">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-            <h6 class="mb-0">
-                <i class="bi bi-list-check"></i>
-                Занятия
-            </h6>
-            <span class="badge bg-primary">{{ journal_data|length }}</span>
+    <div class="card mb-3 no-print">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-list-check me-2"></i>Занятия
+                <span class="badge bg-primary ms-1">{{ journal_data|length }}</span>
+            </h5>
         </div>
-        <div class="card-body p-2">
+        <div class="card-body">
             <div class="mb-2">
-                <select class="form-select form-select-sm" id="mobileTypeFilter" onchange="filterMobileLessons()">
+                <select class="form-select" id="mobileTypeFilter">
                     <option value="">Все типы занятий</option>
                     <option value="lecture">Лекции</option>
                     <option value="practice">Практические</option>
@@ -359,37 +332,32 @@
             </div>
 
             <div class="mb-2">
-                <input type="text"
-                       class="form-control form-control-sm"
+                <input type="text" class="form-control"
                        id="mobileLessonSearch"
-                       placeholder="🔍 Поиск по дате или теме..."
-                       oninput="filterMobileLessons()">
+                       placeholder="Поиск по дате или теме...">
             </div>
 
-            <div class="mobile-lessons-list" id="mobileLessonsList" style="max-height: 400px; overflow-y: auto;">
+            <div class="mobile-lessons-list" id="mobileLessonsList"
+                 style="max-height:400px;overflow-y:auto;">
                 {% for lesson in journal_data|reverse|list %}
                 {% set original_index = journal_data|length - loop.index %}
-                <div class="mobile-lesson-card p-2 mb-2 border rounded cursor-pointer"
+                <div class="mobile-lesson-card p-2 mb-2"
                      data-index="{{ original_index }}"
                      data-type="{{ lesson.type }}"
-                     data-search="{{ lesson.date_formatted }} {{ lesson.date_short }} {{ lesson.topic or '' }}"
-                     onclick="selectMobileLesson({{ original_index }}, this)">
+                     data-search="{{ lesson.date_formatted }} {{ lesson.date_short }} {{ lesson.topic or '' }}">
 
                     <div class="d-flex justify-content-between align-items-start mb-1">
                         <div>
                             <strong>{{ lesson.date_formatted }}</strong>
                             {% if lesson.day_of_week %}
-                            <span class="badge bg-light text-dark ms-1" style="font-size: 0.65rem;">
-                                {{ lesson.day_of_week }}
-                            </span>
+                                <span class="badge bg-light ms-1">{{ lesson.day_of_week }}</span>
                             {% endif %}
                             {% if lesson.time_interval %}
-                            <span class="badge bg-info ms-1">{{ format_time(lesson.time_interval) }}</span>
+                                <span class="badge bg-info ms-1">{{ format_time(lesson.time_interval) }}</span>
                             {% endif %}
                         </div>
-                        <span class="badge {% if lesson.type == 'exam' %}bg-danger{% else %}bg-secondary{% endif %}"
-                              style="font-size: 0.7rem;">
-                            {{ type_names.get(lesson.type, lesson.type) }}
+                        <span class="badge {% if lesson.type == 'exam' %}bg-danger{% else %}bg-secondary{% endif %}">
+                            {{ type_full.get(lesson.type, lesson.type) }}
                         </span>
                     </div>
 
@@ -403,7 +371,7 @@
                         {% set present_count = lesson.entries.values()|selectattr('attendance', 'equalto', 'present')|list|length %}
                         {% set absent_count = lesson.entries.values()|selectattr('attendance', 'equalto', 'absent')|list|length %}
                         <span class="text-success">+{{ present_count }}</span>
-                        <span class="text-danger ms-2">н{{ absent_count }}</span>
+                        <span class="text-danger ms-2">−{{ absent_count }}</span>
                         <span class="text-muted ms-2">из {{ students|length }}</span>
                     </div>
                 </div>
@@ -412,18 +380,19 @@
         </div>
     </div>
 
-    <div class="card shadow-sm mb-3" id="selectedLessonCard" style="display:none;">
-        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+    <div class="card mb-3" id="selectedLessonCard" style="display:none;">
+        <div class="card-header d-flex justify-content-between align-items-center">
             <div>
-                <i class="bi bi-check-circle"></i>
+                <i class="bi bi-check-circle me-1"></i>
                 <span id="selectedLessonTitle">—</span>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-light" onclick="clearMobileSelection()">
-                <i class="bi bi-x"></i> Закрыть
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    onclick="clearMobileSelection()">
+                <i class="bi bi-x"></i>
             </button>
         </div>
         <div class="card-body p-2">
-            <div class="alert alert-light border mb-2">
+            <div class="alert alert-info mb-0">
                 <small>
                     <strong>Тип:</strong> <span id="selectedLessonType">—</span><br>
                     <strong>Тема:</strong> <span id="selectedLessonTopic">—</span>
@@ -433,27 +402,37 @@
     </div>
 
     <div id="mobileStudentsList" style="display:none;">
-        <div class="card shadow-sm">
-            <div class="card-header bg-primary text-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-people"></i>
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-people me-1"></i>
                     Отметки: {{ students|length }} студентов
-                </h6>
+                </h5>
             </div>
             <div class="card-body p-2">
                 {% for student in students %}
-                <div class="student-mobile-row p-2 mb-2 border rounded"
+                <div class="student-mobile-row p-2 mb-2"
                      data-student-id="{{ student.id }}">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <a href="{{ url_for('student_card.card', sid=student.id) }}"
-                           class="text-decoration-none text-dark fw-bold small">
+                           class="text-decoration-none fw-semibold small"
+                           style="color:var(--text);">
                             <i class="bi bi-person-circle"></i> {{ student.full_name }}
                         </a>
+                        {% set avg = students_avg.get(student.id) %}
+                        {% if avg is not none %}
+                            <span class="student-avg
+                                {% if avg >= 4.5 %}student-avg--excellent
+                                {% elif avg >= 4.0 %}student-avg--good
+                                {% elif avg >= 3.0 %}student-avg--satisf
+                                {% else %}student-avg--poor{% endif %}">
+                                {{ avg }}
+                            </span>
+                        {% endif %}
                     </div>
 
                     <div class="attendance-buttons d-flex gap-1 flex-wrap"
-                         data-student-id="{{ student.id }}">
-                    </div>
+                         data-student-id="{{ student.id }}"></div>
                 </div>
                 {% endfor %}
             </div>
@@ -462,120 +441,142 @@
 
 </div>
 
-<!-- Легенда -->
-<div class="card mt-3 shadow-sm no-print">
-    <div class="card-body py-2">
+{# ============================================================
+   ЛЕГЕНДА
+   ============================================================ #}
+<div class="card mt-3 no-print">
+    <div class="card-body">
         <div class="d-flex flex-wrap gap-3 align-items-center">
-            <small class="text-muted fw-bold">Обозначения:</small>
-            <span><span class="cell-mark cell-mark-present">●</span> <small>Присутствовал</small></span>
-            <span><span class="cell-mark cell-mark-absent">●</span> <small>Отсутствовал</small></span>
-            <span><span class="cell-mark grade-cell-5">5</span> <small>Отлично</small></span>
-            <span><span class="cell-mark grade-cell-4">4</span> <small>Хорошо</small></span>
-            <span><span class="cell-mark grade-cell-3">3</span> <small>Удовл.</small></span>
-            <span><span class="cell-mark grade-cell-2">2</span> <small>Неуд.</small></span>
-            <span><span class="cell-mark grade-cell-passed">з</span> <small>Зачтено</small></span>
+            <span class="small fw-semibold text-muted">Обозначения:</span>
+            <span><span class="mark mark-present">✓</span> <span class="small">Был</span></span>
+            <span><span class="mark mark-absent">✗</span> <span class="small">Нет</span></span>
+            <span><span class="mark mark-5">5</span> <span class="small">Отлично</span></span>
+            <span><span class="mark mark-4">4</span> <span class="small">Хорошо</span></span>
+            <span><span class="mark mark-3">3</span> <span class="small">Удовл.</span></span>
+            <span><span class="mark mark-2">2</span> <span class="small">Неуд.</span></span>
+            <span><span class="mark mark-passed">З</span> <span class="small">Зачёт</span></span>
         </div>
     </div>
 </div>
 
 {% else %}
-<div class="card shadow-sm">
-    <div class="card-body text-center py-5">
-        <i class="bi bi-calendar-x" style="font-size: 4rem; color: #ccc;"></i>
-        <h4 class="text-muted mt-3">Занятия еще не добавлены в этом семестре</h4>
-        <p class="text-muted">Начните вести журнал, добавив первое занятие</p>
-        <a href="{{ url_for('journals.add_lesson', gsid=pair.id, semester=current_semester) }}"
-           class="btn btn-success btn-lg">
-            <i class="bi bi-plus-circle"></i> Добавить первое занятие
-        </a>
+<div class="card">
+    <div class="empty">
+        <div class="empty__icon"><i class="bi bi-calendar-x"></i></div>
+        <div class="empty__title">Занятия ещё не добавлены</div>
+        <div class="empty__desc">Начните вести журнал, добавив первое занятие</div>
+        <div class="mt-3">
+            <a href="{{ url_for('journals.add_lesson', gsid=pair.id, semester=current_semester) }}"
+               class="btn btn-success btn-lg">
+                <i class="bi bi-plus-circle"></i> Добавить первое занятие
+            </a>
+        </div>
     </div>
 </div>
 {% endif %}
 
-<!-- Модальное окно редактирования (десктоп) -->
-<div class="modal fade" id="editEntryModal" tabindex="-1">
-    <div class="modal-dialog modal-sm modal-dialog-centered">
+{# ============================================================
+   МОДАЛКА: РЕДАКТИРОВАТЬ ЗАПИСЬ
+   ============================================================ #}
+<div class="modal" id="editEntryModal" aria-hidden="true">
+    <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title">
-                    <i class="bi bi-pencil-square"></i> Редактировать
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-light border mb-3">
-                    <small>
-                        <strong>Студент:</strong> <span id="editStudentName">—</span><br>
-                        <strong>Дата:</strong> <span id="editLessonDate">—</span><br>
-                        <strong>Тип:</strong> <span id="editLessonType">—</span>
-                    </small>
+            <form id="editEntryForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="edit_entry_id" name="entry_id">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-pencil-square text-primary me-2"></i>Редактировать запись
+                    </h5>
+                    <button type="button" class="app-icon-btn"
+                            data-modal-close="editEntryModal" aria-label="Закрыть">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
 
-                <form id="editEntryForm">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" id="edit_entry_id" name="entry_id">
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <small>
+                            <strong>Студент:</strong> <span id="editStudentName">—</span><br>
+                            <strong>Дата:</strong> <span id="editLessonDate">—</span><br>
+                            <strong>Тип:</strong> <span id="editLessonType">—</span>
+                        </small>
+                    </div>
 
                     <div class="mb-3 text-center">
-                        <label class="form-label fw-bold">Посещение</label>
-                        <div class="btn-group w-100">
-                            <input type="radio" class="btn-check" name="attendance" id="modal_present" value="present">
+                        <label class="form-label">Посещение</label>
+                        <div class="d-flex gap-2 justify-content-center">
+                            <input type="radio" class="btn-check" name="attendance"
+                                   id="modal_present" value="present">
                             <label class="btn btn-outline-success" for="modal_present">
-                                <i class="bi bi-check-lg"></i> +
+                                <i class="bi bi-check-lg"></i> Был
                             </label>
-                            <input type="radio" class="btn-check" name="attendance" id="modal_absent" value="absent">
+
+                            <input type="radio" class="btn-check" name="attendance"
+                                   id="modal_absent" value="absent">
                             <label class="btn btn-outline-danger" for="modal_absent">
-                                <i class="bi bi-x-lg"></i> н
+                                <i class="bi bi-x-lg"></i> Нет
                             </label>
                         </div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="edit_grade" class="form-label fw-bold">Оценка</label>
+                        <label class="form-label" for="edit_grade">Оценка</label>
                         <select class="form-select" id="edit_grade" name="grade">
                             {% for grade_val, grade_label in grades %}
                             <option value="{{ grade_val }}">{{ grade_label }}</option>
                             {% endfor %}
                         </select>
                     </div>
+                </div>
 
-                    <button type="submit" class="btn btn-primary w-100">
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                            data-modal-close="editEntryModal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">
                         <i class="bi bi-check-lg"></i> Сохранить
                     </button>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
-<!-- Модалка изменения времени занятия -->
-<div class="modal fade" id="editLessonTimeModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+{# ============================================================
+   МОДАЛКА: ИЗМЕНИТЬ ВРЕМЯ
+   ============================================================ #}
+<div class="modal" id="editLessonTimeModal" aria-hidden="true">
+    <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title">
-                    <i class="bi bi-clock-history"></i>
-                    Изменить время занятия
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-light border mb-3">
-                    <small>
-                        <strong>Дата:</strong> <span id="editTimeDate">—</span>
-                        <span id="editTimeDayOfWeek" class="badge bg-secondary ms-1">—</span>
-                        <br>
-                        <strong>Текущее время:</strong> <span id="editTimeOld">—</span>
-                    </small>
+            <form id="editLessonTimeForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="editTimeDateInput" name="date">
+                <input type="hidden" id="editTimeOldInput" name="old_time">
+                <input type="hidden" name="semester" value="{{ current_semester }}">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-clock-history text-info me-2"></i>Изменить время
+                    </h5>
+                    <button type="button" class="app-icon-btn"
+                            data-modal-close="editLessonTimeModal" aria-label="Закрыть">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
 
-                <form id="editLessonTimeForm">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" id="editTimeDateInput" name="date">
-                    <input type="hidden" id="editTimeOldInput" name="old_time">
-                    <input type="hidden" name="semester" value="{{ current_semester }}">
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <small>
+                            <strong>Дата:</strong> <span id="editTimeDate">—</span>
+                            <span id="editTimeDayOfWeek" class="badge bg-secondary ms-1">—</span>
+                            <br>
+                            <strong>Текущее время:</strong> <span id="editTimeOld">—</span>
+                        </small>
+                    </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Новое время</label>
+                        <label class="form-label" for="editTimeNewInput">Новое время</label>
                         <input type="text"
                                name="new_time"
                                id="editTimeNewInput"
@@ -590,94 +591,100 @@
                     </div>
 
                     <div class="alert alert-warning small mb-0">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        Время изменится у <strong>всех студентов</strong> этой пары.
-                        Посещения и оценки сохранятся.
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span>Время изменится у <strong>всех студентов</strong> этой пары.
+                        Посещения и оценки сохранятся.</span>
                     </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle"></i> Отмена
-                </button>
-                <button type="submit" form="editLessonTimeForm" class="btn btn-primary">
-                    <i class="bi bi-save"></i> Сохранить
-                </button>
-            </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                            data-modal-close="editLessonTimeModal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Сохранить
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
-<!-- Модалка изменения типа занятия -->
-<div class="modal fade" id="editLessonTypeModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+{# ============================================================
+   МОДАЛКА: ИЗМЕНИТЬ ТИП
+   ============================================================ #}
+<div class="modal" id="editLessonTypeModal" aria-hidden="true">
+    <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title">
-                    <i class="bi bi-tag"></i>
-                    Изменить тип занятия
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-light border mb-3">
-                    <small>
-                        <strong>Дата:</strong> <span id="editTypeDate">—</span><br>
-                        <strong>Время:</strong> <span id="editTypeTime">—</span>
-                    </small>
+            <form id="editLessonTypeForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="editTypeGsid" name="gsid">
+                <input type="hidden" id="editTypeDateInput" name="date">
+                <input type="hidden" id="editTypeTimeInput" name="time_interval">
+                <input type="hidden" name="semester" value="{{ current_semester }}">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-tag text-warning me-2"></i>Изменить тип занятия
+                    </h5>
+                    <button type="button" class="app-icon-btn"
+                            data-modal-close="editLessonTypeModal" aria-label="Закрыть">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
 
-                <form id="editLessonTypeForm">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" id="editTypeGsid" name="gsid">
-                    <input type="hidden" id="editTypeDateInput" name="date">
-                    <input type="hidden" id="editTypeTimeInput" name="time_interval">
-                    <input type="hidden" name="semester" value="{{ current_semester }}">
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <small>
+                            <strong>Дата:</strong> <span id="editTypeDate">—</span><br>
+                            <strong>Время:</strong> <span id="editTypeTime">—</span>
+                        </small>
+                    </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Тип занятия</label>
+                        <label class="form-label" for="editTypeSelect">Тип занятия</label>
                         <select class="form-select" id="editTypeSelect" name="type">
-                            {% for type_val, type_label in type_names.items() %}
+                            {% for type_val, type_label in type_full.items() %}
                             <option value="{{ type_val }}">{{ type_label }}</option>
                             {% endfor %}
                         </select>
                     </div>
 
                     <div class="alert alert-warning small mb-0">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        Тип занятия изменится у <strong>всех студентов</strong> этой пары.
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span>Тип изменится у <strong>всех студентов</strong> этой пары.</span>
                     </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle"></i> Отмена
-                </button>
-                <button type="submit" form="editLessonTypeForm" class="btn btn-primary">
-                    <i class="bi bi-save"></i> Сохранить
-                </button>
-            </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary"
+                            data-modal-close="editLessonTypeModal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Сохранить
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
-<!-- ============================================================
-     МОДАЛКА МАССОВЫХ ОЦЕНОК
-     ============================================================ -->
-<div class="modal fade" id="massGradeModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+{# ============================================================
+   МОДАЛКА: МАССОВЫЕ ОЦЕНКИ
+   ============================================================ #}
+<div class="modal" id="massGradeModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
+            <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="bi bi-list-check"></i>
-                    Массовое выставление оценок
+                    <i class="bi bi-list-check text-success me-2"></i>Массовое выставление оценок
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="app-icon-btn"
+                        data-modal-close="massGradeModal" aria-label="Закрыть">
+                    <i class="bi bi-x-lg"></i>
+                </button>
             </div>
 
             <div class="modal-body p-0">
-
-                <div class="p-3 bg-light border-bottom">
+                <div class="p-3" style="background:var(--surface-alt);border-bottom:1px solid var(--border);">
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
                             <strong id="mgLessonTitle">—</strong>
@@ -687,7 +694,7 @@
                     </div>
                 </div>
 
-                <div class="p-3 border-bottom">
+                <div class="p-3" style="border-bottom:1px solid var(--border);">
                     <div class="mb-2">
                         <label class="form-label small fw-bold mb-1">
                             <i class="bi bi-lightning-charge"></i>
@@ -698,7 +705,7 @@
                             <button type="button" class="btn btn-sm btn-info mg-set-all" data-grade="4">4</button>
                             <button type="button" class="btn btn-sm btn-warning mg-set-all" data-grade="3">3</button>
                             <button type="button" class="btn btn-sm btn-danger mg-set-all" data-grade="2">2</button>
-                            <button type="button" class="btn btn-sm btn-outline-success mg-set-all" data-grade="passed">Зачёт</button>
+                            <button type="button" class="btn btn-sm btn-success mg-set-all" data-grade="passed">Зачёт</button>
                             <button type="button" class="btn btn-sm btn-outline-secondary mg-set-all" data-grade="">—</button>
                         </div>
                     </div>
@@ -708,43 +715,40 @@
                             <i class="bi bi-funnel"></i>
                             Показать:
                         </label>
-                        <div class="btn-group btn-group-sm" role="group">
+                        <div class="d-flex gap-1 flex-wrap">
                             <input type="radio" class="btn-check" name="mgFilter" id="mgFilterAll" value="all" checked>
-                            <label class="btn btn-outline-secondary" for="mgFilterAll">Все</label>
+                            <label class="btn btn-sm btn-outline-secondary" for="mgFilterAll">Все</label>
 
                             <input type="radio" class="btn-check" name="mgFilter" id="mgFilterPresent" value="present">
-                            <label class="btn btn-outline-success" for="mgFilterPresent">Присутствующие</label>
+                            <label class="btn btn-sm btn-outline-success" for="mgFilterPresent">Присутствующие</label>
 
                             <input type="radio" class="btn-check" name="mgFilter" id="mgFilterAbsent" value="absent">
-                            <label class="btn btn-outline-danger" for="mgFilterAbsent">Отсутствующие</label>
+                            <label class="btn btn-sm btn-outline-danger" for="mgFilterAbsent">Отсутствующие</label>
                         </div>
                     </div>
                 </div>
 
-                <div class="table-responsive" style="max-height: 50vh;">
-                    <table class="table table-sm table-hover align-middle mb-0" id="mgStudentsTable">
-                        <thead class="table-light sticky-top">
+                <div class="table-responsive" style="max-height:50vh;">
+                    <table class="table mb-0" id="mgStudentsTable">
+                        <thead>
                             <tr>
-                                <th style="width: 40px;" class="text-center">
+                                <th style="width:44px;" class="text-center">
                                     <input type="checkbox" class="form-check-input" id="mgSelectAll" checked>
                                 </th>
                                 <th>Студент</th>
-                                <th style="width: 90px;" class="text-center">Посещ.</th>
-                                <th style="width: 280px;" class="text-center">Оценка</th>
+                                <th style="width:100px;" class="text-center">Посещ.</th>
+                                <th style="width:300px;" class="text-center">Оценка</th>
                             </tr>
                         </thead>
-                        <tbody id="mgStudentsBody">
-                        </tbody>
+                        <tbody id="mgStudentsBody"></tbody>
                     </table>
                 </div>
-
             </div>
 
             <div class="modal-footer">
                 <div class="me-auto small text-muted" id="mgStatus"></div>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle"></i> Отмена
-                </button>
+                <button type="button" class="btn btn-secondary"
+                        data-modal-close="massGradeModal">Отмена</button>
                 <button type="button" class="btn btn-success" id="mgSaveBtn">
                     <i class="bi bi-check-lg"></i> Сохранить оценки
                 </button>
@@ -753,14 +757,72 @@
     </div>
 </div>
 
-<!-- Данные для JS -->
+{# ============================================================
+   МОДАЛКА: ОЦЕНКИ ЗА СЕМЕСТР
+   ============================================================ #}
+{% if has_permission('set_semester_grade') %}
+<div class="modal" id="semesterGradesModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-award text-warning me-2"></i>Оценки за семестр
+                </h5>
+                <button type="button" class="app-icon-btn"
+                        data-modal-close="semesterGradesModal" aria-label="Закрыть">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="modal-body p-0">
+                <div class="p-3" style="background:var(--surface-alt);border-bottom:1px solid var(--border);">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <strong>{{ pair.group_name }} — {{ pair.subject_name }}</strong>
+                            <div class="small text-muted">
+                                Семестр <span id="semGradeSemester">{{ current_semester }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="max-height:60vh;">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Студент</th>
+                                <th style="width:380px;" class="text-center">Оценка</th>
+                            </tr>
+                        </thead>
+                        <tbody id="semGradesBody">
+                            <tr><td colspan="2" class="text-center text-muted">
+                                <div class="skeleton skeleton--block"></div>
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <div class="me-auto small text-muted" id="semGradeStatus"></div>
+                <button type="button" class="btn btn-secondary"
+                        data-modal-close="semesterGradesModal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ============================================================
+   ДАННЫЕ ДЛЯ JS
+   ============================================================ #}
 <script id="journalDataScript" type="application/json">
 {
     "gsid": {{ pair.id }},
     "semester": {{ current_semester }},
     "studentsCount": {{ students|length }},
-    "groupName": "{{ pair.group_name }}",
-    "subjectName": "{{ pair.subject_name }}",
+    "groupName": "{{ pair.group_name | e }}",
+    "subjectName": "{{ pair.subject_name | e }}",
     "lessons": [
         {% for lesson in journal_data %}
         {
@@ -769,9 +831,9 @@
             "dateShort": "{{ lesson.date_short }}",
             "dayOfWeek": "{{ lesson.day_of_week }}",
             "time": "{{ lesson.time_interval }}",
-            "topic": "{{ lesson.topic or '' }}",
+            "topic": "{{ (lesson.topic or '') | e }}",
             "type": "{{ lesson.type }}",
-            "typeName": "{{ type_names.get(lesson.type, lesson.type) }}",
+            "typeName": "{{ type_full.get(lesson.type, lesson.type) }}",
             "entries": {
                 {% for student_id, entry in lesson.entries.items() %}
                 "{{ student_id }}": {
@@ -787,1252 +849,28 @@
 }
 </script>
 
-<style>
-    /* ============================================================
-       DRAG-TO-SCROLL КОНТЕЙНЕР
-       ============================================================ */
-    .journal-scroll-container {
-        overflow-x: auto;
-        max-width: 100%;
-        position: relative;
-        cursor: grab;
-        user-select: none;
-        -webkit-user-select: none;
-        scrollbar-width: thin;
-        scrollbar-color: #c0c0c0 #f1f1f1;
-    }
-    .journal-scroll-container.dragging { cursor: grabbing; }
-    .journal-scroll-container.dragging * { pointer-events: none; }
-    .journal-scroll-container .lesson-time-badge,
-    .journal-scroll-container .mass-grade-btn,
-    .journal-scroll-container .edit-entry-btn,
-    .journal-scroll-container .semester-grade-select,
-    .journal-scroll-container .btn,
-    .journal-scroll-container .dropdown,
-    .journal-scroll-container a { pointer-events: auto; }
-    .journal-scroll-container.dragging .lesson-time-badge,
-    .journal-scroll-container.dragging .mass-grade-btn,
-    .journal-scroll-container.dragging .edit-entry-btn,
-    .journal-scroll-container.dragging .semester-grade-select,
-    .journal-scroll-container.dragging .btn,
-    .journal-scroll-container.dragging .dropdown,
-    .journal-scroll-container.dragging a { pointer-events: none; }
+<script id="journalTimeData" type="application/json">
+{{ all_time_intervals | tojson }}
+</script>
 
-    /* ============================================================
-       ТАБЛИЦА
-       ============================================================ */
-    .journal-table {
-        font-size: 0.9rem;
-        border-collapse: separate;
-        border-spacing: 0;
-        min-width: max-content;
-    }
-    .journal-table th,
-    .journal-table td {
-        vertical-align: middle;
-        text-align: center;
-        padding: 6px 6px;
-        border: 1px solid #dee2e6;
-    }
-    .journal-table thead th {
-        background-color: #f8f9fa;
-        font-weight: 600;
-        position: sticky;
-        top: 0;
-        z-index: 1;
-    }
-    .fixed-left-col {
-        position: sticky !important;
-        left: 0 !important;
-        background-color: #fff !important;
-        z-index: 3 !important;
-        box-shadow: 2px 0 4px rgba(0,0,0,0.08);
-        text-align: left !important;
-        white-space: nowrap;
-    }
-    .fixed-left-col-2 {
-        position: sticky !important;
-        left: 220px !important;
-        background-color: #fff !important;
-        z-index: 3 !important;
-        box-shadow: 2px 0 4px rgba(0,0,0,0.08);
-        min-width: 110px;
-    }
-    .journal-table thead .fixed-left-col,
-    .journal-table thead .fixed-left-col-2 {
-        z-index: 4 !important;
-        background-color: #f8f9fa !important;
-    }
+<script id="journalDayNames" type="application/json">
+{{ day_names_short | tojson }}
+</script>
 
-    /* ============================================================
-       КОМПАКТНАЯ ШАПКА КОЛОНКИ ЗАНЯТИЯ
-       ============================================================ */
-    .lesson-column {
-        min-width: 110px;
-        max-width: 130px;
-        background-color: #fafbfc;
-        padding: 4px !important;
-        vertical-align: top !important;
-    }
-    .lh-header-date {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        white-space: nowrap;
-        line-height: 1.1;
-    }
-    .lh-date {
-        font-weight: 600;
-        font-size: 0.78rem;
-    }
-    .lh-dow {
-        font-size: 0.7rem;
-        color: #6c757d;
-    }
-    .lh-header-time {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        margin-top: 2px;
-        line-height: 1.1;
-    }
-    .lh-time {
-        font-size: 0.7rem;
-        color: #0d6efd;
-        font-weight: 500;
-    }
-    .lh-type {
-        font-size: 0.65rem;
-        background-color: #e9ecef;
-        color: #495057;
-        padding: 1px 5px;
-        border-radius: 3px;
-    }
-    .lh-header-menu {
-        position: absolute;
-        top: 2px;
-        right: 2px;
-    }
-    .lh-menu-btn {
-        color: #6c757d;
-        text-decoration: none;
-        opacity: 0.6;
-        transition: opacity 0.15s;
-    }
-    .lh-menu-btn:hover { opacity: 1; color: #0d6efd; }
-    .lesson-column { position: relative; }
-    .lh-header-topic {
-        font-size: 0.68rem;
-        color: #6c757d;
-        margin-top: 2px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 120px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-
-    /* ============================================================
-       ЕДИНЫЙ СТИЛЬ ОЦЕНОК И ОТМЕТОК
-       ============================================================ */
-    .cell-mark {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 24px;
-        height: 24px;
-        padding: 0 6px;
-        border-radius: 12px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        line-height: 1;
-        vertical-align: middle;
-    }
-    .cell-mark-present {
-        color: #198754;
-        background-color: #d1e7dd;
-        font-size: 1rem;
-    }
-    .cell-mark-absent {
-        color: #dc3545;
-        background-color: #f8d7da;
-        font-size: 1rem;
-    }
-    .grade-cell { padding: 2px 8px; }
-    .grade-cell-5 {
-        background-color: #d1e7dd;
-        color: #0a3622;
-        border: 1px solid #a3cfbb;
-    }
-    .grade-cell-4 {
-        background-color: #cff4fc;
-        color: #055160;
-        border: 1px solid #9eeaf9;
-    }
-    .grade-cell-3 {
-        background-color: #fff3cd;
-        color: #664d03;
-        border: 1px solid #ffe69c;
-    }
-    .grade-cell-2 {
-        background-color: #f8d7da;
-        color: #58151c;
-        border: 1px solid #f1aeb5;
-    }
-    .grade-cell-passed {
-        background-color: #d1e7dd;
-        color: #0a3622;
-        border: 1px solid #a3cfbb;
-    }
-    .grade-cell-empty {
-        background-color: #f8f9fa;
-        color: #adb5bd;
-        border: 1px solid #e9ecef;
-    }
-
-    .edit-entry-btn {
-        text-decoration: none;
-        font-size: 0.75rem;
-        padding: 1px 3px;
-        opacity: 0.35;
-        transition: opacity 0.2s;
-    }
-    .cell-hover:hover .edit-entry-btn { opacity: 1; }
-
-    .semester-grade-select {
-        width: 85px;
-        display: inline-block;
-        font-size: 0.75rem;
-        cursor: pointer;
-    }
-
-    .exam-column {
-        background-color: #fff5f5 !important;
-        border-left: 3px solid #dc3545 !important;
-    }
-    .exam-cell { background-color: #fffafa; }
-
-    /* ============================================================
-       МОБИЛЬНАЯ ВЕРСИЯ
-       ============================================================ */
-    .mobile-lessons-list { scrollbar-width: thin; }
-    .mobile-lesson-card {
-        background-color: #fafbfc;
-        transition: all 0.15s;
-        cursor: pointer;
-    }
-    .mobile-lesson-card:active {
-        background-color: #e7f1ff;
-        transform: scale(0.98);
-    }
-    .mobile-lesson-card.selected {
-        background-color: #cfe2ff;
-        border-color: #0d6efd !important;
-        border-width: 2px !important;
-    }
-    .mobile-lesson-card.filtered-out { display: none; }
-    .student-mobile-row { background-color: #fafbfc; }
-    .attendance-buttons .btn {
-        min-width: 42px;
-        padding: 8px 10px;
-        font-weight: 600;
-        font-size: 0.9rem;
-    }
-    .attendance-buttons .btn:active { transform: scale(0.95); }
-
-    @media (max-width: 767px) {
-        .mobile-lessons-list { max-height: 350px !important; }
-    }
-
-    @media (max-width: 575.98px) {
-        h2 { font-size: 1.2rem; }
-        .btn-success.btn-lg {
-            width: 100%;
-            font-size: 1rem;
-            padding: 0.55rem 1rem;
-        }
-        .btn-group.btn-group-sm { display: flex; width: 100%; }
-        .btn-group.btn-group-sm .btn {
-            flex: 1;
-            padding: 0.5rem 0.25rem;
-            font-size: 0.85rem;
-        }
-        .mobile-lesson-card { padding: 0.55rem !important; }
-        .mobile-lesson-card strong { font-size: 0.92rem; }
-        .mobile-lesson-card .badge { font-size: 0.68rem; }
-        .attendance-buttons .btn {
-            min-width: 44px;
-            min-height: 44px;
-            padding: 0.5rem 0.6rem;
-            font-size: 0.95rem;
-        }
-        .student-mobile-row { padding: 0.6rem !important; }
-    }
-
-    /* ============================================================
-       ПАНЕЛЬ НАВИГАЦИИ ПО ДАТАМ
-       ============================================================ */
-    #dateNavPanel .btn-group-sm .btn {
-        min-width: 44px;
-        font-size: 0.8rem;
-    }
-    #monthNav .btn.active {
-        background-color: #0d6efd;
-        color: #fff;
-        border-color: #0d6efd;
-    }
-
-    /* ============================================================
-       ПЕЧАТЬ (улучшенная)
-       ============================================================ */
-    @media print {
-        @page {
-            size: A4 landscape;
-            margin: 8mm 6mm;
-        }
-
-        /* Скрываем всё интерактивное */
-        .no-print,
-        .navbar,
-        footer,
-        .breadcrumbs,
-        .btn,
-        .alert,
-        .dropdown,
-        .lh-header-menu,
-        .edit-entry-btn,
-        .semester-grade-select,
-        .mass-grade-btn,
-        #dateNavPanel {
-            display: none !important;
-        }
-
-        /* Заголовок страницы */
-        body {
-            background: #fff;
-            font-size: 10px;
-        }
-
-        h2 {
-            font-size: 14px;
-            margin-bottom: 6px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 4px;
-        }
-
-        /* Все карточки разворачиваем */
-        .card {
-            border: none !important;
-            box-shadow: none !important;
-            margin: 0 !important;
-        }
-        .card-header,
-        .card-body {
-            padding: 0 !important;
-        }
-
-        /* Таблица во всю ширину */
-        .journal-scroll-container {
-            overflow: visible !important;
-            max-width: 100% !important;
-        }
-
-        .journal-table {
-            font-size: 8px;
-            min-width: auto !important;
-            width: 100% !important;
-            border-collapse: collapse !important;
-        }
-
-        .journal-table th,
-        .journal-table td {
-            padding: 2px 3px !important;
-            border: 1px solid #666 !important;
-        }
-
-        /* Убираем sticky */
-        .fixed-left-col,
-        .fixed-left-col-2 {
-            position: static !important;
-            box-shadow: none !important;
-            background-color: #f5f5f5 !important;
-        }
-
-        .journal-table thead th {
-            position: static !important;
-            background-color: #e9ecef !important;
-        }
-
-        /* Шапка колонки компактнее */
-        .lesson-column {
-            min-width: auto !important;
-            max-width: 70px !important;
-            padding: 2px !important;
-        }
-
-        .lh-date { font-size: 8px; }
-        .lh-dow { font-size: 7px; }
-        .lh-time { font-size: 7px; }
-        .lh-type { font-size: 7px; padding: 0 3px; }
-        .lh-header-topic { display: none; }
-
-        /* Цветные ячейки сохраняем, но чуть приглушаем */
-        .cell-mark,
-        .grade-cell {
-            min-width: 16px;
-            height: 16px;
-            font-size: 8px;
-            padding: 0 3px;
-            border-radius: 8px;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
-        .cell-mark-present,
-        .cell-mark-absent {
-            font-size: 10px;
-        }
-
-        /* Студент — компактнее */
-        .student-name {
-            max-width: 120px !important;
-            font-size: 8px !important;
-        }
-
-        /* Экзамен-колонка — рамка */
-        .exam-column {
-            border-left: 2px solid #dc3545 !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
-
-        /* Легенду печатаем мелко */
-        .card.mt-3 .card-body {
-            padding: 4px !important;
-            font-size: 7px;
-        }
-    }
-</style>
+<script id="journalStudentsData" type="application/json">
+[
+{% for student in students %}
+    {
+        "id": {{ student.id }},
+        "name": "{{ student.full_name | e }}"
+    }{% if not loop.last %},{% endif %}
+{% endfor %}
+]
+</script>
 
 {% endblock %}
 
 
 {% block scripts %}
-
-<script>
-var journalData = JSON.parse(document.getElementById('journalDataScript').textContent);
-
-var ALL_TIME_INTERVALS = {{ all_time_intervals | tojson }};
-var DAY_NAMES_SHORT = {{ day_names_short | tojson }};
-var DEFAULT_DAY_FOR_INTERVALS = '1';
-
-// ==================== DRAG-TO-SCROLL ====================
-(function() {
-    var container = document.getElementById('journalScroll');
-    if (!container) return;
-
-    var isDown = false;
-    var startX;
-    var scrollLeft;
-
-    container.addEventListener('mousedown', function(e) {
-        if (e.target.closest('button, select, a, input, .dropdown, .lh-menu-btn')) return;
-
-        isDown = true;
-        container.classList.add('dragging');
-        startX = e.pageX - container.offsetLeft;
-        scrollLeft = container.scrollLeft;
-    });
-    container.addEventListener('mouseleave', function() {
-        isDown = false;
-        container.classList.remove('dragging');
-    });
-    container.addEventListener('mouseup', function() {
-        isDown = false;
-        container.classList.remove('dragging');
-    });
-    container.addEventListener('mousemove', function(e) {
-        if (!isDown) return;
-        e.preventDefault();
-        var x = e.pageX - container.offsetLeft;
-        var walk = (x - startX) * 1.5;
-        container.scrollLeft = scrollLeft - walk;
-    });
-    container.addEventListener('auxclick', function(e) {
-        if (e.button === 1) e.preventDefault();
-    });
-})();
-
-// ==================== НАВИГАЦИЯ ПО ДАТАМ ====================
-(function() {
-    var container = document.getElementById('journalScroll');
-    if (!container) return;
-
-    var months = {};  // {MM: [lessonIndex, ...]}
-
-    journalData.lessons.forEach(function(l, i) {
-        var mm = l.date.substring(5, 7);
-        if (!months[mm]) months[mm] = [];
-        months[mm].push(i);
-    });
-
-    var monthNames = {
-        '01': 'Янв', '02': 'Фев', '03': 'Мар', '04': 'Апр',
-        '05': 'Май', '06': 'Июн', '07': 'Июл', '08': 'Авг',
-        '09': 'Сен', '10': 'Окт', '11': 'Ноя', '12': 'Дек'
-    };
-
-    var nav = document.getElementById('monthNav');
-    var sortedMonths = Object.keys(months).sort();
-
-    sortedMonths.forEach(function(mm) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-outline-primary';
-        btn.textContent = monthNames[mm] || mm;
-        btn.dataset.month = mm;
-        btn.addEventListener('click', function() {
-            scrollToMonth(mm);
-        });
-        nav.appendChild(btn);
-    });
-
-    function scrollToMonth(mm) {
-        var indices = months[mm] || [];
-        if (!indices.length) return;
-        var firstIdx = indices[0];
-        var th = document.querySelector('th.lesson-column[data-lesson-month="' + mm + '"]');
-        if (th) {
-            // Прокрутка по горизонтали
-            var table = document.getElementById('journalTable');
-            var fixedCols = 220 + 110; // суммарная ширина sticky-колонок
-            var thLeft = th.offsetLeft;
-            container.scrollLeft = Math.max(0, thLeft - fixedCols - 20);
-
-            // Подсветка
-            nav.querySelectorAll('.btn').forEach(function(b) { b.classList.remove('active'); });
-            var btn = nav.querySelector('[data-month="' + mm + '"]');
-            if (btn) btn.classList.add('active');
-
-            // Плавный скролл
-            container.scrollTo({ left: container.scrollLeft, behavior: 'smooth' });
-        }
-    }
-
-    // Кнопка «Сегодня»
-    document.getElementById('navToToday').addEventListener('click', function() {
-        var today = new Date();
-        var iso = today.toISOString().substring(0, 10);
-        // Найти ближайшее занятие: сначала точное совпадение, иначе — ближайшее будущее, иначе — последнее
-        var exact = journalData.lessons.findIndex(function(l) { return l.date === iso; });
-        var target = exact;
-
-        if (target === -1) {
-            // Ближайшее занятие в будущем
-            for (var i = 0; i < journalData.lessons.length; i++) {
-                if (journalData.lessons[i].date >= iso) { target = i; break; }
-            }
-        }
-        if (target === -1) {
-            // Последнее занятие
-            target = journalData.lessons.length - 1;
-        }
-        if (target >= 0) {
-            scrollToLesson(target);
-        }
-    });
-
-    // Кнопка «Начало»
-    document.getElementById('navToStart').addEventListener('click', function() {
-        if (journalData.lessons.length) {
-            scrollToLesson(0);
-        }
-    });
-
-    // Кнопка «Конец»
-    document.getElementById('navToEnd').addEventListener('click', function() {
-        var n = journalData.lessons.length;
-        if (n) {
-            scrollToLesson(n - 1);
-        }
-    });
-
-    function scrollToLesson(idx) {
-        var lesson = journalData.lessons[idx];
-        if (!lesson) return;
-        var th = document.querySelector('th.lesson-column[data-lesson-date="' + lesson.date + '"]');
-        if (th) {
-            var fixedCols = 220 + 110;
-            var thLeft = th.offsetLeft;
-            container.scrollLeft = Math.max(0, thLeft - fixedCols - 20);
-
-            // Подсветка колонки
-            th.style.transition = 'background-color 0.4s';
-            var oldBg = th.style.backgroundColor;
-            th.style.backgroundColor = '#fff3cd';
-            setTimeout(function() {
-                th.style.backgroundColor = oldBg;
-            }, 1200);
-        }
-    }
-
-    // Поиск по дате
-    var searchInput = document.getElementById('dateSearchInput');
-    var searchStatus = document.getElementById('dateSearchStatus');
-
-    if (searchInput) {
-        searchInput.addEventListener('keydown', function(e) {
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-
-            var query = this.value.trim();
-            if (!query) {
-                searchStatus.textContent = '';
-                return;
-            }
-
-            // Ищем точное совпадение по dateFormatted или частичное
-            var found = -1;
-            for (var i = 0; i < journalData.lessons.length; i++) {
-                var l = journalData.lessons[i];
-                if (l.dateFormatted === query ||
-                    l.dateFormatted.indexOf(query) !== -1 ||
-                    l.dateFormatted.replace(/\./g, '').indexOf(query.replace(/\./g, '')) !== -1) {
-                    found = i;
-                    break;
-                }
-            }
-
-            if (found >= 0) {
-                scrollToLesson(found);
-                searchStatus.textContent = '✓ Найдено: ' + journalData.lessons[found].dateFormatted;
-                searchStatus.className = 'small text-success';
-            } else {
-                searchStatus.textContent = '✗ Не найдено';
-                searchStatus.className = 'small text-danger';
-            }
-        });
-    }
-})();
-
-// ==================== МОБИЛЬНАЯ ВЕРСИЯ ====================
-var selectedMobileLessonIndex = null;
-
-function filterMobileLessons() {
-    var typeFilter = document.getElementById('mobileTypeFilter').value;
-    var searchText = document.getElementById('mobileLessonSearch').value.toLowerCase().trim();
-    var cards = document.querySelectorAll('.mobile-lesson-card');
-
-    cards.forEach(function(card) {
-        var type = card.dataset.type;
-        var searchData = card.dataset.search.toLowerCase();
-
-        var matchesType = !typeFilter || type === typeFilter;
-        var matchesSearch = !searchText || searchData.includes(searchText);
-
-        if (matchesType && matchesSearch) {
-            card.classList.remove('filtered-out');
-        } else {
-            card.classList.add('filtered-out');
-        }
-    });
-
-    if (selectedMobileLessonIndex !== null) {
-        var selectedCard = document.querySelector('.mobile-lesson-card[data-index="' + selectedMobileLessonIndex + '"]');
-        if (selectedCard && selectedCard.classList.contains('filtered-out')) {
-            clearMobileSelection();
-        }
-    }
-}
-
-function selectMobileLesson(index, card) {
-    document.querySelectorAll('.mobile-lesson-card').forEach(function(c) {
-        c.classList.remove('selected');
-    });
-
-    card.classList.add('selected');
-    selectedMobileLessonIndex = index;
-
-    var lesson = journalData.lessons[index];
-    if (!lesson) return;
-
-    document.getElementById('selectedLessonTitle').textContent =
-        lesson.dateFormatted + (lesson.dayOfWeek ? ' • ' + lesson.dayOfWeek : '') +
-        (lesson.time ? ' • ' + lesson.time : '');
-    document.getElementById('selectedLessonType').textContent = lesson.typeName;
-    document.getElementById('selectedLessonTopic').textContent = lesson.topic || '—';
-
-    document.getElementById('selectedLessonCard').style.display = 'block';
-
-    document.querySelectorAll('.attendance-buttons').forEach(function(container) {
-        var studentId = container.dataset.studentId;
-        var entry = lesson.entries[studentId];
-
-        if (!entry) {
-            container.innerHTML = '<span class="text-muted small">Нет записи</span>';
-            return;
-        }
-
-        var html = '';
-
-        html += '<button class="btn btn-sm ' +
-                (entry.attendance === 'present' && !entry.grade ? 'btn-success' : 'btn-outline-success') +
-                '" onclick="quickMark(' + entry.id + ', \'present\', \'\', this)">' +
-                '<i class="bi bi-check-lg"></i> +</button>';
-
-        html += '<button class="btn btn-sm ' +
-                (entry.attendance === 'absent' ? 'btn-danger' : 'btn-outline-danger') +
-                '" onclick="quickMark(' + entry.id + ', \'absent\', \'\', this)">' +
-                '<i class="bi bi-x-lg"></i> н</button>';
-
-        html += '<div class="vr mx-1"></div>';
-
-        ['2', '3', '4', '5'].forEach(function(grade) {
-            html += '<button class="btn btn-sm ' +
-                    (entry.grade === grade ? 'btn-primary' : 'btn-outline-primary') +
-                    '" onclick="quickMark(' + entry.id + ', \'present\', \'' + grade + '\', this)">' +
-                    grade + '</button>';
-        });
-
-        html += '<button class="btn btn-sm ' +
-                (entry.grade === 'passed' ? 'btn-success' : 'btn-outline-success') +
-                '" onclick="quickMark(' + entry.id + ', \'present\', \'passed\', this)">з</button>';
-
-        container.innerHTML = html;
-    });
-
-    document.getElementById('mobileStudentsList').style.display = 'block';
-
-    setTimeout(function() {
-        document.getElementById('mobileStudentsList').scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-        });
-    }, 100);
-}
-
-function clearMobileSelection() {
-    selectedMobileLessonIndex = null;
-    document.querySelectorAll('.mobile-lesson-card').forEach(function(c) {
-        c.classList.remove('selected');
-    });
-    document.getElementById('selectedLessonCard').style.display = 'none';
-    document.getElementById('mobileStudentsList').style.display = 'none';
-}
-
-function quickMark(entryId, attendance, grade, btn) {
-    var formData = new FormData();
-    formData.append('entry_id', entryId);
-    formData.append('attendance', attendance);
-    formData.append('grade', grade);
-
-    fetch('/journal/{{ pair.id }}/update-entry', {
-        method: 'POST',
-        body: formData
-    })
-    .then(function(response) { return response.json(); })
-    .then(function(result) {
-        if (result.success) {
-            var container = btn.closest('.attendance-buttons');
-            var buttons = container.querySelectorAll('.btn');
-            buttons.forEach(function(b) {
-                b.classList.remove('btn-success', 'btn-danger', 'btn-primary');
-                b.classList.remove('btn-outline-success', 'btn-outline-danger', 'btn-outline-primary');
-
-                var text = b.textContent.trim();
-                if (text === '+') b.classList.add('btn-outline-success');
-                else if (text === 'н') b.classList.add('btn-outline-danger');
-                else if (text === 'з') b.classList.add('btn-outline-success');
-                else if (['2','3','4','5'].includes(text)) b.classList.add('btn-outline-primary');
-            });
-
-            if (attendance === 'absent') {
-                btn.className = 'btn btn-sm btn-danger';
-            } else if (grade) {
-                if (grade === 'passed') {
-                    btn.className = 'btn btn-sm btn-success';
-                } else {
-                    btn.className = 'btn btn-sm btn-primary';
-                }
-            } else {
-                btn.className = 'btn btn-sm btn-success';
-            }
-
-            if (selectedMobileLessonIndex !== null) {
-                var lesson = journalData.lessons[selectedMobileLessonIndex];
-                Object.keys(lesson.entries).forEach(function(key) {
-                    if (lesson.entries[key].id === entryId) {
-                        lesson.entries[key].attendance = attendance;
-                        lesson.entries[key].grade = grade;
-                    }
-                });
-            }
-
-            showToast('Сохранено');
-        } else {
-            alert('Ошибка: ' + result.message);
-        }
-    })
-    .catch(function() {
-        alert('Ошибка соединения');
-    });
-}
-
-function showToast(message) {
-    var toast = document.createElement('div');
-    toast.className = 'position-fixed bottom-0 end-0 m-3 alert alert-success py-2 px-3 shadow';
-    toast.style.zIndex = '9999';
-    toast.innerHTML = '<i class="bi bi-check-circle-fill"></i> ' + message;
-    document.body.appendChild(toast);
-
-    setTimeout(function() {
-        toast.style.opacity = '0';
-        toast.style.transition = 'opacity 0.3s';
-        setTimeout(function() { toast.remove(); }, 300);
-    }, 800);
-}
-
-// ==================== ДЕСКТОП: РЕДАКТИРОВАНИЕ ЗАПИСИ ====================
-document.querySelectorAll('.edit-entry-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        document.getElementById('edit_entry_id').value = this.dataset.entryId;
-        document.getElementById('editStudentName').textContent = this.dataset.studentName;
-        document.getElementById('editLessonDate').textContent = this.dataset.lessonDate;
-        document.getElementById('editLessonType').textContent = this.dataset.lessonType;
-
-        if (this.dataset.attendance === 'absent') {
-            document.getElementById('modal_absent').checked = true;
-        } else {
-            document.getElementById('modal_present').checked = true;
-        }
-
-        document.getElementById('edit_grade').value = this.dataset.grade;
-    });
-});
-
-document.getElementById('editEntryForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-
-    var entryId = document.getElementById('edit_entry_id').value;
-    var attendance = document.querySelector('input[name="attendance"]:checked');
-    if (!attendance) { alert('Выберите посещение'); return; }
-
-    var grade = document.getElementById('edit_grade').value;
-    var formData = new FormData();
-    formData.append('entry_id', entryId);
-    formData.append('attendance', attendance.value);
-    formData.append('grade', grade);
-
-    try {
-        var response = await fetch('/journal/{{ pair.id }}/update-entry', { method: 'POST', body: formData });
-        var result = await response.json();
-
-        if (result.success) {
-            bootstrap.Modal.getInstance(document.getElementById('editEntryModal')).hide();
-            location.reload();
-        } else {
-            alert('Ошибка: ' + result.message);
-        }
-    } catch (error) {
-        alert('Ошибка соединения');
-    }
-});
-
-// ==================== ИЗМЕНЕНИЕ ТИПА (МОДАЛКА) ====================
-document.querySelectorAll('[data-bs-target="#editLessonTypeModal"]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-        document.getElementById('editTypeDate').textContent = this.dataset.dateFormatted;
-        document.getElementById('editTypeTime').textContent = this.dataset.timeFormatted;
-        document.getElementById('editTypeGsid').value = this.dataset.gsid;
-        document.getElementById('editTypeDateInput').value = this.dataset.date;
-        document.getElementById('editTypeTimeInput').value = this.dataset.time;
-        document.getElementById('editTypeSelect').value = this.dataset.currentType;
-    });
-});
-
-document.getElementById('editLessonTypeForm').addEventListener('submit', async function (e) {
-    e.preventDefault();
-
-    var formData = new FormData(this);
-    var newType = formData.get('type');
-
-    if (newType === 'exam') {
-        if (!confirm('Изменить на Экзамен?\n\nПосле этого нельзя будет добавить другие занятия.')) {
-            return;
-        }
-    }
-
-    try {
-        var response = await fetch('/journal/update-lesson-type', { method: 'POST', body: formData });
-        var result = await response.json();
-        if (result.success) {
-            bootstrap.Modal.getInstance(document.getElementById('editLessonTypeModal')).hide();
-            location.reload();
-        } else {
-            alert('Ошибка: ' + result.message);
-        }
-    } catch (error) {
-        alert('Ошибка соединения');
-    }
-});
-
-// ==================== ОЦЕНКА ЗА СЕМЕСТР ====================
-document.querySelectorAll('.semester-grade-select').forEach(function(select) {
-    select.addEventListener('change', async function() {
-        var cell = this.closest('.semester-grade-cell');
-        var studentId = cell.dataset.studentId;
-        var semester = cell.dataset.semester;
-        var grade = this.value;
-
-        var formData = new FormData();
-        formData.append('student_id', studentId);
-        formData.append('semester', semester);
-        formData.append('grade', grade);
-
-        try {
-            var response = await fetch('/journal/{{ pair.id }}/set-semester-grade', { method: 'POST', body: formData });
-            var result = await response.json();
-
-            if (result.success) {
-                var display = cell.querySelector('.grade-display');
-                display.textContent = (grade === 'passed' ? 'Зачтено' : (grade || '—'));
-
-                var cls = 'grade-cell ';
-                if (grade === 'passed' || grade === '5') cls += 'grade-cell-5';
-                else if (grade === '4') cls += 'grade-cell-4';
-                else if (grade === '3') cls += 'grade-cell-3';
-                else if (grade === '2') cls += 'grade-cell-2';
-                else cls += 'grade-cell-empty';
-                display.className = 'badge grade-display ' + cls;
-            } else {
-                alert('Ошибка: ' + result.message);
-                location.reload();
-            }
-        } catch (error) {
-            alert('Ошибка соединения');
-        }
-    });
-});
-
-// ==================== ИЗМЕНЕНИЕ ВРЕМЕНИ ЗАНЯТИЯ ====================
-function getWeekdayFromDate(dateStr) {
-    if (!dateStr) return null;
-    var parts = dateStr.split('-');
-    if (parts.length !== 3) return null;
-    var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-    if (isNaN(d.getTime())) return null;
-    var wd = d.getDay();
-    return wd === 0 ? '6' : String(wd - 1);
-}
-
-function formatHHMMEdit(v) {
-    var m = v.match(/^(\d{2})(\d{2})-(\d{2})(\d{2})$/);
-    return m ? m[1] + ':' + m[2] + '–' + m[3] + ':' + m[4] : v;
-}
-
-document.querySelectorAll('.lesson-time-badge').forEach(function (badge) {
-    badge.addEventListener('click', function (e) {
-        e.preventDefault();
-
-        var date = this.dataset.date;
-        var time = this.dataset.time;
-        var timeFormatted = this.dataset.timeFormatted;
-
-        document.getElementById('editTimeDate').textContent = date;
-        document.getElementById('editTimeOld').textContent = timeFormatted;
-        document.getElementById('editTimeDateInput').value = date;
-        document.getElementById('editTimeOldInput').value = time;
-        document.getElementById('editTimeNewInput').value = time;
-
-        var weekday = getWeekdayFromDate(date) || DEFAULT_DAY_FOR_INTERVALS;
-        var intervals = ALL_TIME_INTERVALS[weekday] || ALL_TIME_INTERVALS[DEFAULT_DAY_FOR_INTERVALS];
-
-        var wdInt = parseInt(weekday);
-        document.getElementById('editTimeDayOfWeek').textContent =
-            DAY_NAMES_SHORT[wdInt] || '—';
-
-        var datalist = document.getElementById('editTimeDatalist');
-        datalist.innerHTML = '';
-        intervals.forEach(function (pair) {
-            var opt = document.createElement('option');
-            opt.value = pair[0];
-            opt.label = pair[1];
-            datalist.appendChild(opt);
-        });
-
-        var validTimes = intervals.map(function (p) { return formatHHMMEdit(p[0]); }).join(', ');
-        document.getElementById('editTimeHint').textContent =
-            'Для ' + (DAY_NAMES_SHORT[wdInt] || '—') + ': ' + validTimes;
-    });
-});
-
-var editTimeForm = document.getElementById('editLessonTimeForm');
-if (editTimeForm) {
-    editTimeForm.addEventListener('submit', async function (e) {
-        e.preventDefault();
-
-        var formData = new FormData(editTimeForm);
-
-        try {
-            var response = await fetch(
-                '/journal/{{ pair.id }}/update-lesson-time',
-                { method: 'POST', body: formData }
-            );
-            var result = await response.json();
-
-            if (result.success) {
-                bootstrap.Modal.getInstance(
-                    document.getElementById('editLessonTimeModal')
-                ).hide();
-                location.reload();
-            } else {
-                alert('Ошибка: ' + result.message);
-            }
-        } catch (err) {
-            alert('Ошибка соединения');
-        }
-    });
-}
-
-// ==================== МАССОВОЕ ВЫСТАВЛЕНИЕ ОЦЕНОК ====================
-var mgCurrentLesson = null;
-var mgCurrentGsid = {{ pair.id }};
-
-document.querySelectorAll('.mass-grade-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-        var date = this.dataset.date;
-        var time = this.dataset.time;
-
-        var idx = journalData.lessons.findIndex(function (l) {
-            return l.date === date && l.time === time;
-        });
-        if (idx === -1) {
-            alert('Занятие не найдено');
-            return;
-        }
-
-        mgCurrentLesson = idx;
-        var lesson = journalData.lessons[idx];
-
-        document.getElementById('mgLessonTitle').textContent =
-            lesson.dateFormatted + (lesson.dayOfWeek ? ' • ' + lesson.dayOfWeek : '') +
-            (lesson.time ? ' • ' + lesson.time : '');
-        document.getElementById('mgLessonSubtitle').textContent =
-            lesson.typeName + (lesson.topic ? ' • ' + lesson.topic : '');
-
-        mgBuildTable(lesson);
-        document.getElementById('mgCountBadge').textContent =
-            Object.keys(lesson.entries).length + ' студентов';
-        document.getElementById('mgStatus').textContent = '';
-
-        document.getElementById('mgFilterAll').checked = true;
-    });
-});
-
-function mgBuildTable(lesson) {
-    var tbody = document.getElementById('mgStudentsBody');
-    tbody.innerHTML = '';
-
-    var studentIds = Object.keys(lesson.entries);
-    var domOrder = {};
-    document.querySelectorAll('td.student-name a[data-student-id]').forEach(function (a, i) {
-        domOrder[a.dataset.studentId] = i;
-    });
-    studentIds.sort(function (a, b) {
-        return (domOrder[a] !== undefined ? domOrder[a] : 999) -
-               (domOrder[b] !== undefined ? domOrder[b] : 999);
-    });
-
-    studentIds.forEach(function (sid) {
-        var entry = lesson.entries[sid];
-
-        var nameLink = document.querySelector('td.student-name a[data-student-id="' + sid + '"]');
-        var fullName = nameLink ? nameLink.textContent.trim() : '#' + sid;
-
-        var tr = document.createElement('tr');
-        tr.dataset.studentId = sid;
-        tr.dataset.entryId = entry.id;
-        tr.dataset.attendance = entry.attendance;
-        tr.dataset.grade = entry.grade || '';
-
-        var tdCheck = document.createElement('td');
-        tdCheck.className = 'text-center';
-        tdCheck.innerHTML =
-            '<input type="checkbox" class="form-check-input mg-student-check" ' +
-            'data-student-id="' + sid + '" checked>';
-        tr.appendChild(tdCheck);
-
-        var tdName = document.createElement('td');
-        tdName.className = 'small';
-        tdName.textContent = fullName;
-        tr.appendChild(tdName);
-
-        var tdAtt = document.createElement('td');
-        tdAtt.className = 'text-center';
-        tdAtt.innerHTML = entry.attendance === 'present'
-            ? '<span class="badge bg-success">+</span>'
-            : '<span class="badge bg-danger">н</span>';
-        tr.appendChild(tdAtt);
-
-        var tdGrade = document.createElement('td');
-        tdGrade.className = 'text-center';
-        tdGrade.innerHTML = mgGradeButtonsHtml(entry.grade || '');
-        tr.appendChild(tdGrade);
-
-        tbody.appendChild(tr);
-    });
-
-    mgAttachHandlers();
-}
-
-function mgGradeButtonsHtml(currentGrade) {
-    var buttons = [
-        { value: '5', label: '5', cls: 'success' },
-        { value: '4', label: '4', cls: 'info' },
-        { value: '3', label: '3', cls: 'warning' },
-        { value: '2', label: '2', cls: 'danger' },
-        { value: 'passed', label: 'з', cls: 'success' },
-        { value: '', label: '—', cls: 'secondary' },
-    ];
-
-    return '<div class="btn-group btn-group-sm">' +
-        buttons.map(function (b) {
-            var active = b.value === currentGrade;
-            var cls = active
-                ? 'btn btn-' + b.cls
-                : 'btn btn-outline-' + b.cls;
-            return '<button type="button" class="' + cls + ' mg-grade-btn" ' +
-                'data-grade="' + b.value + '">' + b.label + '</button>';
-        }).join('') +
-        '</div>';
-}
-
-function mgAttachHandlers() {
-    document.querySelectorAll('#mgStudentsBody .mg-grade-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var tr = this.closest('tr');
-            var newGrade = this.dataset.grade;
-            tr.dataset.grade = newGrade;
-            var tdGrade = tr.querySelector('td:last-child');
-            tdGrade.innerHTML = mgGradeButtonsHtml(newGrade);
-            mgAttachHandlers();
-        });
-    });
-
-    document.querySelectorAll('.mg-student-check').forEach(function (cb) {
-        cb.addEventListener('change', mgUpdateSelection);
-    });
-
-    var selectAll = document.getElementById('mgSelectAll');
-    if (selectAll) {
-        selectAll.onchange = function () {
-            document.querySelectorAll('.mg-student-check').forEach(function (cb) {
-                cb.checked = selectAll.checked;
-            });
-            mgUpdateSelection();
-        };
-    }
-}
-
-function mgUpdateSelection() {
-    var checks = document.querySelectorAll('.mg-student-check');
-    var checked = document.querySelectorAll('.mg-student-check:checked').length;
-    var selectAll = document.getElementById('mgSelectAll');
-    if (selectAll) {
-        selectAll.checked = (checked === checks.length);
-        selectAll.indeterminate = (checked > 0 && checked < checks.length);
-    }
-}
-
-document.querySelectorAll('.mg-set-all').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-        var grade = this.dataset.grade;
-        document.querySelectorAll('#mgStudentsBody tr').forEach(function (tr) {
-            var check = tr.querySelector('.mg-student-check');
-            if (!check || !check.checked) return;
-
-            var attendance = tr.dataset.attendance;
-            if (attendance !== 'present') return;
-
-            tr.dataset.grade = grade;
-            var tdGrade = tr.querySelector('td:last-child');
-            tdGrade.innerHTML = mgGradeButtonsHtml(grade);
-        });
-        mgAttachHandlers();
-    });
-});
-
-document.querySelectorAll('input[name="mgFilter"]').forEach(function (radio) {
-    radio.addEventListener('change', function () {
-        var val = this.value;
-        document.querySelectorAll('#mgStudentsBody tr').forEach(function (tr) {
-            if (val === 'all') {
-                tr.style.display = '';
-            } else if (val === 'present') {
-                tr.style.display = tr.dataset.attendance === 'present' ? '' : 'none';
-            } else if (val === 'absent') {
-                tr.style.display = tr.dataset.attendance === 'absent' ? '' : 'none';
-            }
-        });
-    });
-});
-
-document.getElementById('mgSaveBtn').addEventListener('click', async function () {
-    if (mgCurrentLesson === null) return;
-
-    var updates = [];
-
-    document.querySelectorAll('#mgStudentsBody tr').forEach(function (tr) {
-        var check = tr.querySelector('.mg-student-check');
-        if (!check || !check.checked) return;
-
-        var entryId = parseInt(tr.dataset.entryId);
-        var attendance = tr.dataset.attendance;
-        var grade = tr.dataset.grade || null;
-
-        updates.push({
-            entry_id: entryId,
-            attendance: attendance,
-            grade: grade,
-        });
-    });
-
-    if (updates.length === 0) {
-        alert('Не выбрано ни одного студента');
-        return;
-    }
-
-    var btn = this;
-    var originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Сохранение...';
-
-    try {
-        var response = await fetch('/journal/' + mgCurrentGsid + '/update-grades-batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ updates: updates }),
-        });
-        var result = await response.json();
-
-        if (result.success) {
-            document.getElementById('mgStatus').textContent =
-                '✓ ' + (result.message || 'Сохранено');
-            setTimeout(function () {
-                window.location.reload();
-            }, 400);
-        } else {
-            alert('Ошибка: ' + result.message);
-            btn.disabled = false;
-            btn.innerHTML = originalHtml;
-        }
-    } catch (err) {
-        alert('Ошибка соединения');
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-    }
-});
-</script>
+<script src="{{ url_for('static', filename='js/journal.js') }}"></script>
 {% endblock %}

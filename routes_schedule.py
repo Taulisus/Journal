@@ -29,14 +29,10 @@ schedule_bp = Blueprint('schedule', __name__, url_prefix='/schedule')
 # ============================================================
 
 _import_previews = {}
-_IMPORT_PREVIEW_LIMIT = 50  # максимум одновременных предпросмотров
+_IMPORT_PREVIEW_LIMIT = 50
 
 
 def _register_preview(preview_id, data):
-    """
-    Кладёт данные в _import_previews с ограничением размера:
-    если превышен лимит — вытесняется самая старая запись.
-    """
     if len(_import_previews) >= _IMPORT_PREVIEW_LIMIT:
         oldest = next(iter(_import_previews))
         _import_previews.pop(oldest, None)
@@ -48,7 +44,6 @@ def _register_preview(preview_id, data):
 # ============================================================
 
 def _can_edit_schedule(uid):
-    """Может ли пользователь редактировать занятия вообще."""
     return (
         Permission.has_permission(uid, 'manage_users')
         or Permission.has_permission(uid, 'edit_schedule')
@@ -56,11 +51,6 @@ def _can_edit_schedule(uid):
 
 
 def _can_edit_lesson(uid, lesson):
-    """
-    Может ли пользователь редактировать ЭТО занятие.
-    Админ — всегда, преподаватель — только своё.
-    lesson — sqlite3.Row или dict с полем 'teacher_id'.
-    """
     if Permission.has_permission(uid, 'manage_users'):
         return True
     if not Permission.has_permission(uid, 'edit_schedule'):
@@ -72,6 +62,32 @@ def _can_edit_lesson(uid, lesson):
         return lesson['teacher_id'] == teacher_id
     except (KeyError, TypeError):
         return False
+
+
+# ============================================================
+#                 УЧЕБНЫЙ ГОД
+# ============================================================
+
+def _current_year_range():
+    """
+    Возвращает (start_date_str, end_date_str) текущего учебного года
+    или (None, None), если год не найден.
+    """
+    year = AcademicYear.get_current()
+    if not year:
+        return None, None
+    try:
+        return year['start_date'], year['end_date']
+    except (KeyError, TypeError):
+        return None, None
+
+
+def _date_in_current_year(date_str):
+    """True, если date_str (YYYY-MM-DD) входит в текущий учебный год."""
+    start, end = _current_year_range()
+    if not start or not end:
+        return True  # нет года — не мешаем (лучше, чем совсем заблокировать)
+    return start <= date_str <= end
 
 
 # ============================================================
@@ -100,12 +116,27 @@ def _week_start(date_str):
     return monday.isoformat()
 
 
-def _get_filters():
-    return {
+def _get_filters(uid=None):
+    """
+    Фильтры из query string.
+    Для не-админа: если teacher_id не указан — ставим его самого.
+    """
+    f = {
         'group_id': request.args.get('group_id', type=int),
         'teacher_id': request.args.get('teacher_id', type=int),
         'room_id': request.args.get('room_id', type=int),
     }
+    if uid is not None and f['teacher_id'] is None:
+        if not Permission.has_permission(uid, 'manage_users'):
+            # Если есть право edit_schedule (препод) — фильтруем на себя.
+            if Permission.has_permission(uid, 'edit_schedule'):
+                try:
+                    my_tid = User.get_teacher_id(uid)
+                    if my_tid:
+                        f['teacher_id'] = my_tid
+                except Exception:
+                    pass
+    return f
 
 
 def _week_days(monday_str):
@@ -143,13 +174,14 @@ def index():
         view = 'day'
 
     date_str = _parse_date(request.args.get('date'), _today_str())
-    filters = _get_filters()
+
+    uid = session['user_id']
+    filters = _get_filters(uid=uid)
 
     groups = Group.get_all()
     teachers = Teacher.get_all()
     rooms = Room.get_all()
 
-    uid = session['user_id']
     can_edit_any = _can_edit_schedule(uid)
     my_teacher_id = User.get_teacher_id(uid)
 
@@ -219,11 +251,13 @@ def index():
 @schedule_bp.route('/today')
 @permission_required('view_journals')
 def today():
+    uid = session['user_id']
+    f = _get_filters(uid=uid)
     return redirect(url_for(
         'schedule.index',
         view='day',
         date=_today_str(),
-        **{k: v for k, v in _get_filters().items() if v},
+        **{k: v for k, v in f.items() if v},
     ))
 
 
@@ -258,7 +292,7 @@ def edit_lesson(lesson_id):
         room_id = request.form.get('room_id', type=int) or None
         lesson_type = request.form.get('lesson_type', 'lecture')
 
-        # ЭТАП 5.3: не-админ не может назначить занятие на чужого преподавателя.
+        # Задача 3: не-админ не может поставить чужого — форма игнорируется.
         if is_admin:
             teacher_id = request.form.get('teacher_id', type=int) or None
         else:
@@ -267,6 +301,13 @@ def edit_lesson(lesson_id):
         if not date or not _parse_date(date):
             flash('Некорректная дата', 'danger')
             return redirect(url_for('schedule.edit_lesson', lesson_id=lesson_id))
+
+        # Задача 4: дата должна входить в текущий учебный год.
+        if not _date_in_current_year(date):
+            start, end = _current_year_range()
+            flash(f'Дата вне текущего учебного года ({start} … {end})', 'danger')
+            return redirect(url_for('schedule.edit_lesson', lesson_id=lesson_id))
+
         if not pair_number or pair_number < 1:
             flash('Некорректный номер пары', 'danger')
             return redirect(url_for('schedule.edit_lesson', lesson_id=lesson_id))
@@ -303,6 +344,7 @@ def edit_lesson(lesson_id):
     subjects = Subject.get_all()
     teachers = Teacher.get_all()
     rooms = Room.get_all()
+    year_start, year_end = _current_year_range()
 
     return render_template(
         'schedule/edit_lesson.html',
@@ -314,6 +356,8 @@ def edit_lesson(lesson_id):
         lesson_types=_get_lesson_types(),
         is_admin=is_admin,
         my_teacher_id=my_teacher_id,
+        year_start=year_start,
+        year_end=year_end,
     )
 
 
@@ -359,12 +403,9 @@ def new_lesson():
         return redirect(url_for('schedule.index'))
 
     is_admin = Permission.has_permission(uid, 'manage_users')
-
-    # Определяем teacher_id по умолчанию
     my_teacher_id = None
 
     if not is_admin:
-        # Для не-админа: ищем или создаём преподавателя из профиля
         teacher_id, was_created, err = User.find_or_create_teacher(uid)
         if err:
             flash(err, 'warning')
@@ -377,9 +418,9 @@ def new_lesson():
                     'info'
                 )
     else:
-        # Админ: teacher_id берётся из формы (или None)
-        # Если у админа тоже есть teacher_id — покажем его по умолчанию
         my_teacher_id = User.get_teacher_id(uid)
+
+    year_start, year_end = _current_year_range()
 
     if request.method == 'POST':
         date = request.form.get('date', '').strip()
@@ -391,7 +432,7 @@ def new_lesson():
         room_id = request.form.get('room_id', type=int) or None
         lesson_type = request.form.get('lesson_type', 'lecture')
 
-        # ЭТАП 5.3: не-админ не может назначить занятие на чужого.
+        # Задача 3: не-админ не может поставить чужого.
         if is_admin:
             teacher_id = request.form.get('teacher_id', type=int) or None
         else:
@@ -400,6 +441,12 @@ def new_lesson():
         if not date or not _parse_date(date):
             flash('Некорректная дата', 'danger')
             return redirect(url_for('schedule.new_lesson'))
+
+        # Задача 4: дата в текущем учебном году.
+        if not _date_in_current_year(date):
+            flash(f'Дата вне текущего учебного года ({year_start} … {year_end})', 'danger')
+            return redirect(url_for('schedule.new_lesson'))
+
         if not pair_number or pair_number < 1:
             flash('Некорректный номер пары', 'danger')
             return redirect(url_for('schedule.new_lesson'))
@@ -456,6 +503,8 @@ def new_lesson():
         lesson_types=_get_lesson_types(),
         is_admin=is_admin,
         my_teacher_id=my_teacher_id,
+        year_start=year_start,
+        year_end=year_end,
     )
 
 
@@ -492,7 +541,8 @@ def free_rooms():
 @permission_required('view_journals')
 def api_day():
     date_str = _parse_date(request.args.get('date'), _today_str())
-    filters = _get_filters()
+    uid = session['user_id']
+    filters = _get_filters(uid=uid)
 
     lessons = ScheduleLesson.get_for_date(
         date_str,
@@ -534,11 +584,7 @@ def api_teachers_search():
     return jsonify({
         'success': True,
         'items': [
-            {
-                'id': r['id'],
-                'full_name': r['full_name'],
-                'short_name': r['short_name'],
-            }
+            {'id': r['id'], 'full_name': r['full_name'], 'short_name': r['short_name']}
             for r in rows
         ],
     })
@@ -678,11 +724,7 @@ def room_delete(rid):
 def aliases_list():
     aliases = GroupAlias.get_all()
     groups = Group.get_all()
-    return render_template(
-        'schedule/aliases.html',
-        aliases=aliases,
-        groups=groups,
-    )
+    return render_template('schedule/aliases.html', aliases=aliases, groups=groups)
 
 
 @schedule_bp.route('/aliases/add', methods=['POST'])
@@ -711,6 +753,38 @@ def alias_delete(alias_id):
 # ============================================================
 #                 ИМПОРТ PDF
 # ============================================================
+
+def _resolve_group_choice(raw_name):
+    """
+    Определяет, какой group_id соответствует распознанному имени.
+    Возвращает (group_id, display_name) или (None, raw_name).
+    Логика:
+      1. Алиас → group_id
+      2. Точное имя (без регистра) → group_id
+      3. None
+    """
+    if not raw_name:
+        return None, ''
+    gid = GroupAlias.resolve(raw_name)
+    if gid:
+        return gid, raw_name
+    grp = Group.get_by_name(raw_name)
+    if grp:
+        return grp['id'], raw_name
+    return None, raw_name
+
+
+def _resolve_subject_choice(raw_name):
+    """
+    Аналогично для предмета.
+    """
+    if not raw_name:
+        return None, ''
+    subj = Subject.get_by_name(raw_name)
+    if subj:
+        return subj['id'], raw_name
+    return None, raw_name
+
 
 @schedule_bp.route('/upload', methods=['GET', 'POST'])
 @permission_required('add_journal')
@@ -742,8 +816,6 @@ def upload_pdf():
     os.makedirs(upload_dir, exist_ok=True)
     safe_name = secure_filename(file.filename)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    # ЭТАП 6.2: добавляем уникальный суффикс, чтобы два PDF с одинаковым
-    # именем, загруженные в одну секунду, не перезаписывали друг друга.
     uniq = _uuid.uuid4().hex[:8]
     pdf_path = os.path.join(upload_dir, f"{timestamp}_{uniq}_{safe_name}")
     file.save(pdf_path)
@@ -761,6 +833,26 @@ def upload_pdf():
               'warning')
         return redirect(url_for('schedule.upload_pdf'))
 
+    # Задача 2: готовим варианты выбора для каждой строки.
+    all_groups = Group.get_all()
+    all_subjects = Subject.get_all()
+
+    # Для каждой строки: какой group_id/subject_id выбран по умолчанию.
+    # -1 — «Создать новое» (когда не нашли).
+    preview_rows = []
+    for i, l in enumerate(lessons):
+        gid, gname_raw = _resolve_group_choice(l.get('group'))
+        sid, sname_raw = _resolve_subject_choice(l.get('subject'))
+
+        preview_rows.append({
+            'index': i,
+            'raw': l,
+            'group_choice': gid if gid else -1,      # -1 = создать новое
+            'subject_choice': sid if sid else -1,
+            'group_raw': gname_raw,
+            'subject_raw': sname_raw,
+        })
+
     preview_id = str(_uuid.uuid4())
     _register_preview(preview_id, {
         'lessons': lessons,
@@ -770,21 +862,23 @@ def upload_pdf():
         'pdf_path': pdf_path,
     })
 
-    groups = sorted({l['group'] for l in lessons if l.get('group')})
-    teachers = sorted({l['teacher'] for l in lessons if l.get('teacher')})
-    subjects = sorted({l['subject'] for l in lessons if l.get('subject')})
+    groups_recognized = sorted({l['group'] for l in lessons if l.get('group')})
+    teachers_recognized = sorted({l['teacher'] for l in lessons if l.get('teacher')})
+    subjects_recognized = sorted({l['subject'] for l in lessons if l.get('subject')})
 
     return render_template(
         'schedule/upload.html',
         step='preview',
         preview_id=preview_id,
-        lessons=lessons,
+        preview_rows=preview_rows,
+        all_groups=all_groups,
+        all_subjects=all_subjects,
         filename=safe_name,
         teacher_pattern=teacher_pattern,
         year=year,
-        groups=groups,
-        teachers=teachers,
-        subjects=subjects,
+        groups=groups_recognized,
+        teachers=teachers_recognized,
+        subjects=subjects_recognized,
     )
 
 
@@ -800,20 +894,14 @@ def import_commit():
     lessons = preview['lessons']
     year = preview['year']
 
+    # Какие строки выбраны (галочка)
     selected_indices = set()
     for key in request.form:
-        if key.startswith('lesson_'):
+        if key.startswith('lesson_') and key.count('_') == 1:
             try:
                 selected_indices.add(int(key.replace('lesson_', '')))
             except ValueError:
                 pass
-
-    if selected_indices:
-        lessons = [l for i, l in enumerate(lessons) if i in selected_indices]
-
-    if not lessons:
-        flash('Не выбрано ни одного занятия', 'warning')
-        return redirect(url_for('schedule.upload_pdf'))
 
     current_year = AcademicYear.get_current()
     if not current_year:
@@ -833,31 +921,55 @@ def import_commit():
     }
 
     conn = get_db()
-    try:
-        for lesson in lessons:
-            try:
-                group_name = lesson.get('group')
+
+    for i, lesson in enumerate(lessons):
+        if selected_indices and i not in selected_indices:
+            # пользователь снял галочку — пропускаем
+            continue
+
+        try:
+            # ---- Группа: читаем выбор пользователя ----
+            group_choice = request.form.get(f'group_choice_{i}', '').strip()
+            if group_choice == '__skip__':
+                stats['skipped'] += 1
+                continue
+
+            group_name = lesson.get('group')
+            if group_choice == '__new__' or not group_choice:
                 if not group_name:
                     stats['skipped'] += 1
                     continue
-
-                group_id = GroupAlias.resolve(group_name)
-                if not group_id:
-                    grp = Group.get_by_name(group_name)
-                    if not grp:
-                        ok, _, new_id = Group.create(group_name)
-                        if ok:
-                            group_id = new_id
-                            stats['new_groups'] += 1
-                        else:
-                            stats['errors'].append(
-                                f"Не удалось создать группу «{group_name}»"
-                            )
-                            continue
+                grp = Group.get_by_name(group_name)
+                if not grp:
+                    ok, _, new_id = Group.create(group_name)
+                    if ok:
+                        group_id = new_id
+                        stats['new_groups'] += 1
                     else:
-                        group_id = grp['id']
+                        stats['errors'].append(
+                            f"Не удалось создать группу «{group_name}»"
+                        )
+                        continue
+                else:
+                    group_id = grp['id']
+            else:
+                try:
+                    group_id = int(group_choice)
+                except (ValueError, TypeError):
+                    stats['skipped'] += 1
+                    continue
+                if not Group.get_by_id(group_id):
+                    stats['errors'].append(f'Группа #{group_id} не найдена')
+                    continue
 
-                subject_name = lesson.get('subject') or 'Без названия'
+            # ---- Предмет: читаем выбор ----
+            subject_choice = request.form.get(f'subject_choice_{i}', '').strip()
+            if subject_choice == '__skip__':
+                stats['skipped'] += 1
+                continue
+
+            subject_name = lesson.get('subject') or 'Без названия'
+            if subject_choice == '__new__' or not subject_choice:
                 subj = Subject.get_by_name(subject_name)
                 if not subj:
                     ok, _, new_id = Subject.create(subject_name)
@@ -871,93 +983,113 @@ def import_commit():
                         continue
                 else:
                     subject_id = subj['id']
-
-                teacher_id, raw_name, was_created, matched = Teacher.find_or_create(
-                    lesson.get('teacher')
-                )
-                if was_created:
-                    stats['new_teachers'] += 1
-
-                room_id = None
-                room_name = lesson.get('room')
-                if room_name:
-                    existing_room = Room.get_by_name(room_name)
-                    if not existing_room:
-                        room_id = Room.find_or_create(room_name)
-                        if room_id:
-                            stats['new_rooms'] += 1
-                    else:
-                        room_id = existing_room['id']
-
-                date_str = lesson.get('date')
-                if not date_str:
-                    stats['skipped'] += 1
-                    continue
+            else:
                 try:
-                    dd, mm = date_str.split('.')
-                    date_iso = f"{year}-{mm.zfill(2)}-{dd.zfill(2)}"
-                    datetime.strptime(date_iso, '%Y-%m-%d')
-                except (ValueError, AttributeError):
-                    stats['errors'].append(f"Некорректная дата «{date_str}»")
-                    continue
-
-                time_str = lesson.get('time')
-                if not time_str:
+                    subject_id = int(subject_choice)
+                except (ValueError, TypeError):
                     stats['skipped'] += 1
                     continue
-                try:
-                    start, end = time_str.split('-')
-                    time_start = start.strip()
-                    time_end = end.strip()
-                except ValueError:
-                    stats['errors'].append(f"Некорректное время «{time_str}»")
+                if not Subject.get_by_id(subject_id):
+                    stats['errors'].append(f'Предмет #{subject_id} не найден')
                     continue
 
-                pair_number = lesson.get('pair') or 1
+            # ---- Преподаватель ----
+            teacher_id, raw_name, was_created, matched = Teacher.find_or_create(
+                lesson.get('teacher')
+            )
+            if was_created:
+                stats['new_teachers'] += 1
 
-                lesson_type = 'lecture'
-                subj_lower = subject_name.lower()
-                if 'с/р' in subj_lower or 'самост' in subj_lower:
-                    lesson_type = 'independent'
-                elif 'экзамен' in subj_lower:
-                    lesson_type = 'exam'
-
-                exists = conn.execute('''
-                    SELECT id FROM schedule_lessons
-                    WHERE date = ? AND pair_number = ? AND group_id = ?
-                      AND subject_id = ?
-                ''', (date_iso, pair_number, group_id, subject_id)).fetchone()
-                if exists:
-                    stats['skipped'] += 1
-                    continue
-
-                ok, msg, new_id = ScheduleLesson.create(
-                    academic_year_id=academic_year_id,
-                    date=date_iso,
-                    pair_number=pair_number,
-                    time_start=time_start,
-                    time_end=time_end,
-                    group_id=group_id,
-                    subject_id=subject_id,
-                    teacher_id=teacher_id,
-                    teacher_name_raw=raw_name,
-                    room_id=room_id,
-                    room_name_raw=room_name,
-                    lesson_type=lesson_type,
-                    original_group_name=group_name,
-                    source_file=preview['filename'],
-                )
-                if ok:
-                    stats['created'] += 1
+            # ---- Аудитория ----
+            room_id = None
+            room_name = lesson.get('room')
+            if room_name:
+                existing_room = Room.get_by_name(room_name)
+                if not existing_room:
+                    room_id = Room.find_or_create(room_name)
+                    if room_id:
+                        stats['new_rooms'] += 1
                 else:
-                    stats['errors'].append(msg)
+                    room_id = existing_room['id']
 
-            except Exception as e:
-                stats['errors'].append(f"Ошибка на записи: {e}")
+            # ---- Дата / время ----
+            date_str = lesson.get('date')
+            if not date_str:
+                stats['skipped'] += 1
+                continue
+            try:
+                dd, mm = date_str.split('.')
+                date_iso = f"{year}-{mm.zfill(2)}-{dd.zfill(2)}"
+                datetime.strptime(date_iso, '%Y-%m-%d')
+            except (ValueError, AttributeError):
+                stats['errors'].append(f"Некорректная дата «{date_str}»")
+                continue
 
+            # Задача 4: в текущем учебном году?
+            if not _date_in_current_year(date_iso):
+                stats['skipped'] += 1
+                continue
+
+            time_str = lesson.get('time')
+            if not time_str:
+                stats['skipped'] += 1
+                continue
+            try:
+                start, end = time_str.split('-')
+                time_start = start.strip()
+                time_end = end.strip()
+            except ValueError:
+                stats['errors'].append(f"Некорректное время «{time_str}»")
+                continue
+
+            pair_number = lesson.get('pair') or 1
+
+            lesson_type = 'lecture'
+            subj_lower = (subject_name or '').lower()
+            if 'с/р' in subj_lower or 'самост' in subj_lower:
+                lesson_type = 'independent'
+            elif 'экзамен' in subj_lower:
+                lesson_type = 'exam'
+
+            exists = conn.execute('''
+                SELECT id FROM schedule_lessons
+                WHERE date = ? AND pair_number = ? AND group_id = ?
+                  AND subject_id = ?
+            ''', (date_iso, pair_number, group_id, subject_id)).fetchone()
+            if exists:
+                stats['skipped'] += 1
+                continue
+
+            ok, msg, new_id = ScheduleLesson.create(
+                academic_year_id=academic_year_id,
+                date=date_iso,
+                pair_number=pair_number,
+                time_start=time_start,
+                time_end=time_end,
+                group_id=group_id,
+                subject_id=subject_id,
+                teacher_id=teacher_id,
+                teacher_name_raw=raw_name,
+                room_id=room_id,
+                room_name_raw=room_name,
+                lesson_type=lesson_type,
+                original_group_name=group_name,
+                source_file=preview['filename'],
+            )
+            if ok:
+                stats['created'] += 1
+            else:
+                stats['errors'].append(msg)
+
+        except Exception as e:
+            stats['errors'].append(f"Ошибка на записи {i}: {e}")
+
+    # Финальный commit — раньше было внутри finally, но теперь
+    # соединение живёт до конца запроса, так что коммитим прямо здесь.
+    try:
         conn.commit()
-    finally:
-        conn.close()
+    except Exception as e:
+        print(f"[import_commit] Ошибка commit: {e}")
 
     log_activity(
         session['user_id'], 'import_schedule',
@@ -998,28 +1130,14 @@ def import_commit():
 # ============================================================
 
 def _academic_weeks(academic_year, max_weeks=36):
-    """
-    Возвращает список недель учебного года:
-    [
-        {
-            'number': 1,
-            'start': '2025-09-01',
-            'end': '2025-09-07',
-            'label': 'Неделя 1: 01.09 — 07.09',
-        },
-        ...
-    ]
-    """
     if not academic_year:
         return []
-
     try:
         start = datetime.strptime(academic_year['start_date'], '%Y-%m-%d').date()
         end = datetime.strptime(academic_year['end_date'], '%Y-%m-%d').date()
     except (ValueError, TypeError, KeyError):
         return []
 
-    # Сдвигаем start до понедельника
     start = start - timedelta(days=start.weekday())
 
     weeks = []
@@ -1044,7 +1162,6 @@ def _academic_weeks(academic_year, max_weeks=36):
 
 
 def _current_week_number(academic_year):
-    """Возвращает номер текущей недели или None."""
     if not academic_year:
         return None
     try:
@@ -1063,13 +1180,6 @@ def _current_week_number(academic_year):
 @schedule_bp.route('/group/<int:group_id>')
 @permission_required('view_journals')
 def group_schedule(group_id):
-    """
-    Расписание конкретной группы на неделю.
-
-    Query:
-      ?week=N — номер учебной недели (1..36), по умолчанию — текущая
-      ?date=YYYY-MM-DD — альтернатива: любая дата в нужной неделе
-    """
     uid = session['user_id']
 
     group = Group.get_by_id(group_id)
@@ -1080,12 +1190,10 @@ def group_schedule(group_id):
     academic_year = AcademicYear.get_current()
     weeks = _academic_weeks(academic_year, max_weeks=36)
 
-    # Определяем номер недели
     week_number = request.args.get('week', type=int)
     date_param = request.args.get('date', '').strip()
 
     if not week_number and date_param:
-        # Определяем номер недели по дате
         try:
             d = datetime.strptime(date_param, '%Y-%m-%d').date()
             for w in weeks:
@@ -1100,7 +1208,6 @@ def group_schedule(group_id):
     if not week_number:
         week_number = _current_week_number(academic_year) or 1
 
-    # Находим нужную неделю
     week = None
     for w in weeks:
         if w['number'] == week_number:
@@ -1115,24 +1222,21 @@ def group_schedule(group_id):
             'label': 'Текущая неделя',
         }
 
-    # Собираем занятия
     monday = week['start']
     week_data, start, end = ScheduleLesson.get_week(monday)
 
-    # Фильтруем только эту группу
     group_lessons_by_date = {}
     for d, lessons in week_data.items():
         group_lessons_by_date[d] = [
             l for l in lessons if l['group_id'] == group_id
         ]
 
-    # Формируем сетку дней
     days = []
     day_names = ScheduleLesson.DAY_NAMES_SHORT
     day_names_full = ScheduleLesson.DAY_NAMES_FULL
 
     current = datetime.strptime(week['start'], '%Y-%m-%d').date()
-    for i in range(6):  # Пн–Сб
+    for i in range(6):
         d = current + timedelta(days=i)
         ds = d.isoformat()
         lessons = sorted(
@@ -1149,11 +1253,9 @@ def group_schedule(group_id):
             'lessons': lessons,
         })
 
-    # Предыдущая / следующая неделя
     prev_week_number = week_number - 1 if week_number > 1 else None
     next_week_number = week_number + 1 if week_number < len(weeks) else None
 
-    # Для формы создания занятия — текущий пользователь
     my_teacher_id = User.get_teacher_id(uid)
     can_edit_any = _can_edit_schedule(uid)
 

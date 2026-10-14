@@ -225,13 +225,10 @@ def mass_transfer():
         transfer_date = datetime.now().strftime('%Y-%m-%d')
 
     conn = get_db()
-    try:
-        row = conn.execute(
-            "SELECT id FROM academic_years WHERE is_current = 1 LIMIT 1"
-        ).fetchone()
-        academic_year_id = row['id'] if row else None
-    finally:
-        conn.close()
+    row = conn.execute(
+        "SELECT id FROM academic_years WHERE is_current = 1 LIMIT 1"
+    ).fetchone()
+    academic_year_id = row['id'] if row else None
 
     if not academic_year_id:
         flash('Не найден текущий учебный год', 'danger')
@@ -290,44 +287,41 @@ def transfer_info(new_group_id):
         })
 
     conn = get_db()
-    try:
-        placeholders = ','.join('?' for _ in student_ids)
+    placeholders = ','.join('?' for _ in student_ids)
 
-        rows = conn.execute(f'''
-            SELECT id, full_name, group_id FROM students
-            WHERE id IN ({placeholders})
-        ''', student_ids).fetchall()
+    rows = conn.execute(f'''
+        SELECT id, full_name, group_id FROM students
+        WHERE id IN ({placeholders})
+    ''', student_ids).fetchall()
 
-        existing_in_new = {
-            r['lname'] for r in conn.execute(
-                "SELECT LOWER(full_name) AS lname FROM students WHERE group_id = ?",
-                (new_group_id,)
-            ).fetchall()
+    existing_in_new = {
+        r['lname'] for r in conn.execute(
+            "SELECT LOWER(full_name) AS lname FROM students WHERE group_id = ?",
+            (new_group_id,)
+        ).fetchall()
+    }
+
+    same_group = 0
+    duplicates = 0
+    ok = 0
+
+    for r in rows:
+        if r['group_id'] == new_group_id:
+            same_group += 1
+        elif r['full_name'].lower() in existing_in_new:
+            duplicates += 1
+        else:
+            ok += 1
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'total': len(rows),
+            'same_group': same_group,
+            'duplicates': duplicates,
+            'ok': ok,
         }
-
-        same_group = 0
-        duplicates = 0
-        ok = 0
-
-        for r in rows:
-            if r['group_id'] == new_group_id:
-                same_group += 1
-            elif r['full_name'].lower() in existing_in_new:
-                duplicates += 1
-            else:
-                ok += 1
-
-        return jsonify({
-            'success': True,
-            'data': {
-                'total': len(rows),
-                'same_group': same_group,
-                'duplicates': duplicates,
-                'ok': ok,
-            }
-        })
-    finally:
-        conn.close()
+    })
 
 
 # ============================================================
@@ -351,7 +345,6 @@ def card(sid):
         "WHERE gs.group_id=? ORDER BY s.name",
         (student['group_id'],)
     ).fetchall()
-    conn.close()
 
     subjects_stats = []
     total_absences = 0

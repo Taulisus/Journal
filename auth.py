@@ -27,13 +27,24 @@ def init_auth_limiter(app):
 @_login_limiter.limit("10 per minute", methods=["POST"])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        remember = request.form.get('remember') == '1'
 
         user = User.find_by_username(username)
+
         if user and User.check_password(user, password):
             session['user_id'] = user['id']
             session['username'] = user['username']
+
+            # «Запомнить меня» — 30 дней
+            if remember:
+                from datetime import timedelta
+                from flask import current_app
+                session.permanent = True
+                current_app.permanent_session_lifetime = timedelta(days=30)
+            else:
+                session.permanent = False
 
             # === ЛОГ ===
             log_activity(

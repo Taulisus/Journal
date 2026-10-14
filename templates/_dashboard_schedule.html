@@ -1,0 +1,101 @@
+{# Партиал: расписание недели на дашборде. #}
+{# Ожидает: schedule_week, current_user_teacher_id #}
+
+{% if schedule_week and schedule_week.has_any %}
+    <div class="card-body p-2">
+        <div class="schedule-grid d-none d-md-grid">
+            {% for day in schedule_week.days %}
+                <div class="schedule-day {% if day.is_today %}is-today{% endif %}">
+                    <div class="schedule-day-header">
+                        <div class="schedule-day-name">{{ day.day_short }}</div>
+                        <div class="schedule-day-date">{{ day.date_label }}</div>
+                    </div>
+                    <div class="schedule-day-body">
+                        {% for pair_num in range(1, 8) %}
+                            {% set lesson = day.lessons_by_pair.get(pair_num) %}
+                            {% if lesson %}
+                                <a href="{{ url_for('schedule.index', view='day', date=day.date, group_id=lesson.group_id) }}"
+                                   class="schedule-slot schedule-slot-filled"
+                                   title="{{ lesson.subject_name or '—' }}{% if lesson.teacher_short_name %} — {{ lesson.teacher_short_name }}{% endif %}">
+                                    <div class="schedule-slot-pair">{{ lesson.pair_number }}</div>
+                                    <div class="schedule-slot-info">
+                                        <div class="schedule-slot-group">{{ lesson.group_name or '—' }}</div>
+                                        <div class="schedule-slot-time">{{ lesson.time_start }}–{{ lesson.time_end }}</div>
+                                        {% if lesson.room_resolved_name %}
+                                            <div class="schedule-slot-room">
+                                                <i class="bi bi-door-open"></i> {{ lesson.room_resolved_name }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            {% else %}
+                                <div class="schedule-slot schedule-slot-empty" aria-hidden="true">
+                                    <div class="schedule-slot-pair schedule-slot-pair-empty">{{ pair_num }}</div>
+                                    <div class="schedule-slot-empty-body"></div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="d-md-none">
+            {% set ns = namespace(any=false) %}
+            {% for day in schedule_week.days %}
+                {% if day.lessons %}
+                    {% set ns.any = true %}
+                    <div class="mobile-day mb-2 {% if day.is_today %}is-today{% endif %}">
+                        <div class="mobile-day-header">
+                            <strong>{{ day.day_short }}</strong>
+                            <span class="text-muted">{{ day.date_label }}</span>
+                            {% if day.is_today %}<span class="badge bg-warning text-dark ms-1">Сегодня</span>{% endif %}
+                        </div>
+                        {% for pair_num in range(1, 8) %}
+                            {% set lesson = day.lessons_by_pair.get(pair_num) %}
+                            {% if lesson %}
+                                <a href="{{ url_for('schedule.index', view='day', date=day.date, group_id=lesson.group_id) }}"
+                                   class="mobile-lesson">
+                                    <span class="badge bg-primary">{{ lesson.pair_number }}</span>
+                                    <div class="flex-grow-1">
+                                        <div class="fw-semibold small">{{ lesson.group_name or '—' }}</div>
+                                        <div class="text-muted small">{{ lesson.time_start }}–{{ lesson.time_end }}
+                                            {% if lesson.room_resolved_name %}· {{ lesson.room_resolved_name }}{% endif %}
+                                        </div>
+                                    </div>
+                                    <i class="bi bi-chevron-right text-muted"></i>
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endfor %}
+            {% if not ns.any %}
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-calendar-x"></i> На этой неделе занятий нет
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-footer bg-white small text-muted d-flex justify-content-between flex-wrap gap-2">
+        <div>
+            <i class="bi bi-info-circle"></i>
+            {% if current_user_teacher_id %}Только ваши занятия{% else %}Все занятия{% endif %}
+        </div>
+        <a id="weekFullLink"
+           href="{{ url_for('schedule.index', view='week', date=schedule_week.week_start) }}"
+           class="text-decoration-none">
+            Открыть полностью <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+{% elif schedule_week %}
+    <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-calendar-x" style="font-size:2rem;"></i>
+        <p class="mt-2 mb-0">На этой неделе занятий нет</p>
+    </div>
+{% else %}
+    <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-calendar-x" style="font-size:2rem;"></i>
+        <p class="mt-2 mb-0">Расписание недоступно</p>
+    </div>
+{% endif %}

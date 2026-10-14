@@ -18,29 +18,23 @@ class AcademicYear:
     @staticmethod
     def get_all():
         conn = get_db()
-        rows = conn.execute(
+        return conn.execute(
             "SELECT * FROM academic_years ORDER BY start_date DESC"
         ).fetchall()
-        conn.close()
-        return rows
 
     @staticmethod
     def get_by_id(year_id):
         conn = get_db()
-        row = conn.execute(
+        return conn.execute(
             "SELECT * FROM academic_years WHERE id = ?", (year_id,)
         ).fetchone()
-        conn.close()
-        return row
 
     @staticmethod
     def get_current():
         conn = get_db()
-        row = conn.execute(
+        return conn.execute(
             "SELECT * FROM academic_years WHERE is_current = 1 LIMIT 1"
         ).fetchone()
-        conn.close()
-        return row
 
     @staticmethod
     def create(name, start_date, end_date, is_current=False):
@@ -57,9 +51,8 @@ class AcademicYear:
             new_id = cur.lastrowid
             return True, "Учебный год создан", new_id
         except sqlite3.IntegrityError:
+            conn.rollback()
             return False, "Такой учебный год уже существует", None
-        finally:
-            conn.close()
 
     @staticmethod
     def set_current(year_id):
@@ -75,8 +68,6 @@ class AcademicYear:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}"
-        finally:
-            conn.close()
 
 
 # ============================================================
@@ -88,42 +79,33 @@ class Teacher:
     def get_all(active_only=True):
         conn = get_db()
         if active_only:
-            rows = conn.execute(
+            return conn.execute(
                 "SELECT * FROM teachers WHERE is_active = 1 ORDER BY short_name, full_name"
             ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM teachers ORDER BY short_name, full_name"
-            ).fetchall()
-        conn.close()
-        return rows
+        return conn.execute(
+            "SELECT * FROM teachers ORDER BY short_name, full_name"
+        ).fetchall()
 
     @staticmethod
     def get_by_id(tid):
         conn = get_db()
-        row = conn.execute(
+        return conn.execute(
             "SELECT * FROM teachers WHERE id = ?", (tid,)
         ).fetchone()
-        conn.close()
-        return row
 
     @staticmethod
     def get_by_full_name(full_name):
         conn = get_db()
-        row = conn.execute(
+        return conn.execute(
             "SELECT * FROM teachers WHERE full_name = ?", (full_name,)
         ).fetchone()
-        conn.close()
-        return row
 
     @staticmethod
     def find_by_short_name(short_name):
         conn = get_db()
-        row = conn.execute(
+        return conn.execute(
             "SELECT * FROM teachers WHERE short_name = ?", (short_name,)
         ).fetchone()
-        conn.close()
-        return row
 
     @staticmethod
     def create(full_name, short_name=None):
@@ -144,9 +126,8 @@ class Teacher:
             new_id = cur.lastrowid
             return True, "Преподаватель добавлен", new_id
         except sqlite3.IntegrityError:
+            conn.rollback()
             return False, "Преподаватель с таким ФИО уже существует", None
-        finally:
-            conn.close()
 
     @staticmethod
     def update(tid, full_name, short_name=None, is_active=1):
@@ -161,9 +142,8 @@ class Teacher:
             conn.commit()
             return True, "Преподаватель обновлён"
         except sqlite3.IntegrityError:
+            conn.rollback()
             return False, "Преподаватель с таким ФИО уже существует"
-        finally:
-            conn.close()
 
     @staticmethod
     def delete(tid):
@@ -175,8 +155,6 @@ class Teacher:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}"
-        finally:
-            conn.close()
 
     @staticmethod
     def make_short_name(full_name):
@@ -212,14 +190,12 @@ class Teacher:
             return []
         q = f"%{query.strip().lower()}%"
         conn = get_db()
-        rows = conn.execute(
+        return conn.execute(
             "SELECT * FROM teachers "
             "WHERE LOWER(full_name) LIKE ? OR LOWER(short_name) LIKE ? "
             "ORDER BY short_name LIMIT ?",
             (q, q, limit),
         ).fetchall()
-        conn.close()
-        return rows
 
     @staticmethod
     def find_or_create(raw_name):
@@ -295,29 +271,23 @@ class Room:
     @staticmethod
     def get_all():
         conn = get_db()
-        rows = conn.execute(
+        return conn.execute(
             "SELECT * FROM rooms ORDER BY building, name"
         ).fetchall()
-        conn.close()
-        return rows
 
     @staticmethod
     def get_by_id(rid):
         conn = get_db()
-        row = conn.execute(
+        return conn.execute(
             "SELECT * FROM rooms WHERE id = ?", (rid,)
         ).fetchone()
-        conn.close()
-        return row
 
     @staticmethod
     def get_by_name(name):
         conn = get_db()
-        row = conn.execute(
+        return conn.execute(
             "SELECT * FROM rooms WHERE name = ?", (name,)
         ).fetchone()
-        conn.close()
-        return row
 
     @staticmethod
     def create(name, building=None, capacity=None, room_type='classroom'):
@@ -334,9 +304,8 @@ class Room:
             new_id = cur.lastrowid
             return True, "Аудитория добавлена", new_id
         except sqlite3.IntegrityError:
+            conn.rollback()
             return False, "Аудитория с таким названием уже существует", None
-        finally:
-            conn.close()
 
     @staticmethod
     def update(rid, name, building=None, capacity=None, room_type='classroom'):
@@ -349,9 +318,8 @@ class Room:
             conn.commit()
             return True, "Аудитория обновлена"
         except sqlite3.IntegrityError:
+            conn.rollback()
             return False, "Аудитория с таким названием уже существует"
-        finally:
-            conn.close()
 
     @staticmethod
     def delete(rid):
@@ -363,8 +331,6 @@ class Room:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}"
-        finally:
-            conn.close()
 
     @staticmethod
     def find_or_create(name, building=None, room_type='classroom'):
@@ -390,23 +356,19 @@ class GroupAlias:
     @staticmethod
     def get_all():
         conn = get_db()
-        rows = conn.execute(
+        return conn.execute(
             "SELECT ga.*, g.name AS group_name "
             "FROM group_aliases ga JOIN groups g ON ga.group_id = g.id "
             "ORDER BY ga.alias"
         ).fetchall()
-        conn.close()
-        return rows
 
     @staticmethod
     def get_for_group(group_id):
         conn = get_db()
-        rows = conn.execute(
+        return conn.execute(
             "SELECT * FROM group_aliases WHERE group_id = ? ORDER BY alias",
             (group_id,),
         ).fetchall()
-        conn.close()
-        return rows
 
     @staticmethod
     def resolve(alias):
@@ -422,7 +384,6 @@ class GroupAlias:
             "SELECT group_id FROM group_aliases WHERE LOWER(alias) = ?",
             (key,),
         ).fetchone()
-        conn.close()
         return row['group_id'] if row else None
 
     @staticmethod
@@ -440,9 +401,8 @@ class GroupAlias:
             new_id = cur.lastrowid
             return True, "Алиас добавлен", new_id
         except sqlite3.IntegrityError:
+            conn.rollback()
             return False, "Такой алиас уже существует", None
-        finally:
-            conn.close()
 
     @staticmethod
     def delete(alias_id):
@@ -454,8 +414,6 @@ class GroupAlias:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}"
-        finally:
-            conn.close()
 
 
 # ============================================================
@@ -478,7 +436,7 @@ class ScheduleLesson:
     @staticmethod
     def get_by_id(lesson_id):
         conn = get_db()
-        row = conn.execute('''
+        return conn.execute('''
             SELECT sl.*,
                    g.name AS group_name,
                    s.name AS subject_name,
@@ -493,8 +451,6 @@ class ScheduleLesson:
             LEFT JOIN rooms r ON sl.room_id = r.id
             WHERE sl.id = ?
         ''', (lesson_id,)).fetchone()
-        conn.close()
-        return row
 
     @staticmethod
     def get_for_date(date_str, group_id=None, teacher_id=None, room_id=None):
@@ -533,9 +489,7 @@ class ScheduleLesson:
         '''
 
         conn = get_db()
-        rows = conn.execute(sql, params).fetchall()
-        conn.close()
-        return rows
+        return conn.execute(sql, params).fetchall()
 
     @staticmethod
     def get_for_date_range(date_from, date_to, group_id=None,
@@ -574,9 +528,7 @@ class ScheduleLesson:
         '''
 
         conn = get_db()
-        rows = conn.execute(sql, params).fetchall()
-        conn.close()
-        return rows
+        return conn.execute(sql, params).fetchall()
 
     @staticmethod
     def get_week(start_date):
@@ -653,12 +605,11 @@ class ScheduleLesson:
             new_id = cur.lastrowid
             return True, "Занятие добавлено в расписание", new_id
         except sqlite3.IntegrityError as e:
+            conn.rollback()
             return False, f"Ошибка целостности: {e}", None
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}", None
-        finally:
-            conn.close()
 
     @staticmethod
     def update(lesson_id, **fields):
@@ -698,8 +649,6 @@ class ScheduleLesson:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}"
-        finally:
-            conn.close()
 
     @staticmethod
     def delete(lesson_id):
@@ -711,8 +660,6 @@ class ScheduleLesson:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}"
-        finally:
-            conn.close()
 
     @staticmethod
     def delete_for_date(date_str):
@@ -725,11 +672,9 @@ class ScheduleLesson:
             deleted = cur.rowcount
             conn.commit()
             return True, deleted
-        except Exception as e:
+        except Exception:
             conn.rollback()
             return False, 0
-        finally:
-            conn.close()
 
     @staticmethod
     def delete_week(start_date):
@@ -750,11 +695,9 @@ class ScheduleLesson:
             deleted = cur.rowcount
             conn.commit()
             return True, deleted
-        except Exception as e:
+        except Exception:
             conn.rollback()
             return False, 0
-        finally:
-            conn.close()
 
     @staticmethod
     def get_free_rooms_now(date_str, time_start, time_end):
@@ -763,23 +706,20 @@ class ScheduleLesson:
         Учитываем только аудитории, у которых room_type != 'none'.
         """
         conn = get_db()
-        try:
-            busy = conn.execute('''
-                SELECT DISTINCT room_id FROM schedule_lessons
-                WHERE date = ?
-                  AND room_id IS NOT NULL
-                  AND NOT (time_end <= ? OR time_start >= ?)
-            ''', (date_str, time_start, time_end)).fetchall()
+        busy = conn.execute('''
+            SELECT DISTINCT room_id FROM schedule_lessons
+            WHERE date = ?
+              AND room_id IS NOT NULL
+              AND NOT (time_end <= ? OR time_start >= ?)
+        ''', (date_str, time_start, time_end)).fetchall()
 
-            busy_ids = {r['room_id'] for r in busy}
+        busy_ids = {r['room_id'] for r in busy}
 
-            all_rooms = conn.execute(
-                "SELECT * FROM rooms WHERE room_type != 'none' ORDER BY building, name"
-            ).fetchall()
+        all_rooms = conn.execute(
+            "SELECT * FROM rooms WHERE room_type != 'none' ORDER BY building, name"
+        ).fetchall()
 
-            return [r for r in all_rooms if r['id'] not in busy_ids]
-        finally:
-            conn.close()
+        return [r for r in all_rooms if r['id'] not in busy_ids]
 
     @staticmethod
     def get_teacher_lessons_for_date(teacher_id, date_str):
@@ -793,26 +733,20 @@ class ScheduleLesson:
     def count_for_date_range(date_from, date_to):
         """Сколько занятий в диапазоне — для статистики импорта."""
         conn = get_db()
-        try:
-            row = conn.execute(
-                "SELECT COUNT(*) AS c FROM schedule_lessons "
-                "WHERE date >= ? AND date <= ?",
-                (date_from, date_to),
-            ).fetchone()
-            return row['c'] if row else 0
-        finally:
-            conn.close()
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM schedule_lessons "
+            "WHERE date >= ? AND date <= ?",
+            (date_from, date_to),
+        ).fetchone()
+        return row['c'] if row else 0
 
     @staticmethod
     def get_dates_with_lessons(limit=50):
         """Список дат, по которым есть расписание (для навигации)."""
         conn = get_db()
-        try:
-            rows = conn.execute(
-                "SELECT DISTINCT date FROM schedule_lessons "
-                "ORDER BY date DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
-            return [r['date'] for r in rows]
-        finally:
-            conn.close()
+        rows = conn.execute(
+            "SELECT DISTINCT date FROM schedule_lessons "
+            "ORDER BY date DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [r['date'] for r in rows]

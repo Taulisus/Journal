@@ -1,0 +1,155 @@
+<aside class="app-drawer" id="drawer" aria-hidden="true">
+
+    {# ---------- Профиль ---------- #}
+    <a href="{{ url_for('main.profile') }}" class="app-drawer__profile">
+        <span class="app-avatar app-avatar--lg" data-avatar="{{ session.username }}">
+            {{ session.username[0] | upper }}
+        </span>
+        <div class="flex-grow-1 min-width-0">
+            <div class="fw-bold">{{ session.username }}</div>
+            <div class="text-muted small">Открыть профиль</div>
+        </div>
+        <i class="bi bi-chevron-right text-muted"></i>
+    </a>
+
+    {# ---------- Главная ---------- #}
+    <a href="{{ url_for('main.dashboard') }}"
+       class="app-drawer__link {% if request.endpoint == 'main.dashboard' %}is-active{% endif %}">
+        <i class="bi bi-speedometer2"></i> Главная
+    </a>
+
+    {% if has_permission('view_journals') %}
+        {# ---------- Журналы (аккордеон) ---------- #}
+        <div class="app-drawer__group">
+            <button type="button" class="app-drawer__toggle" aria-expanded="false">
+                <span><i class="bi bi-journal-text me-2"></i>Журналы</span>
+                <i class="bi bi-chevron-down"></i>
+            </button>
+            <div class="app-drawer__sub">
+                <a href="{{ url_for('journals.index') }}"
+                   class="app-drawer__link {% if request.endpoint == 'journals.index' %}is-active{% endif %}">
+                    <i class="bi bi-folder2-open"></i> Все журналы
+                </a>
+                <a href="{{ url_for('main.teacher_hours_stats') }}"
+                   class="app-drawer__link {% if request.endpoint == 'main.teacher_hours_stats' %}is-active{% endif %}">
+                    <i class="bi bi-clock-history"></i> Мои часы
+                </a>
+            </div>
+        </div>
+
+        {# ---------- Расписание ---------- #}
+        <a href="{{ url_for('schedule.index') }}"
+           class="app-drawer__link {% if request.endpoint and request.endpoint.startswith('schedule.') %}is-active{% endif %}">
+            <i class="bi bi-calendar-week"></i> Расписание
+        </a>
+    {% endif %}
+
+    {% if has_permission('view_student_card') %}
+        <a href="{{ url_for('students.index') }}"
+           class="app-drawer__link {% if request.endpoint and request.endpoint.startswith('students.') %}is-active{% endif %}">
+            <i class="bi bi-person-lines-fill"></i> Студенты
+        </a>
+    {% endif %}
+
+    {% if has_permission('create_report') %}
+        <a href="{{ url_for('main.reports') }}"
+           class="app-drawer__link {% if request.endpoint == 'main.reports' %}is-active{% endif %}">
+            <i class="bi bi-graph-up"></i> Отчёты
+        </a>
+    {% endif %}
+
+    {# ---------- Справочники (аккордеон) ---------- #}
+    <div class="app-drawer__group">
+        <button type="button" class="app-drawer__toggle" aria-expanded="false">
+            <span><i class="bi bi-gear me-2"></i>Справочники</span>
+            <i class="bi bi-chevron-down"></i>
+        </button>
+        <div class="app-drawer__sub">
+            <a href="{{ url_for('groups.index') }}"
+               class="app-drawer__link {% if request.endpoint == 'groups.index' %}is-active{% endif %}">
+                <i class="bi bi-people"></i> Группы
+            </a>
+            <a href="{{ url_for('subjects.index') }}"
+               class="app-drawer__link {% if request.endpoint == 'subjects.index' %}is-active{% endif %}">
+                <i class="bi bi-book"></i> Предметы
+            </a>
+            <a href="{{ url_for('students.index') }}"
+               class="app-drawer__link {% if request.endpoint == 'students.index' %}is-active{% endif %}">
+                <i class="bi bi-person-plus"></i> Студенты
+            </a>
+            {% if has_permission('manage_users') %}
+                <a href="{{ url_for('schedule.teachers_list') }}"
+                   class="app-drawer__link {% if request.endpoint == 'schedule.teachers_list' %}is-active{% endif %}">
+                    <i class="bi bi-person-badge"></i> Преподаватели
+                </a>
+                <a href="{{ url_for('schedule.rooms_list') }}"
+                   class="app-drawer__link {% if request.endpoint == 'schedule.rooms_list' %}is-active{% endif %}">
+                    <i class="bi bi-door-open"></i> Аудитории
+                </a>
+                <a href="{{ url_for('schedule.aliases_list') }}"
+                   class="app-drawer__link {% if request.endpoint == 'schedule.aliases_list' %}is-active{% endif %}">
+                    <i class="bi bi-tags"></i> Алиасы групп
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ---------- Администрирование (аккордеон) ---------- #}
+    {% if has_permission('manage_users') or has_permission('manage_permissions') %}
+        <div class="app-drawer__group">
+            <button type="button" class="app-drawer__toggle" aria-expanded="false">
+                <span><i class="bi bi-shield-lock me-2"></i>Администрирование</span>
+                <i class="bi bi-chevron-down"></i>
+            </button>
+            <div class="app-drawer__sub">
+                {% if has_permission('manage_users') %}
+                    <a href="{{ url_for('users.index') }}"
+                       class="app-drawer__link {% if request.endpoint and request.endpoint.startswith('users.') %}is-active{% endif %}">
+                        <i class="bi bi-shield-lock"></i> Пользователи
+                    </a>
+                    <a href="{{ url_for('main.activity_log_page') }}"
+                       class="app-drawer__link {% if request.endpoint == 'main.activity_log_page' %}is-active{% endif %}">
+                        <i class="bi bi-activity"></i> Действия
+                    </a>
+                {% endif %}
+                {% if has_permission('manage_permissions') %}
+                    <a href="{{ url_for('roles.index') }}"
+                       class="app-drawer__link {% if request.endpoint == 'roles.index' %}is-active{% endif %}">
+                        <i class="bi bi-shield-check"></i> Роли и права
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    {# ---------- Внешний вид ---------- #}
+    <div class="appearance">
+        <div class="appearance__title">Внешний вид</div>
+        <div class="appearance__row">
+            <span class="appearance__label">Акцент</span>
+            <div class="accent-swatches">
+                <button type="button" class="accent-swatch" data-accent="blue" aria-label="blue"></button>
+                <button type="button" class="accent-swatch" data-accent="violet" aria-label="violet"></button>
+                <button type="button" class="accent-swatch" data-accent="emerald" aria-label="emerald"></button>
+                <button type="button" class="accent-swatch" data-accent="rose" aria-label="rose"></button>
+                <button type="button" class="accent-swatch" data-accent="amber" aria-label="amber"></button>
+                <button type="button" class="accent-swatch" data-accent="slate" aria-label="slate"></button>
+            </div>
+        </div>
+        <div class="appearance__row">
+            <span class="appearance__label">Плотность</span>
+            <div class="density-toggle">
+                <button type="button" data-density="compact">Компактно</button>
+                <button type="button" data-density="comfortable">Просторно</button>
+            </div>
+        </div>
+    </div>
+
+    {# ---------- Logout ---------- #}
+    <div class="app-drawer__footer">
+        <a href="{{ url_for('auth.logout') }}" class="app-drawer__link" style="color:var(--danger)">
+            <i class="bi bi-box-arrow-right" style="color:var(--danger)"></i> Выйти из системы
+        </a>
+    </div>
+
+</aside>

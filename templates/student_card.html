@@ -12,25 +12,35 @@
 
 {% block content %}
 
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-    <h2 class="mb-0">
-        <i class="bi bi-person-badge"></i>
+{# ============================================================
+   ЗАГОЛОВОК + ДЕЙСТВИЯ
+   ============================================================ #}
+<div class="page-head">
+    <h2>
+        <i class="bi bi-person-badge text-primary me-2"></i>
         {{ student.full_name }}
     </h2>
-    <a href="{{ url_for('students.index') }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> К списку
-    </a>
+    <div class="page-head__actions">
+        <a href="{{ url_for('students.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> К списку
+        </a>
+    </div>
 </div>
 
-<div class="row g-3">
+<div class="row">
 
-    <div class="col-12 col-md-6 col-lg-4">
-        <div class="card shadow-sm mb-3">
+    {# ============================================================
+       ЛЕВАЯ КОЛОНКА: ПРОФИЛЬ + ОБЩАЯ СТАТИСТИКА
+       ============================================================ #}
+    <div class="col-12 col-md-6 col-lg-4 mb-3">
+
+        <div class="card mb-3">
             <div class="card-body text-center">
-                <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-3"
-                     style="width:80px; height:80px; font-size:2rem; font-weight:700;">
-                    {{ student.full_name[0]|upper }}
-                </div>
+                <span class="app-avatar app-avatar--lg"
+                      style="width:80px;height:80px;font-size:2rem;display:inline-grid;margin-bottom:12px;"
+                      data-avatar="{{ student.full_name }}">
+                    {{ student.full_name[0] | upper }}
+                </span>
                 <h5 class="mb-1">{{ student.full_name }}</h5>
                 <div class="text-muted small">
                     <i class="bi bi-people"></i> {{ group.name }}
@@ -39,9 +49,9 @@
         </div>
 
         {% if overall_stats %}
-        <div class="card shadow-sm">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">Общая статистика</h6>
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Общая статистика</h5>
             </div>
             <div class="card-body">
                 <div class="d-flex justify-content-between mb-2">
@@ -69,14 +79,17 @@
         {% endif %}
     </div>
 
+    {# ============================================================
+       ПРАВАЯ КОЛОНКА: ГРАФИК + СПИСОК ПРЕДМЕТОВ
+       ============================================================ #}
     <div class="col-12 col-md-6 col-lg-8">
 
         {% if chart_filename %}
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-white">
-                <h6 class="mb-0">
-                    <i class="bi bi-graph-up"></i> График успеваемости
-                </h6>
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-graph-up text-primary me-2"></i>График успеваемости
+                </h5>
             </div>
             <div class="card-body text-center">
                 <img src="{{ url_for('static', filename=chart_filename) }}"
@@ -86,10 +99,10 @@
         {% endif %}
 
         {% for subject in subjects_stats %}
-        <div class="card shadow-sm mb-3">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
-                    <h6 class="mb-0">{{ subject.subject_name }}</h6>
+                    <h5 class="mb-0">{{ subject.subject_name }}</h5>
                     <small class="text-muted">
                         Средний балл: <strong>{{ subject.avg_grade }}</strong>
                         &middot; пропусков: <strong>{{ subject.absence_percent }}%</strong>
@@ -97,23 +110,24 @@
                 </div>
                 <span class="badge bg-secondary">{{ subject.total_lessons }} занятий</span>
             </div>
+
             <div class="table-responsive">
-                <table class="table table-sm mb-0">
-                    <thead class="table-light">
+                <table class="table mb-0">
+                    <thead>
                         <tr>
-                            <th>Дата</th>
-                            <th>Время</th>
-                            <th>Тип</th>
+                            <th style="width:110px;">Дата</th>
+                            <th style="width:110px;">Время</th>
+                            <th style="width:130px;">Тип</th>
                             <th>Тема</th>
-                            <th class="text-center">Посещ.</th>
-                            <th class="text-center">Оценка</th>
+                            <th style="width:80px;" class="text-center">Посещ.</th>
+                            <th style="width:90px;" class="text-center">Оценка</th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for g in subject.grades_list %}
                         <tr>
                             <td class="small">{{ g.date }}</td>
-                            <td class="small">{{ g.time_interval }}</td>
+                            <td class="small text-nowrap">{{ g.time_interval }}</td>
                             <td class="small">{{ g.type }}</td>
                             <td class="small">{{ g.topic or '—' }}</td>
                             <td class="text-center">
@@ -135,11 +149,12 @@
                     </tbody>
                 </table>
             </div>
+
             {% if subject.semester_grades %}
-            <div class="card-footer bg-white small">
+            <div class="card-footer small">
                 <strong>Оценки за семестры:</strong>
                 {% for sem, grade in subject.semester_grades.items() %}
-                    <span class="badge bg-info text-dark me-1">
+                    <span class="badge bg-info ms-1">
                         Сем. {{ sem }}: {{ grade }}
                     </span>
                 {% endfor %}
@@ -150,13 +165,12 @@
 
         {% if not subjects_stats %}
             <div class="alert alert-info">
-                <i class="bi bi-info-circle"></i>
-                У студента пока нет записей в журналах.
+                <i class="bi bi-info-circle-fill"></i>
+                <span>У студента пока нет записей в журналах.</span>
             </div>
         {% endif %}
 
     </div>
-
 </div>
 
 {% endblock %}

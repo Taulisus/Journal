@@ -49,24 +49,21 @@ def log_activity(user_id, action, description='', target_type=None, target_id=No
         description = (description or '')[:1000]
 
         conn = get_db()
-        try:
-            conn.execute(
-                "INSERT INTO activity_log "
-                "(user_id, action, description, target_type, target_id, ip, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    user_id,
-                    action,
-                    description,
-                    target_type,
-                    target_id,
-                    ip,
-                    datetime.now().isoformat(timespec='seconds'),
-                )
+        conn.execute(
+            "INSERT INTO activity_log "
+            "(user_id, action, description, target_type, target_id, ip, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                user_id,
+                action,
+                description,
+                target_type,
+                target_id,
+                ip,
+                datetime.now().isoformat(timespec='seconds'),
             )
-            conn.commit()
-        finally:
-            conn.close()
+        )
+        conn.commit()
     except Exception as e:
         print(f"[activity] Ошибка логирования: {e}")
 
@@ -77,28 +74,25 @@ def log_activity(user_id, action, description='', target_type=None, target_id=No
 
 def get_recent_activity(limit=20, user_id=None):
     conn = get_db()
-    try:
-        if user_id is not None:
-            rows = conn.execute('''
-                SELECT al.*, u.username, up.full_name
-                FROM activity_log al
-                LEFT JOIN users u ON al.user_id = u.id
-                LEFT JOIN user_profiles up ON u.id = up.user_id
-                WHERE al.user_id = ?
-                ORDER BY al.created_at DESC
-                LIMIT ?
-            ''', (user_id, limit)).fetchall()
-        else:
-            rows = conn.execute('''
-                SELECT al.*, u.username, up.full_name
-                FROM activity_log al
-                LEFT JOIN users u ON al.user_id = u.id
-                LEFT JOIN user_profiles up ON u.id = up.user_id
-                ORDER BY al.created_at DESC
-                LIMIT ?
-            ''', (limit,)).fetchall()
-    finally:
-        conn.close()
+    if user_id is not None:
+        rows = conn.execute('''
+            SELECT al.*, u.username, up.full_name
+            FROM activity_log al
+            LEFT JOIN users u ON al.user_id = u.id
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            WHERE al.user_id = ?
+            ORDER BY al.created_at DESC
+            LIMIT ?
+        ''', (user_id, limit)).fetchall()
+    else:
+        rows = conn.execute('''
+            SELECT al.*, u.username, up.full_name
+            FROM activity_log al
+            LEFT JOIN users u ON al.user_id = u.id
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            ORDER BY al.created_at DESC
+            LIMIT ?
+        ''', (limit,)).fetchall()
 
     return [_row_to_dict(r) for r in rows]
 
@@ -136,28 +130,25 @@ def get_activity_filtered(filters=None, page=1, per_page=50):
     where_sql, params = _build_where(filters)
 
     conn = get_db()
-    try:
-        total = conn.execute(f'''
-            SELECT COUNT(*) as c
-            FROM activity_log al
-            LEFT JOIN users u ON al.user_id = u.id
-            LEFT JOIN user_profiles up ON u.id = up.user_id
-            {where_sql}
-        ''', params).fetchone()['c']
+    total = conn.execute(f'''
+        SELECT COUNT(*) as c
+        FROM activity_log al
+        LEFT JOIN users u ON al.user_id = u.id
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        {where_sql}
+    ''', params).fetchone()['c']
 
-        offset = max(0, (page - 1) * per_page)
+    offset = max(0, (page - 1) * per_page)
 
-        rows = conn.execute(f'''
-            SELECT al.*, u.username, up.full_name
-            FROM activity_log al
-            LEFT JOIN users u ON al.user_id = u.id
-            LEFT JOIN user_profiles up ON u.id = up.user_id
-            {where_sql}
-            ORDER BY al.created_at DESC
-            LIMIT ? OFFSET ?
-        ''', params + [per_page, offset]).fetchall()
-    finally:
-        conn.close()
+    rows = conn.execute(f'''
+        SELECT al.*, u.username, up.full_name
+        FROM activity_log al
+        LEFT JOIN users u ON al.user_id = u.id
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        {where_sql}
+        ORDER BY al.created_at DESC
+        LIMIT ? OFFSET ?
+    ''', params + [per_page, offset]).fetchall()
 
     total_pages = max(1, (total + per_page - 1) // per_page)
 
@@ -175,56 +166,44 @@ def get_activity_for_export(filters=None, limit=10000):
     where_sql, params = _build_where(filters)
 
     conn = get_db()
-    try:
-        rows = conn.execute(f'''
-            SELECT al.*, u.username, up.full_name
-            FROM activity_log al
-            LEFT JOIN users u ON al.user_id = u.id
-            LEFT JOIN user_profiles up ON u.id = up.user_id
-            {where_sql}
-            ORDER BY al.created_at DESC
-            LIMIT ?
-        ''', params + [limit]).fetchall()
-    finally:
-        conn.close()
+    rows = conn.execute(f'''
+        SELECT al.*, u.username, up.full_name
+        FROM activity_log al
+        LEFT JOIN users u ON al.user_id = u.id
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        {where_sql}
+        ORDER BY al.created_at DESC
+        LIMIT ?
+    ''', params + [limit]).fetchall()
 
     return [_row_to_dict(r) for r in rows]
 
 
 def get_unique_actions():
     conn = get_db()
-    try:
-        rows = conn.execute("SELECT DISTINCT action FROM activity_log ORDER BY action").fetchall()
-    finally:
-        conn.close()
+    rows = conn.execute("SELECT DISTINCT action FROM activity_log ORDER BY action").fetchall()
     return [r['action'] for r in rows]
 
 
 def get_unique_users():
     conn = get_db()
-    try:
-        rows = conn.execute('''
-            SELECT DISTINCT al.user_id, u.username, up.full_name
-            FROM activity_log al
-            LEFT JOIN users u ON al.user_id = u.id
-            LEFT JOIN user_profiles up ON u.id = up.user_id
-            WHERE al.user_id IS NOT NULL
-            ORDER BY up.full_name, u.username
-        ''').fetchall()
-    finally:
-        conn.close()
+    rows = conn.execute('''
+        SELECT DISTINCT al.user_id, u.username, up.full_name
+        FROM activity_log al
+        LEFT JOIN users u ON al.user_id = u.id
+        LEFT JOIN user_profiles up ON u.id = up.user_id
+        WHERE al.user_id IS NOT NULL
+        ORDER BY up.full_name, u.username
+    ''').fetchall()
     return [dict(r) for r in rows]
 
 
 def get_unique_target_types():
     conn = get_db()
-    try:
-        rows = conn.execute(
-            "SELECT DISTINCT target_type FROM activity_log "
-            "WHERE target_type IS NOT NULL ORDER BY target_type"
-        ).fetchall()
-    finally:
-        conn.close()
+    rows = conn.execute(
+        "SELECT DISTINCT target_type FROM activity_log "
+        "WHERE target_type IS NOT NULL ORDER BY target_type"
+    ).fetchall()
     return [r['target_type'] for r in rows]
 
 
@@ -242,9 +221,6 @@ def activity_to_csv(items):
     ])
 
     for a in items:
-        # _csv_safe применяется ко всем полям, включая числовые:
-        # id, target_id и т.п. тоже могут прийти из БД как строки,
-        # которые Excel воспримет как формулу.
         writer.writerow([
             _csv_safe(a.get('id', '')),
             _csv_safe(a.get('created_at', '')),
@@ -267,8 +243,6 @@ def activity_to_csv(items):
 def get_target_url(target_type, target_id):
     """
     Возвращает URL к объекту лога или None.
-    Исправлены имена эндпоинтов:
-      groups.index, subjects.index, student_card.card, journals.journal.
     """
     if not target_type or not target_id:
         return None
@@ -331,27 +305,18 @@ def _humanize_time(iso_str):
 
 def get_old_activity_stats(days=90):
     """
-    Возвращает статистику по старым записям:
-      {
-        'total': int,           # всего записей в логе
-        'old_count': int,       # старше N дней
-        'cutoff_date': str,     # граница (YYYY-MM-DD)
-        'oldest_date': str,     # самая старая запись (YYYY-MM-DD или None)
-      }
+    Возвращает статистику по старым записям.
     """
     cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec='seconds')
 
     conn = get_db()
-    try:
-        total = conn.execute("SELECT COUNT(*) FROM activity_log").fetchone()[0]
-        old_count = conn.execute(
-            "SELECT COUNT(*) FROM activity_log WHERE created_at < ?", (cutoff,)
-        ).fetchone()[0]
-        oldest = conn.execute(
-            "SELECT MIN(created_at) FROM activity_log"
-        ).fetchone()[0]
-    finally:
-        conn.close()
+    total = conn.execute("SELECT COUNT(*) FROM activity_log").fetchone()[0]
+    old_count = conn.execute(
+        "SELECT COUNT(*) FROM activity_log WHERE created_at < ?", (cutoff,)
+    ).fetchone()[0]
+    oldest = conn.execute(
+        "SELECT MIN(created_at) FROM activity_log"
+    ).fetchone()[0]
 
     oldest_date = None
     if oldest:
@@ -386,5 +351,3 @@ def clear_old_activity(days=90):
     except Exception as e:
         conn.rollback()
         return 0, str(e)
-    finally:
-        conn.close()

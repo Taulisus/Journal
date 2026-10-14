@@ -11,96 +11,102 @@
 
 {% block content %}
 
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-    <h2 class="mb-0">
-        <i class="bi bi-activity text-danger"></i>
-        Последние действия
+{# ============================================================
+   ЗАГОЛОВОК
+   ============================================================ #}
+<div class="page-head">
+    <h2>
+        <i class="bi bi-activity text-danger me-2"></i>Последние действия
     </h2>
-    <div class="text-muted small">
-        Всего записей: <strong>{{ data.total }}</strong>
-    </div>
+    <div class="text-muted small">Всего записей: <strong>{{ data.total }}</strong></div>
 </div>
 
-<!-- ФИЛЬТРЫ -->
-<div class="card shadow-sm mb-4">
+{# ============================================================
+   ФИЛЬТРЫ
+   ============================================================ #}
+<div class="card mb-3">
     <div class="card-body">
-        <form method="get" action="{{ url_for('main.activity_log_page') }}" class="row g-2 align-items-end">
+        <form method="get" action="{{ url_for('main.activity_log_page') }}">
+            <div class="filters-row">
 
-            <div class="col-12 col-md-6 col-lg-3">
-                <label class="form-label small mb-1">Пользователь</label>
-                <select name="user_id" class="form-select form-select-sm">
-                    <option value="">— Все —</option>
-                    {% for u in all_users %}
-                        <option value="{{ u.user_id }}"
-                                {% if filters.user_id == u.user_id %}selected{% endif %}>
-                            {{ u.full_name or u.username }}
-                        </option>
-                    {% endfor %}
-                </select>
+                <div>
+                    <label class="form-label" for="f_user">Пользователь</label>
+                    <select name="user_id" id="f_user" class="form-select">
+                        <option value="">— Все —</option>
+                        {% for u in all_users %}
+                            <option value="{{ u.user_id }}"
+                                    {% if filters.user_id == u.user_id %}selected{% endif %}>
+                                {{ u.full_name or u.username }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="f_action">Действие</label>
+                    <select name="action" id="f_action" class="form-select">
+                        <option value="">— Все —</option>
+                        {% for a in all_actions %}
+                            <option value="{{ a }}"
+                                    {% if filters.action == a %}selected{% endif %}>
+                                {{ action_labels.get(a, a) }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="f_target">Тип объекта</label>
+                    <select name="target_type" id="f_target" class="form-select">
+                        <option value="">— Все —</option>
+                        {% for t in all_target_types %}
+                            <option value="{{ t }}"
+                                    {% if filters.target_type == t %}selected{% endif %}>
+                                {{ target_type_labels.get(t, t) }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="f_date_from">Дата с</label>
+                    <input type="date" name="date_from" id="f_date_from"
+                           class="form-control"
+                           value="{{ filters.date_from or '' }}">
+                </div>
+
+                <div>
+                    <label class="form-label" for="f_date_to">Дата по</label>
+                    <input type="date" name="date_to" id="f_date_to"
+                           class="form-control"
+                           value="{{ filters.date_to or '' }}">
+                </div>
+
+                <div>
+                    <label class="form-label" for="f_search">Поиск</label>
+                    <input type="text" name="search" id="f_search"
+                           class="form-control"
+                           placeholder="ФИО, логин, текст"
+                           value="{{ filters.search or '' }}">
+                </div>
+
+                <div>
+                    <label class="form-label" for="f_per_page">На странице</label>
+                    <select name="per_page" id="f_per_page" class="form-select">
+                        {% for n in [20, 50, 100, 200] %}
+                            <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
 
-            <div class="col-12 col-md-6 col-lg-2">
-                <label class="form-label small mb-1">Действие</label>
-                <select name="action" class="form-select form-select-sm">
-                    <option value="">— Все —</option>
-                    {% for a in all_actions %}
-                        <option value="{{ a }}"
-                                {% if filters.action == a %}selected{% endif %}>
-                            {{ action_labels.get(a, a) }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-12 col-md-6 col-lg-2">
-                <label class="form-label small mb-1">Тип объекта</label>
-                <select name="target_type" class="form-select form-select-sm">
-                    <option value="">— Все —</option>
-                    {% for t in all_target_types %}
-                        <option value="{{ t }}"
-                                {% if filters.target_type == t %}selected{% endif %}>
-                            {{ target_type_labels.get(t, t) }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-6 col-md-3 col-lg-2">
-                <label class="form-label small mb-1">Дата с</label>
-                <input type="date" name="date_from" class="form-control form-control-sm"
-                       value="{{ filters.date_from or '' }}">
-            </div>
-
-            <div class="col-6 col-md-3 col-lg-2">
-                <label class="form-label small mb-1">Дата по</label>
-                <input type="date" name="date_to" class="form-control form-control-sm"
-                       value="{{ filters.date_to or '' }}">
-            </div>
-
-            <div class="col-12 col-md-6 col-lg-3">
-                <label class="form-label small mb-1">Поиск</label>
-                <input type="text" name="search" class="form-control form-control-sm"
-                       placeholder="ФИО, логин, текст"
-                       value="{{ filters.search or '' }}">
-            </div>
-
-            <div class="col-12 col-md-6 col-lg-2">
-                <label class="form-label small mb-1">На странице</label>
-                <select name="per_page" class="form-select form-select-sm">
-                    {% for n in [20, 50, 100, 200] %}
-                        <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="col-12 col-lg-7 d-flex gap-2 flex-wrap">
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="bi bi-funnel"></i>
-                    Применить
+            <div class="d-flex gap-2 flex-wrap mt-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel"></i> Применить
                 </button>
-                <a href="{{ url_for('main.activity_log_page') }}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-x-circle"></i>
-                    Сбросить
+                <a href="{{ url_for('main.activity_log_page') }}"
+                   class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Сбросить
                 </a>
 
                 {% set export_query = [] %}
@@ -112,32 +118,32 @@
                 {% if filters.search %}{% set _ = export_query.append('search=' ~ filters.search) %}{% endif %}
 
                 <a href="{{ url_for('main.activity_export_csv') }}{% if export_query %}?{{ export_query|join('&') }}{% endif %}"
-                   class="btn btn-success btn-sm">
-                    <i class="bi bi-download"></i>
-                    Скачать CSV
+                   class="btn btn-success ms-auto">
+                    <i class="bi bi-download"></i> Скачать CSV
                 </a>
             </div>
-
         </form>
     </div>
 </div>
 
-<!-- ТАБЛИЦА -->
+{# ============================================================
+   ТАБЛИЦА
+   ============================================================ #}
 {% if data['items'] %}
-<div class="card shadow-sm mb-4">
-    <a id="table-top"></a>
+<a id="table-top"></a>
+<div class="card mb-3">
     <div class="activity-table-scroll">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0 activity-table">
-                <thead class="table-light">
+            <table class="table mb-0 activity-table">
+                <thead>
                     <tr>
-                        <th class="col-id">ID</th>
-                        <th class="col-when">Когда</th>
+                        <th style="width:60px;">ID</th>
+                        <th style="width:150px;">Когда</th>
                         <th>Пользователь</th>
                         <th>Действие</th>
-                        <th class="col-desc">Описание</th>
-                        <th class="text-center col-target">Объект</th>
-                        <th class="text-muted small col-ip">IP</th>
+                        <th style="min-width:200px;">Описание</th>
+                        <th style="width:80px;" class="text-center">Объект</th>
+                        <th style="width:120px;">IP</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -150,20 +156,23 @@
                         </td>
                         <td>
                             <div class="d-flex align-items-center gap-2">
-                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center flex-shrink-0"
-                                     style="width:28px; height:28px; font-size:0.8rem; font-weight:700;">
-                                    {{ a.display_name[0]|upper if a.display_name else '?' }}
-                                </div>
+                                <span class="app-avatar"
+                                      data-avatar="{{ a.display_name or '?' }}"
+                                      style="width:28px;height:28px;font-size:0.8rem;">
+                                    {{ (a.display_name or '?')[0] | upper }}
+                                </span>
                                 <div>
                                     <div class="fw-semibold small">{{ a.display_name }}</div>
                                     {% if a.username and a.username != a.display_name %}
-                                        <div class="text-muted" style="font-size:0.75rem;">{{ a.username }}</div>
+                                        <div class="text-muted" style="font-size:0.75rem;">
+                                            {{ a.username }}
+                                        </div>
                                     {% endif %}
                                 </div>
                             </div>
                         </td>
                         <td>
-                            <span class="badge bg-light text-dark border small">
+                            <span class="badge bg-light">
                                 {% if a.action == 'login' %}
                                     <i class="bi bi-box-arrow-in-right text-success"></i>
                                 {% elif a.action == 'logout' %}
@@ -195,8 +204,9 @@
                         <td class="small">{{ a.description or '—' }}</td>
                         <td class="text-center">
                             {% if a.target_url %}
-                                <a href="{{ a.target_url }}" class="btn btn-sm btn-outline-primary py-0 px-2"
-                                   title="Перейти к объекту">
+                                <a href="{{ a.target_url }}"
+                                   class="btn btn-sm btn-outline-primary"
+                                   data-tooltip="Перейти к объекту">
                                     <i class="bi bi-box-arrow-up-right"></i>
                                 </a>
                             {% else %}
@@ -212,11 +222,13 @@
     </div>
 </div>
 
-<!-- ПАГИНАЦИЯ -->
+{# ============================================================
+   ПАГИНАЦИЯ
+   ============================================================ #}
 {% if data.total_pages > 1 %}
 <nav aria-label="Пагинация">
-    <ul class="pagination pagination-sm justify-content-center flex-wrap">
-        <li class="page-item {% if data.page <= 1 %}disabled{% endif %}">
+    <ul class="pagination">
+        <li class="page-item {% if data.page <= 1 %}is-disabled{% endif %}">
             <a class="page-link"
                href="{{ url_for('main.activity_log_page', page=data.page-1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">
                 &laquo;
@@ -231,25 +243,29 @@
                 <a class="page-link"
                    href="{{ url_for('main.activity_log_page', page=1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">1</a>
             </li>
-            {% if start_page > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+            {% if start_page > 2 %}
+                <li class="page-item is-disabled"><span class="page-link">…</span></li>
+            {% endif %}
         {% endif %}
 
         {% for p in range(start_page, end_page + 1) %}
-            <li class="page-item {% if p == data.page %}active{% endif %}">
+            <li class="page-item {% if p == data.page %}is-active{% endif %}">
                 <a class="page-link"
                    href="{{ url_for('main.activity_log_page', page=p, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">{{ p }}</a>
             </li>
         {% endfor %}
 
         {% if end_page < data.total_pages %}
-            {% if end_page < data.total_pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+            {% if end_page < data.total_pages - 1 %}
+                <li class="page-item is-disabled"><span class="page-link">…</span></li>
+            {% endif %}
             <li class="page-item">
                 <a class="page-link"
                    href="{{ url_for('main.activity_log_page', page=data.total_pages, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">{{ data.total_pages }}</a>
             </li>
         {% endif %}
 
-        <li class="page-item {% if data.page >= data.total_pages %}disabled{% endif %}">
+        <li class="page-item {% if data.page >= data.total_pages %}is-disabled{% endif %}">
             <a class="page-link"
                href="{{ url_for('main.activity_log_page', page=data.page+1, user_id=filters.user_id, action=filters.action, target_type=filters.target_type, date_from=filters.date_from, date_to=filters.date_to, search=filters.search, per_page=per_page) }}#table-top">
                 &raquo;
@@ -261,21 +277,25 @@
 
 {% else %}
 <div class="alert alert-info">
-    <i class="bi bi-info-circle"></i>
-    Записей по заданным фильтрам не найдено.
-    <a href="{{ url_for('main.activity_log_page') }}" class="alert-link">Сбросить фильтры</a>
+    <i class="bi bi-info-circle-fill"></i>
+    <span>
+        Записей по заданным фильтрам не найдено.
+        <a href="{{ url_for('main.activity_log_page') }}" class="alert-link">Сбросить фильтры</a>
+    </span>
 </div>
 {% endif %}
 
-<!-- РЕЗЕРВНАЯ КОПИЯ БД -->
-<div class="card shadow-sm mt-4 border-info">
+{# ============================================================
+   БЭКАП БД
+   ============================================================ #}
+<div class="card mb-3" style="border-color:var(--info);">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
             <div>
-                <h6 class="mb-1">
-                    <i class="bi bi-shield-check text-info"></i>
+                <h5 class="mb-1">
+                    <i class="bi bi-shield-check text-info me-2"></i>
                     Резервная копия БД
-                </h6>
+                </h5>
                 <div class="text-muted small">
                     Создать копию <code>journal.db</code> прямо сейчас.
                     Файл сохраняется в папку <code>backups/</code>.
@@ -287,10 +307,9 @@
 
             <form method="post"
                   action="{{ url_for('main.manual_backup') }}"
-                  onsubmit="return confirm('Создать резервную копию БД?\n\nФайл будет сохранён в папку backups/.');"
-                  class="d-inline">
+                  onsubmit="return confirm('Создать резервную копию БД?\n\nФайл будет сохранён в папку backups/.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-outline-info btn-sm">
+                <button type="submit" class="btn btn-outline-info">
                     <i class="bi bi-download"></i>
                     Создать бэкап
                 </button>
@@ -299,15 +318,17 @@
     </div>
 </div>
 
-<!-- ОЧИСТКА СТАРОГО ЛОГА -->
-<div class="card shadow-sm mt-4 border-warning">
+{# ============================================================
+   ОЧИСТКА СТАРОГО ЛОГА
+   ============================================================ #}
+<div class="card mb-3" style="border-color:var(--warning);">
     <div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
             <div>
-                <h6 class="mb-1">
-                    <i class="bi bi-trash text-warning"></i>
+                <h5 class="mb-1">
+                    <i class="bi bi-trash text-warning me-2"></i>
                     Очистка старого лога
-                </h6>
+                </h5>
                 <div class="text-muted small">
                     Всего записей: <strong>{{ cleanup_stats.total }}</strong>.
                     {% if cleanup_stats.old_count > 0 %}
@@ -324,12 +345,11 @@
 
             <form method="post"
                   action="{{ url_for('main.activity_cleanup') }}"
-                  onsubmit="return confirm('Удалить {{ cleanup_stats.old_count }} записей старше 90 дней?\n\nДействие необратимо.');"
-                  class="d-inline">
+                  onsubmit="return confirm('Удалить {{ cleanup_stats.old_count }} записей старше 90 дней?\n\nДействие необратимо.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="days" value="90">
                 <button type="submit"
-                        class="btn btn-outline-warning btn-sm"
+                        class="btn btn-outline-warning"
                         {% if cleanup_stats.old_count == 0 %}disabled{% endif %}>
                     <i class="bi bi-trash"></i>
                     Удалить старые записи
@@ -344,79 +364,25 @@
 
 {% block scripts %}
 <style>
-/* Ширина колонок на десктопе */
-.col-id { width: 60px; }
-.col-when { width: 150px; }
-.col-desc { min-width: 200px; }
-.col-target { width: 80px; }
-.col-ip { width: 120px; }
-
-/* ============================================================
-   СКРОЛЛ ДЛЯ ТАБЛИЦЫ ДЕЙСТВИЙ
-   ============================================================ */
 .activity-table-scroll {
-    max-height: 70vh;         /* ~70% высоты экрана */
+    max-height: 70vh;
     overflow-y: auto;
     overflow-x: hidden;
-    scrollbar-width: thin;
-    scrollbar-color: #c0c0c0 #f1f1f1;
-    border-bottom-left-radius: 8px;
-    border-bottom-right-radius: 8px;
+    border-bottom-left-radius: var(--r-xl);
+    border-bottom-right-radius: var(--r-xl);
 }
-
-.activity-table-scroll::-webkit-scrollbar {
-    width: 8px;
-}
-
-.activity-table-scroll::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.activity-table-scroll::-webkit-scrollbar-thumb {
-    background: #c0c0c0;
-    border-radius: 4px;
-}
-
-.activity-table-scroll::-webkit-scrollbar-thumb:hover {
-    background: #a0a0a0;
-}
-
-/* Закреплённая шапка таблицы при скролле */
 .activity-table-scroll .activity-table thead th {
     position: sticky;
     top: 0;
     z-index: 2;
-    background-color: #f8f9fa;
-    box-shadow: 0 1px 0 #dee2e6;
+    background-color: var(--surface-alt);
+    box-shadow: 0 1px 0 var(--border);
 }
 
-/* iPhone 12 mini и подобные (375px) */
 @media (max-width: 575.98px) {
-    /* Таблица: горизонтальный скролл, чтобы не сжималась */
     .activity-table {
         min-width: 720px;
     }
-
-    /* Фильтры на всю ширину, кнопки в столбик */
-    .card-body form > [class*="col-"] {
-        width: 100%;
-    }
-
-    /* Кнопки «Применить» / «Сбросить» / «Скачать CSV» — на всю ширину */
-    .card-body form .btn {
-        width: 100%;
-        min-height: 42px;
-    }
-
-    /* Иконки-кнопки в таблице (touch-target) */
-    .activity-table .btn-sm {
-        min-width: 40px;
-        min-height: 40px;
-        padding: 0.4rem;
-    }
-
-    /* Скролл действий — меньше высота на мобильных */
     .activity-table-scroll {
         max-height: 60vh;
     }

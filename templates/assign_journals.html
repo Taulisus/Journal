@@ -12,31 +12,40 @@
 
 {% block content %}
 
-<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
-    <h2 class="mb-0">
-        <i class="bi bi-journal-bookmark"></i>
+{# ============================================================
+   ЗАГОЛОВОК
+   ============================================================ #}
+<div class="page-head">
+    <h2>
+        <i class="bi bi-journal-bookmark text-primary me-2"></i>
         Назначение журналов: {{ user.full_name or user.username }}
     </h2>
-    <a href="{{ url_for('users.index') }}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> К пользователям
-    </a>
+    <div class="page-head__actions">
+        <a href="{{ url_for('users.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> К пользователям
+        </a>
+    </div>
 </div>
 
 <form method="POST">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <div class="card shadow-sm mb-3">
-        <div class="card-header bg-white">
-            <h6 class="mb-0">
-                <i class="bi bi-journal-text text-primary"></i>
-                Журналы и часы
-            </h6>
+    {# ============================================================
+       ЖУРНАЛЫ + ЧАСЫ
+       ============================================================ #}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-journal-text text-primary me-2"></i>Журналы и часы
+            </h5>
         </div>
+
+        {% if pairs %}
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
+            <table class="table mb-0">
+                <thead>
                     <tr>
-                        <th style="width: 60px;">Выбрать</th>
+                        <th style="width:60px;" class="text-center">Выбрать</th>
                         <th>Группа</th>
                         <th>Предмет</th>
                         <th>Часы по семестрам</th>
@@ -54,7 +63,7 @@
                                    {% if is_assigned %}checked{% endif %}>
                         </td>
                         <td class="fw-semibold">
-                            <label for="j_{{ pair.id }}" class="mb-0">
+                            <label for="j_{{ pair.id }}" class="mb-0" style="cursor:pointer;">
                                 {{ pair.group_name }}
                             </label>
                         </td>
@@ -64,31 +73,32 @@
                                 {% for sem in semesters_dict.get(pid, []) %}
                                     {% set sem_str = sem|string %}
                                     {% set h = hours_dict.get(pid, {}).get(sem_str, {}) %}
-                                    <div class="border rounded p-2 small">
-                                        <div class="fw-semibold mb-1">Сем. {{ sem }}</div>
-                                        <div class="row g-1">
-                                            <div class="col-6">
+                                    <div class="border rounded p-2 small"
+                                         style="border-color:var(--border);min-width:200px;">
+                                        <div class="fw-semibold mb-2">Семестр {{ sem }}</div>
+                                        <div class="row">
+                                            <div class="col-6 mb-1">
                                                 <label class="form-label small mb-0">Лек</label>
                                                 <input type="number" min="0"
                                                        name="hours_{{ pair.id }}_{{ sem }}_lecture"
                                                        class="form-control form-control-sm"
                                                        value="{{ h.get('lecture_hours', 0) }}">
                                             </div>
-                                            <div class="col-6">
+                                            <div class="col-6 mb-1">
                                                 <label class="form-label small mb-0">Пр</label>
                                                 <input type="number" min="0"
                                                        name="hours_{{ pair.id }}_{{ sem }}_practice"
                                                        class="form-control form-control-sm"
                                                        value="{{ h.get('practice_hours', 0) }}">
                                             </div>
-                                            <div class="col-6">
+                                            <div class="col-6 mb-1">
                                                 <label class="form-label small mb-0">С/Р</label>
                                                 <input type="number" min="0"
                                                        name="hours_{{ pair.id }}_{{ sem }}_independent"
                                                        class="form-control form-control-sm"
                                                        value="{{ h.get('independent_hours', 0) }}">
                                             </div>
-                                            <div class="col-6">
+                                            <div class="col-6 mb-1">
                                                 <label class="form-label small mb-0">Экз</label>
                                                 <input type="number" min="0"
                                                        name="hours_{{ pair.id }}_{{ sem }}_exam"
@@ -105,19 +115,29 @@
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <div class="empty">
+            <div class="empty__icon"><i class="bi bi-journal-x"></i></div>
+            <div class="empty__title">Нет журналов</div>
+            <div class="empty__desc">Сначала создайте журналы в разделе «Журналы»</div>
+        </div>
+        {% endif %}
     </div>
 
-    <div class="card shadow-sm mb-3">
-        <div class="card-header bg-white">
-            <h6 class="mb-0">
-                <i class="bi bi-person-badge text-info"></i>
-                Кураторство (группы)
-            </h6>
+    {# ============================================================
+       КУРАТОРСТВО
+       ============================================================ #}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-person-badge text-info me-2"></i>Кураторство (группы)
+            </h5>
         </div>
         <div class="card-body">
-            <div class="row g-2">
+            {% if groups %}
+            <div class="row">
                 {% for g in groups %}
-                    <div class="col-12 col-md-4 col-lg-3">
+                    <div class="col-12 col-md-6 col-lg-4 mb-2">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox"
                                    name="curator_groups" value="{{ g.id }}"
@@ -130,10 +150,16 @@
                     </div>
                 {% endfor %}
             </div>
+            {% else %}
+                <div class="text-muted small">Нет доступных групп</div>
+            {% endif %}
         </div>
     </div>
 
-    <div class="d-flex gap-2">
+    {# ============================================================
+       КНОПКИ
+       ============================================================ #}
+    <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary">
             <i class="bi bi-save"></i> Сохранить назначения
         </button>
