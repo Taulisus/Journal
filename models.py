@@ -1736,6 +1736,139 @@ class JournalPlan:
         return [dict(r) for r in rows]
 
     @staticmethod
+    def get_all_for_journal(gsid):
+        """
+        Возвращает ВСЕ пункты плана для журнала (включая использованные).
+        Для использованных подтягивает дату и время занятия,
+        чтобы в UI показать «занята 12.09».
+        """
+        conn = get_db()
+
+        rows = conn.execute('''
+            SELECT id, group_subject_id, order_number, topic, hours,
+                   lesson_type, used_lesson_id, created_at
+            FROM journal_plan
+            WHERE group_subject_id = ?
+            ORDER BY
+                CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
+                order_number,
+                id
+        ''', (gsid,)).fetchall()
+
+        if not rows:
+            return []
+
+        used_map = {}
+        table_name = f"journal_{gsid}"
+
+        try:
+            exists = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,)
+            ).fetchone()
+        except Exception:
+            exists = None
+
+        if exists:
+            used_ids = [r['used_lesson_id'] for r in rows if r['used_lesson_id']]
+            if used_ids:
+                placeholders = ','.join('?' for _ in used_ids)
+                entries = conn.execute(
+                    f"SELECT id, date, time_interval FROM {table_name} "
+                    f"WHERE id IN ({placeholders})",
+                    used_ids
+                ).fetchall()
+                for e in entries:
+                    used_map[e['id']] = {
+                        'date': e['date'],
+                        'time_interval': e['time_interval'],
+                    }
+
+        result = []
+        for r in rows:
+            d = dict(r)
+            info = used_map.get(d.get('used_lesson_id'))
+            d['used_date'] = info['date'] if info else None
+            d['used_time'] = info['time_interval'] if info else None
+            result.append(d)
+
+        return result
+
+    @staticmethod
+    def unlink_lesson(gsid, lesson_entry_id):
+        """Сбрасывает used_lesson_id у пунктов плана, привязанных к записи занятия."""
+        conn = get_db()
+        try:
+            conn.execute('''
+                UPDATE journal_plan
+                SET used_lesson_id = NULL
+                WHERE group_subject_id = ? AND used_lesson_id = ?
+            ''', (gsid, lesson_entry_id))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+    @staticmethod
+    def get_all_for_journal(gsid):
+        """
+        Возвращает ВСЕ пункты плана для журнала (включая использованные).
+        Для использованных подтягивает дату и время занятия,
+        чтобы в UI показать «занята 12.09».
+        """
+        conn = get_db()
+
+        rows = conn.execute('''
+            SELECT id, group_subject_id, order_number, topic, hours,
+                   lesson_type, used_lesson_id, created_at
+            FROM journal_plan
+            WHERE group_subject_id = ?
+            ORDER BY
+                CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
+                order_number,
+                id
+        ''', (gsid,)).fetchall()
+
+        if not rows:
+            return []
+
+        # Карта: used_lesson_id -> {date, time_interval}
+        used_map = {}
+        table_name = f"journal_{gsid}"
+
+        try:
+            exists = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,)
+            ).fetchone()
+        except Exception:
+            exists = None
+
+        if exists:
+            used_ids = [r['used_lesson_id'] for r in rows if r['used_lesson_id']]
+            if used_ids:
+                placeholders = ','.join('?' for _ in used_ids)
+                entries = conn.execute(
+                    f"SELECT id, date, time_interval FROM {table_name} "
+                    f"WHERE id IN ({placeholders})",
+                    used_ids
+                ).fetchall()
+                for e in entries:
+                    used_map[e['id']] = {
+                        'date': e['date'],
+                        'time_interval': e['time_interval'],
+                    }
+
+        result = []
+        for r in rows:
+            d = dict(r)
+            info = used_map.get(d.get('used_lesson_id'))
+            d['used_date'] = info['date'] if info else None
+            d['used_time'] = info['time_interval'] if info else None
+            result.append(d)
+
+        return result
+
+    @staticmethod
     def get_by_id(plan_id):
         conn = get_db()
         row = conn.execute(
@@ -1760,6 +1893,67 @@ class JournalPlan:
         except Exception as e:
             conn.rollback()
             return False, f"Ошибка: {e}", None
+
+        @staticmethod
+        def get_all_for_journal(gsid):
+            """
+            Возвращает ВСЕ пункты плана для журнала (включая использованные).
+            Для использованных дополнительно подтягивает дату и время занятия,
+            чтобы в UI показать «занята 12.09».
+            """
+            conn = get_db()
+            rows = conn.execute('''
+                SELECT id, group_subject_id, order_number, topic, hours,
+                       lesson_type, used_lesson_id, created_at
+                FROM journal_plan
+                WHERE group_subject_id = ?
+                ORDER BY
+                    CASE WHEN order_number IS NULL THEN 1 ELSE 0 END,
+                    order_number,
+                    id
+            ''', (gsid,)).fetchall()
+
+            if not rows:
+                return []
+
+            # Карта: plan_id -> {used_date, used_time}
+            used_map = {}
+            table_name = f"journal_{gsid}"
+
+            # Проверим, что таблица существует
+            try:
+                exists = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (table_name,)
+                ).fetchone()
+            except Exception:
+                exists = None
+
+            if exists:
+                # Соберём все used_lesson_id из плана
+                used_ids = [r['used_lesson_id'] for r in rows if r['used_lesson_id']]
+                if used_ids:
+                    placeholders = ','.join('?' for _ in used_ids)
+                    entries = conn.execute(f'''
+                        SELECT id, date, time_interval
+                        FROM {table_name}
+                        WHERE id IN ({placeholders})
+                    ''', used_ids).fetchall()
+                    for e in entries:
+                        used_map[e['id']] = {
+                            'date': e['date'],
+                            'time_interval': e['time_interval'],
+                        }
+
+            result = []
+            for r in rows:
+                d = dict(r)
+                used_info = used_map.get(d.get('used_lesson_id'))
+                d['used_date'] = used_info['date'] if used_info else None
+                d['used_time'] = used_info['time_interval'] if used_info else None
+                result.append(d)
+
+            return result
 
     @staticmethod
     def update(plan_id, order_number, topic, hours, lesson_type):

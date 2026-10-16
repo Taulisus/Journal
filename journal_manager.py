@@ -292,13 +292,40 @@ class JournalManager:
 
     @staticmethod
     def delete_lesson(gs_id, date, time_interval):
-        """Удаляет все записи за определенную дату и время"""
+        """
+        Удаляет все записи за определенную дату и время.
+        Перед удалением — сбрасывает used_lesson_id у плана,
+        ссылающегося на эти записи.
+        """
         conn = get_db()
         table_name = JournalManager.get_table_name(gs_id)
-        conn.execute(f"DELETE FROM {table_name} WHERE date = ? AND time_interval = ?",
-                     (date, time_interval))
-        conn.commit()
-        return True, "Занятие удалено"
+
+        try:
+            rows = conn.execute(
+                f"SELECT id FROM {table_name} WHERE date = ? AND time_interval = ?",
+                (date, time_interval)
+            ).fetchall()
+            entry_ids = [r['id'] for r in rows]
+
+            conn.execute(
+                f"DELETE FROM {table_name} WHERE date = ? AND time_interval = ?",
+                (date, time_interval)
+            )
+
+            if entry_ids:
+                placeholders = ','.join('?' for _ in entry_ids)
+                conn.execute(
+                    f"UPDATE journal_plan "
+                    f"SET used_lesson_id = NULL "
+                    f"WHERE group_subject_id = ? AND used_lesson_id IN ({placeholders})",
+                    [gs_id] + entry_ids
+                )
+
+            conn.commit()
+            return True, "Занятие удалено"
+        except Exception as e:
+            conn.rollback()
+            return False, f"Ошибка удаления: {e}"
 
     @staticmethod
     def get_statistics(gs_id, semester=None):

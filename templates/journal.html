@@ -188,22 +188,16 @@
                                 </button>
                                 <div class="dropdown-menu">
                                     <button type="button"
+                                            class="dropdown-item edit-lesson-btn"
+                                            data-lesson-idx="{{ loop.index0 }}">
+                                        <i class="bi bi-pencil-square"></i>
+                                        <span>Изменить занятие</span>
+                                    </button>
+                                    <button type="button"
                                             class="dropdown-item mass-grade-btn"
                                             data-lesson-idx="{{ loop.index0 }}">
                                         <i class="bi bi-list-check"></i>
                                         <span>Массовые оценки</span>
-                                    </button>
-                                    <button type="button"
-                                            class="dropdown-item edit-time-btn"
-                                            data-lesson-idx="{{ loop.index0 }}">
-                                        <i class="bi bi-clock"></i>
-                                        <span>Изменить время</span>
-                                    </button>
-                                    <button type="button"
-                                            class="dropdown-item edit-type-btn"
-                                            data-lesson-idx="{{ loop.index0 }}">
-                                        <i class="bi bi-tag"></i>
-                                        <span>Изменить тип</span>
                                     </button>
                                     <hr class="dropdown-divider">
                                     <a class="dropdown-item text-danger"
@@ -544,23 +538,24 @@
 </div>
 
 {# ============================================================
-   МОДАЛКА: ИЗМЕНИТЬ ВРЕМЯ
+   МОДАЛКА: ИЗМЕНИТЬ ЗАНЯТИЕ (дата + время + тип + тема)
    ============================================================ #}
-<div class="modal" id="editLessonTimeModal" aria-hidden="true">
-    <div class="modal-dialog">
+<div class="modal" id="editLessonModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form id="editLessonTimeForm">
+            <form id="editLessonForm">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" id="editTimeDateInput" name="date">
-                <input type="hidden" id="editTimeOldInput" name="old_time">
+                <input type="hidden" name="old_date" id="elOldDate">
+                <input type="hidden" name="old_time" id="elOldTime">
                 <input type="hidden" name="semester" value="{{ current_semester }}">
+                <input type="hidden" name="plan_id" id="elPlanId">
 
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="bi bi-clock-history text-info me-2"></i>Изменить время
+                        <i class="bi bi-pencil-square text-primary me-2"></i>Изменить занятие
                     </h5>
                     <button type="button" class="app-icon-btn"
-                            data-modal-close="editLessonTimeModal" aria-label="Закрыть">
+                            data-modal-close="editLessonModal" aria-label="Закрыть">
                         <i class="bi bi-x-lg"></i>
                     </button>
                 </div>
@@ -568,96 +563,85 @@
                 <div class="modal-body">
                     <div class="alert alert-info mb-3">
                         <small>
-                            <strong>Дата:</strong> <span id="editTimeDate">—</span>
-                            <span id="editTimeDayOfWeek" class="badge bg-secondary ms-1">—</span>
-                            <br>
-                            <strong>Текущее время:</strong> <span id="editTimeOld">—</span>
+                            <strong>Текущее занятие:</strong>
+                            <span id="elCurrentInfo">—</span>
                         </small>
                     </div>
 
+                    {# --- Дата / Пара / Время / Тип --- #}
+                    <div class="row">
+                        <div class="col-12 col-md-4 mb-3">
+                            <label class="form-label" for="elDate">Дата *</label>
+                            <input type="date" class="form-control" id="elDate" name="new_date" required>
+                        </div>
+
+                        <div class="col-6 col-md-2 mb-3">
+                            <label class="form-label" for="elPair">Пара №</label>
+                            <input type="number" class="form-control text-center"
+                                   id="elPair" min="1" max="8">
+                        </div>
+
+                        <div class="col-6 col-md-3 mb-3">
+                            <label class="form-label" for="elTime">Время *</label>
+                            <input type="text" class="form-control"
+                                   id="elTime" name="new_time"
+                                   placeholder="0900-1030"
+                                   pattern="\d{4}-\d{4}"
+                                   list="elTimeDatalist"
+                                   autocomplete="off"
+                                   required>
+                            <datalist id="elTimeDatalist"></datalist>
+                        </div>
+
+                        <div class="col-12 col-md-3 mb-3">
+                            <label class="form-label" for="elType">Тип занятия *</label>
+                            <select class="form-select" id="elType" name="new_type" required>
+                                {% for type_val, type_label in type_full.items() %}
+                                <option value="{{ type_val }}">{{ type_label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {# --- Быстрый выбор времени --- #}
                     <div class="mb-3">
-                        <label class="form-label" for="editTimeNewInput">Новое время</label>
-                        <input type="text"
-                               name="new_time"
-                               id="editTimeNewInput"
-                               class="form-control"
-                               placeholder="0900-1030"
-                               pattern="\d{4}-\d{4}"
-                               list="editTimeDatalist"
-                               autocomplete="off"
-                               required>
-                        <datalist id="editTimeDatalist"></datalist>
-                        <div class="form-text" id="editTimeHint"></div>
+                        <label class="form-label small text-muted mb-1">
+                            <i class="bi bi-lightning-charge"></i>
+                            Быстрый выбор времени
+                            <span class="badge bg-secondary ms-1" id="elDayLabel">—</span>
+                        </label>
+                        <div class="d-flex flex-wrap gap-1" id="elQuickTimes"></div>
                     </div>
 
-                    <div class="alert alert-warning small mb-0">
-                        <i class="bi bi-exclamation-triangle-fill"></i>
-                        <span>Время изменится у <strong>всех студентов</strong> этой пары.
-                        Посещения и оценки сохранятся.</span>
-                    </div>
-                </div>
+                    <hr>
 
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary"
-                            data-modal-close="editLessonTimeModal">Отмена</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-save"></i> Сохранить
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-{# ============================================================
-   МОДАЛКА: ИЗМЕНИТЬ ТИП
-   ============================================================ #}
-<div class="modal" id="editLessonTypeModal" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form id="editLessonTypeForm">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" id="editTypeGsid" name="gsid">
-                <input type="hidden" id="editTypeDateInput" name="date">
-                <input type="hidden" id="editTypeTimeInput" name="time_interval">
-                <input type="hidden" name="semester" value="{{ current_semester }}">
-
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="bi bi-tag text-warning me-2"></i>Изменить тип занятия
-                    </h5>
-                    <button type="button" class="app-icon-btn"
-                            data-modal-close="editLessonTypeModal" aria-label="Закрыть">
-                        <i class="bi bi-x-lg"></i>
-                    </button>
-                </div>
-
-                <div class="modal-body">
-                    <div class="alert alert-info mb-3">
-                        <small>
-                            <strong>Дата:</strong> <span id="editTypeDate">—</span><br>
-                            <strong>Время:</strong> <span id="editTypeTime">—</span>
-                        </small>
-                    </div>
-
+                    {# --- Тема --- #}
                     <div class="mb-3">
-                        <label class="form-label" for="editTypeSelect">Тип занятия</label>
-                        <select class="form-select" id="editTypeSelect" name="type">
-                            {% for type_val, type_label in type_full.items() %}
-                            <option value="{{ type_val }}">{{ type_label }}</option>
-                            {% endfor %}
+                        <label class="form-label">Тема из плана</label>
+                        <select class="form-select" id="elPlanSelect">
+                            <option value="">— Своя тема (введите ниже) —</option>
                         </select>
+                        <div class="form-text" id="elPlanHint">Загружаем темы…</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="elTopic">Тема занятия *</label>
+                        <input type="text" class="form-control no-emoji"
+                               id="elTopic" name="new_topic"
+                               maxlength="200"
+                               placeholder="Введите тему занятия"
+                               required>
                     </div>
 
                     <div class="alert alert-warning small mb-0">
                         <i class="bi bi-exclamation-triangle-fill"></i>
-                        <span>Тип изменится у <strong>всех студентов</strong> этой пары.</span>
+                        <span>Изменения применятся ко <strong>всем студентам</strong> этой пары.</span>
                     </div>
                 </div>
 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary"
-                            data-modal-close="editLessonTypeModal">Отмена</button>
+                            data-modal-close="editLessonModal">Отмена</button>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-save"></i> Сохранить
                     </button>

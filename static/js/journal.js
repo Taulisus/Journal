@@ -1,5 +1,6 @@
 /* ============================================================
-   JOURNAL — drag-scroll, grade-popover, модалки, фильтр по месяцам
+   JOURNAL — drag-scroll, grade-popover, модалки, фильтр по месяцам,
+             изменение занятия (дата + время + тип + тема)
    ============================================================ */
 (function(){
     'use strict';
@@ -16,7 +17,7 @@
     var sc = document.getElementById('journalScroll');
 
     /* ============================================================
-       ВОССТАНОВЛЕНИЕ СКРОЛЛА ПОСЛЕ ПЕРЕЗАГРУЗКИ
+       ВОССТАНОВЛЕНИЕ СКРОЛЛА
        ============================================================ */
     function restoreScroll(){
         if(!sc) return;
@@ -41,8 +42,67 @@
         location.reload();
     }
 
-         /* ============================================================
-       DRAG-SCROLL + определение клик vs drag
+    /* ============================================================
+       УТИЛИТЫ
+       ============================================================ */
+    function getWeekdayFromDate(dateStr){
+        if(!dateStr) return null;
+        var parts = dateStr.split('-');
+        if(parts.length !== 3) return null;
+        var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        if(isNaN(d.getTime())) return null;
+        var wd = d.getDay();
+        return wd === 0 ? '6' : String(wd - 1);
+    }
+
+    function formatHHMM(v){
+        var m = v.match(/^(\d{2})(\d{2})-(\d{2})(\d{2})$/);
+        return m ? m[1] + ':' + m[2] + '–' + m[3] + ':' + m[4] : v;
+    }
+
+    function formatDateRu(iso){
+        if(!iso) return '';
+        var p = iso.split('-');
+        if(p.length !== 3) return iso;
+        return p[2] + '.' + p[1] + '.' + p[0];
+    }
+
+    /**
+     * Нормализует время к формату '0900-1030'.
+     */
+    function normalizeTimeStr(timeStr){
+        if(!timeStr) return '';
+        var t = timeStr.trim().replace(/\s+/g, '');
+        var m = t.match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
+        if(m){
+            return ('0' + m[1]).slice(-2) + m[2] + '-' + ('0' + m[3]).slice(-2) + m[4];
+        }
+        return t;
+    }
+
+    /**
+     * Определяет номер пары по дате и времени.
+     * Ищет timeStr в списке интервалов для дня недели dateStr.
+     * Возвращает 1..7 или null.
+     */
+    function getPairNumber(dateStr, timeStr){
+        if(!dateStr || !timeStr) return null;
+
+        var wd = getWeekdayFromDate(dateStr) || DEFAULT_DAY;
+        var intervals = TIME_INTERVALS[wd] || TIME_INTERVALS[DEFAULT_DAY] || [];
+
+        var t = normalizeTimeStr(timeStr);
+
+        for(var i = 0; i < intervals.length; i++){
+            if(intervals[i][0] === t){
+                return i + 1;
+            }
+        }
+        return null;
+    }
+
+    /* ============================================================
+       DRAG-SCROLL + клик vs drag
        ============================================================ */
     if(sc){
         var isDown = false;
@@ -52,7 +112,6 @@
 
         sc.addEventListener('mousedown', function(e){
             if(e.target.closest('button, select, a, input, .dropdown, .lesson-head__btn')) return;
-
             isDown = true;
             startX = e.pageX - sc.offsetLeft;
             scrollLeft = sc.scrollLeft;
@@ -78,15 +137,12 @@
         ['mouseup','mouseleave'].forEach(function(ev){
             sc.addEventListener(ev, function(){
                 isDown = false;
-                // снимаем is-dragging чуть позже, чтобы click не попал в состояние drag
                 setTimeout(function(){ sc.classList.remove('is-dragging'); }, 0);
             });
         });
 
-        // Клик по ячейке — открывает popover, только если не было drag
         sc.addEventListener('click', function(e){
             if(moved){
-                // Это был drag — не открываем
                 moved = false;
                 return;
             }
@@ -96,7 +152,6 @@
             openPopover(cell);
         });
 
-        // Клавиатура — Enter / Space на ячейке
         sc.addEventListener('keydown', function(e){
             var cell = e.target.closest('.journal-cell-clickable');
             if(!cell) return;
@@ -175,7 +230,6 @@
 
         applyMonthFilter('all');
 
-        // Поиск по дате — переключает на месяц
         var dateSearch = document.getElementById('dateSearchInput');
         var dateStatus = document.getElementById('dateSearchStatus');
         if(dateSearch){
@@ -213,7 +267,7 @@
     }
 
     /* ============================================================
-       GRADE POPOVER (клик по ячейке)
+       GRADE POPOVER
        ============================================================ */
     var popover = null;
 
@@ -337,9 +391,7 @@
        ============================================================ */
     function reloadLessonCellsFromUpdates(updates){
         var byId = {};
-        updates.forEach(function(u){
-            byId[u.entry_id] = u;
-        });
+        updates.forEach(function(u){ byId[u.entry_id] = u; });
 
         document.querySelectorAll('.journal-cell-clickable').forEach(function(cell){
             var entryId = parseInt(cell.dataset.entryId, 10);
@@ -351,42 +403,20 @@
     }
 
     /* ============================================================
-       МОДАЛКА: ИЗМЕНИТЬ ВРЕМЯ
+       МОДАЛКА: ИЗМЕНИТЬ ЗАНЯТИЕ (дата + время + тип + тема)
        ============================================================ */
-    function getWeekdayFromDate(dateStr){
-        if(!dateStr) return null;
-        var parts = dateStr.split('-');
-        if(parts.length !== 3) return null;
-        var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-        if(isNaN(d.getTime())) return null;
-        var wd = d.getDay();
-        return wd === 0 ? '6' : String(wd - 1);
-    }
+    var elCurrentLessonIdx = null;
+    var elPlanItems = [];   // все темы из плана, полученные с сервера
 
-    function formatHHMM(v){
-        var m = v.match(/^(\d{2})(\d{2})-(\d{2})(\d{2})$/);
-        return m ? m[1] + ':' + m[2] + '–' + m[3] + ':' + m[4] : v;
-    }
+    function rebuildQuickTimes(dateStr){
+        var wd = getWeekdayFromDate(dateStr) || DEFAULT_DAY;
+        var intervals = TIME_INTERVALS[wd] || TIME_INTERVALS[DEFAULT_DAY] || [];
 
-    document.querySelectorAll('.edit-time-btn').forEach(function(btn){
-        btn.addEventListener('click', function(){
-            var idx = parseInt(this.dataset.lessonIdx, 10);
-            var l = JOURNAL.lessons[idx];
-            if(!l) return;
+        var dayLabel = document.getElementById('elDayLabel');
+        if(dayLabel) dayLabel.textContent = DAY_NAMES[parseInt(wd, 10)] || '—';
 
-            document.getElementById('editTimeDate').textContent = l.dateFormatted;
-            document.getElementById('editTimeOld').textContent = formatHHMM(l.time);
-            document.getElementById('editTimeDateInput').value = l.date;
-            document.getElementById('editTimeOldInput').value = l.time;
-            document.getElementById('editTimeNewInput').value = l.time;
-
-            var weekday = getWeekdayFromDate(l.date) || DEFAULT_DAY;
-            var intervals = TIME_INTERVALS[weekday] || TIME_INTERVALS[DEFAULT_DAY] || [];
-
-            document.getElementById('editTimeDayOfWeek').textContent =
-                DAY_NAMES[parseInt(weekday, 10)] || '—';
-
-            var datalist = document.getElementById('editTimeDatalist');
+        var datalist = document.getElementById('elTimeDatalist');
+        if(datalist){
             datalist.innerHTML = '';
             intervals.forEach(function(pair){
                 var opt = document.createElement('option');
@@ -394,76 +424,260 @@
                 opt.label = pair[1];
                 datalist.appendChild(opt);
             });
+        }
 
-            var hint = intervals.map(function(p){ return formatHHMM(p[0]); }).join(', ');
-            document.getElementById('editTimeHint').textContent =
-                'Для ' + (DAY_NAMES[parseInt(weekday, 10)] || '—') + ': ' + hint;
+        var buttons = document.getElementById('elQuickTimes');
+        if(buttons){
+            buttons.innerHTML = '';
+            intervals.forEach(function(pair, idx){
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-sm btn-outline-secondary';
+                btn.setAttribute('data-time', pair[0]);
+                btn.innerHTML = '<span style="font-weight:600;">' + (idx + 1) + ' пара</span>'
+                              + '<span style="margin-left:6px;opacity:.8;font-weight:400;">'
+                              + formatHHMM(pair[0]) + '</span>';
+                btn.addEventListener('click', function(){
+                    var t = this.getAttribute('data-time');
+                    document.getElementById('elTime').value = t;
+                    document.getElementById('elPair').value = idx + 1;
 
-            App.openModal('editLessonTimeModal');
-        });
-    });
-
-    var editTimeForm = document.getElementById('editLessonTimeForm');
-    if(editTimeForm){
-        editTimeForm.addEventListener('submit', function(e){
-            e.preventDefault();
-            var formData = new FormData(editTimeForm);
-
-            fetch('/journal/' + JOURNAL.gsid + '/update-lesson-time', {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(r){ return r.json(); })
-            .then(function(result){
-                if(result.success){
-                    App.closeModal('editLessonTimeModal');
-                    App.toast(result.message || 'Время обновлено', 'success');
-                    saveScrollAndReload();
-                } else {
-                    App.toast('Ошибка: ' + result.message, 'danger');
-                }
-            })
-            .catch(function(){
-                App.toast('Ошибка соединения', 'danger');
+                    buttons.querySelectorAll('.btn').forEach(function(b){
+                        b.classList.remove('btn-primary');
+                        b.classList.add('btn-outline-secondary');
+                    });
+                    this.classList.remove('btn-outline-secondary');
+                    this.classList.add('btn-primary');
+                });
+                buttons.appendChild(btn);
             });
-        });
+        }
     }
 
-    /* ============================================================
-       МОДАЛКА: ИЗМЕНИТЬ ТИП
-       ============================================================ */
-    document.querySelectorAll('.edit-type-btn').forEach(function(btn){
+    /**
+     * Пересобирает селект «Тема из плана» по текущему типу занятия.
+     */
+    function rebuildPlanTopics(keepSelectedId){
+        var typeSelect = document.getElementById('elType');
+        var select = document.getElementById('elPlanSelect');
+        var hint = document.getElementById('elPlanHint');
+        if(!typeSelect || !select) return;
+
+        var currentType = typeSelect.value;
+
+        while(select.firstChild) select.removeChild(select.firstChild);
+
+        var optOwn = document.createElement('option');
+        optOwn.value = '';
+        optOwn.textContent = '— Своя тема (введите ниже) —';
+        select.appendChild(optOwn);
+
+        var filtered = (elPlanItems || []).filter(function(it){
+            return it.lesson_type === currentType;
+        });
+
+        filtered.forEach(function(it){
+            var opt = document.createElement('option');
+            opt.value = String(it.id);
+            var label = (it.order_number ? '№' + it.order_number + '. ' : '') + it.topic;
+            if(it.used_lesson_id && it.used_date){
+                label += '  ·  занята ' + formatDateRu(it.used_date);
+            }
+            opt.textContent = label;
+            opt.dataset.topic = it.topic;
+            if(it.used_lesson_id && it.used_date){
+                opt.dataset.usedDate = it.used_date;
+            }
+            select.appendChild(opt);
+        });
+
+        if(hint){
+            if(filtered.length === 0){
+                hint.textContent = 'В плане нет тем для выбранного типа занятия. ' +
+                    'Введите свою тему или выберите другой тип.';
+            } else {
+                hint.textContent = 'Доступно тем для этого типа: ' + filtered.length + '.';
+            }
+        }
+
+        if(keepSelectedId){
+            select.value = String(keepSelectedId);
+        } else {
+            select.value = '';
+        }
+    }
+
+    document.querySelectorAll('.edit-lesson-btn').forEach(function(btn){
         btn.addEventListener('click', function(){
             var idx = parseInt(this.dataset.lessonIdx, 10);
             var l = JOURNAL.lessons[idx];
             if(!l) return;
 
-            document.getElementById('editTypeDate').textContent = l.dateFormatted;
-            document.getElementById('editTypeTime').textContent = formatHHMM(l.time);
-            document.getElementById('editTypeGsid').value = JOURNAL.gsid;
-            document.getElementById('editTypeDateInput').value = l.date;
-            document.getElementById('editTypeTimeInput').value = l.time;
-            document.getElementById('editTypeSelect').value = l.type;
+            elCurrentLessonIdx = idx;
+            elPlanItems = [];
 
-            App.openModal('editLessonTypeModal');
+            document.getElementById('elCurrentInfo').textContent =
+                l.dateFormatted + ' · ' + formatHHMM(l.time) +
+                (l.typeName ? ' · ' + l.typeName : '') +
+                (l.topic ? ' · «' + l.topic + '»' : '');
+
+            document.getElementById('elOldDate').value = l.date;
+            document.getElementById('elOldTime').value = l.time;
+            document.getElementById('elDate').value = l.date;
+            document.getElementById('elTime').value = l.time;
+            document.getElementById('elType').value = l.type;
+            document.getElementById('elTopic').value = l.topic || '';
+            document.getElementById('elPlanId').value = '';
+
+            // Заполняем номер пары из времени
+            var pairNum = getPairNumber(l.date, l.time);
+            document.getElementById('elPair').value = pairNum || '';
+
+            // Сбрасываем селект тем
+            var select = document.getElementById('elPlanSelect');
+            var hint = document.getElementById('elPlanHint');
+            while(select.firstChild) select.removeChild(select.firstChild);
+            var optOwn = document.createElement('option');
+            optOwn.value = '';
+            optOwn.textContent = '— Своя тема (введите ниже) —';
+            select.appendChild(optOwn);
+            if(hint) hint.textContent = 'Загружаем темы…';
+
+            rebuildQuickTimes(l.date);
+
+            App.openModal('editLessonModal');
+
+            fetch('/journal/' + JOURNAL.gsid + '/plan-list'
+                  + '?date=' + encodeURIComponent(l.date)
+                  + '&time_interval=' + encodeURIComponent(l.time)
+                  + '&semester=' + encodeURIComponent(JOURNAL.semester))
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    if(!data.success){
+                        if(hint) hint.textContent = 'Не удалось загрузить план.';
+                        return;
+                    }
+
+                    elPlanItems = data.items || [];
+
+                    // Пытаемся найти пункт плана с той же темой
+                    var currentTopic = (l.topic || '').trim();
+                    var matchedId = null;
+                    if(currentTopic){
+                        var found = elPlanItems.find(function(it){
+                            return (it.topic || '').trim() === currentTopic;
+                        });
+                        if(found) matchedId = found.id;
+                    }
+
+                    rebuildPlanTopics(matchedId);
+
+                    if(matchedId){
+                        document.getElementById('elPlanId').value = String(matchedId);
+                    }
+                })
+                .catch(function(){
+                    if(hint) hint.textContent = 'Ошибка загрузки плана.';
+                });
         });
     });
 
-    var editTypeForm = document.getElementById('editLessonTypeForm');
-    if(editTypeForm){
-        editTypeForm.addEventListener('submit', function(e){
-            e.preventDefault();
-            var formData = new FormData(editTypeForm);
+    // Смена типа занятия → пересобираем список тем
+    var elType = document.getElementById('elType');
+    if(elType){
+        elType.addEventListener('change', function(){
+            var currentPlanId = document.getElementById('elPlanId').value || null;
 
-            fetch('/journal/update-lesson-type', {
+            var keepId = null;
+            if(currentPlanId){
+                var found = (elPlanItems || []).find(function(it){
+                    return String(it.id) === String(currentPlanId) &&
+                           it.lesson_type === elType.value;
+                });
+                if(found) keepId = found.id;
+            }
+
+            rebuildPlanTopics(keepId);
+
+            if(!keepId){
+                document.getElementById('elPlanId').value = '';
+
+                var currentTopic = document.getElementById('elTopic').value.trim();
+                var topicExists = (elPlanItems || []).some(function(it){
+                    return (it.topic || '').trim() === currentTopic;
+                });
+                if(!topicExists){
+                    document.getElementById('elTopic').value = '';
+                }
+            }
+        });
+    }
+
+    // Выбор темы из плана → подставляем в input
+    var elPlanSelect = document.getElementById('elPlanSelect');
+    if(elPlanSelect){
+        elPlanSelect.addEventListener('change', function(){
+            var opt = this.options[this.selectedIndex];
+            var input = document.getElementById('elTopic');
+            var hidden = document.getElementById('elPlanId');
+
+            if(this.value){
+                input.value = opt.dataset.topic || '';
+                hidden.value = this.value;
+            } else {
+                input.value = '';
+                hidden.value = '';
+            }
+        });
+    }
+
+    // Смена даты — обновляем быстрый выбор + пересчитываем номер пары
+    var elDate = document.getElementById('elDate');
+    if(elDate){
+        elDate.addEventListener('change', function(){
+            rebuildQuickTimes(this.value);
+
+            var currentTime = document.getElementById('elTime').value;
+            var pairNum = getPairNumber(this.value, currentTime);
+            document.getElementById('elPair').value = pairNum || '';
+        });
+    }
+
+    // Нормализация времени + пересчёт номера пары
+    var elTime = document.getElementById('elTime');
+    if(elTime){
+        elTime.addEventListener('blur', function(){
+            var normalized = normalizeTimeStr(this.value);
+            if(normalized) this.value = normalized;
+
+            var currentDate = document.getElementById('elDate').value;
+            var pairNum = getPairNumber(currentDate, this.value);
+            document.getElementById('elPair').value = pairNum || '';
+        });
+    }
+
+    // Отправка формы
+    var elForm = document.getElementById('editLessonForm');
+    if(elForm){
+        elForm.addEventListener('submit', function(e){
+            e.preventDefault();
+
+            var formData = new FormData(elForm);
+            var topic = (formData.get('new_topic') || '').toString().trim();
+            if(!topic){
+                App.toast('Введите тему занятия', 'warning');
+                return;
+            }
+
+            fetch('/journal/' + JOURNAL.gsid + '/update-lesson-full', {
                 method: 'POST',
                 body: formData
             })
             .then(function(r){ return r.json(); })
             .then(function(result){
                 if(result.success){
-                    App.closeModal('editLessonTypeModal');
-                    App.toast(result.message || 'Тип обновлён', 'success');
+                    App.closeModal('editLessonModal');
+                    App.toast(result.message || 'Занятие обновлено', 'success');
                     saveScrollAndReload();
                 } else {
                     App.toast('Ошибка: ' + result.message, 'danger');
@@ -607,10 +821,8 @@
             document.querySelectorAll('#mgStudentsBody tr').forEach(function(tr){
                 var check = tr.querySelector('.mg-student-check');
                 if(!check || !check.checked) return;
-
                 var attendance = tr.dataset.attendance;
                 if(attendance !== 'present') return;
-
                 tr.dataset.grade = grade;
                 var tdGrade = tr.querySelector('td:last-child');
                 tdGrade.innerHTML = mgGradeButtonsHtml(grade);
@@ -643,7 +855,6 @@
             document.querySelectorAll('#mgStudentsBody tr').forEach(function(tr){
                 var check = tr.querySelector('.mg-student-check');
                 if(!check || !check.checked) return;
-
                 updates.push({
                     entry_id: parseInt(tr.dataset.entryId, 10),
                     attendance: tr.dataset.attendance,
@@ -671,7 +882,6 @@
                 if(result.success){
                     App.toast(result.message || 'Оценки сохранены', 'success');
                     App.closeModal('massGradeModal');
-                    // Обновляем ячейки без перезагрузки
                     reloadLessonCellsFromUpdates(updates);
                     btn.disabled = false;
                     btn.innerHTML = origHtml;
@@ -777,10 +987,8 @@
         cards.forEach(function(card){
             var type = card.dataset.type;
             var searchData = card.dataset.search.toLowerCase();
-
             var matchesType = !typeFilter || type === typeFilter;
             var matchesSearch = !searchText || searchData.indexOf(searchText) !== -1;
-
             card.style.display = (matchesType && matchesSearch) ? '' : 'none';
         });
     };
@@ -885,7 +1093,6 @@
                     container.querySelectorAll('.btn').forEach(function(b){
                         b.classList.remove('btn-success', 'btn-danger', 'btn-primary');
                         b.classList.remove('btn-outline-success', 'btn-outline-danger', 'btn-outline-primary');
-
                         var text = b.textContent.trim();
                         if(text === '') b.classList.add('btn-outline-success');
                         else if(text === '') b.classList.add('btn-outline-danger');
@@ -925,7 +1132,7 @@
     };
 
     /* ============================================================
-       ВОССТАНОВЛЕНИЕ СКРОЛЛА ПРИ ЗАГРУЗКЕ
+       ВОССТАНОВЛЕНИЕ СКРОЛЛА
        ============================================================ */
     if(document.readyState === 'loading'){
         document.addEventListener('DOMContentLoaded', restoreScroll);

@@ -719,6 +719,131 @@ def update_lesson_time(gsid):
         conn.rollback()
         return jsonify({'success': False, 'message': f'Ошибка: {e}'}), 500
 
+@journals_bp.route('/journal/<int:gsid>/update-lesson-full', methods=['POST'])
+@permission_required('view_journals')
+def update_lesson_full(gsid):
+    """
+    Полное изменение занятия:
+      - дата
+      - время (time_interval)
+      - тип занятия
+      - тема (+ привязка к плану)
+    Все записи за (old_date, old_time_interval, semester) обновляются.
+    """
+    uid = session['user_id']
+
+    resp = _require_journal_access_json(uid, gsid)
+    if resp:
+        return resp
+
+    old_date = (request.form.get('old_date') or '').strip()
+    old_time = (request.form.get('old_time') or '').strip()
+    semester = request.form.get('semester', type=int)
+
+    new_date = (request.form.get('new_date') or '').strip()
+    new_time = (request.form.get('new_time') or '').strip()
+    new_type = (request.form.get('new_type') or 'lecture').strip()
+    new_topic = (request.form.get('new_topic') or '').strip()
+    plan_id = request.form.get('plan_id', type=int)
+
+    if not old_date or not old_time:
+        return jsonify({'success': False, 'message': 'Не указаны исходные дата и время'}), 400
+
+    if not new_date or not new_time:
+        return jsonify({'success': False, 'message': 'Укажите новую дату и время'}), 400
+
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', new_date):
+        return jsonify({'success': False, 'message': 'Некорректная дата'}), 400
+
+    if not re.match(r'^\d{4}-\d{4}$', new_time):
+        return jsonify({'success': False, 'message': 'Формат времени: 0900-1030'}), 400
+
+    if not semester:
+        return jsonify({'success': False, 'message': 'Не указан семестр'}), 400
+
+    if not new_topic:
+        return jsonify({'success': False, 'message': 'Введите тему занятия'}), 400
+
+    if len(new_topic) > 200:
+        return jsonify({'success': False, 'message': 'Тема слишком длинная (макс. 200)'}), 400
+
+    if has_emoji(new_topic):
+        return jsonify({'success': False, 'message': 'Эмодзи запрещены в теме'}), 400
+
+    conn = get_db()
+    table_name = JournalManager.get_table_name(gsid)
+
+    try:
+        # Проверка конфликта
+        if not (old_date == new_date and old_time == new_time):
+            conflict = conn.execute(
+                f"SELECT COUNT(*) AS c FROM {table_name} "
+                f"WHERE date = ? AND time_interval = ? AND semester = ?",
+                (new_date, new_time, semester)
+            ).fetchone()
+            if conflict['c'] > 0:
+                return jsonify({
+                    'success': False,
+                    'message': 'Занятие с такой датой и временем уже существует',
+                }), 409
+
+        # Запоминаем id записей ДО обновления
+        rows = conn.execute(
+            f"SELECT id FROM {table_name} "
+            f"WHERE date = ? AND time_interval = ? AND semester = ?",
+            (old_date, old_time, semester)
+        ).fetchall()
+        entry_ids = [r['id'] for r in rows]
+
+        if not entry_ids:
+            return jsonify({
+                'success': False,
+                'message': 'Исходное занятие не найдено',
+            }), 404
+
+        # Обновляем все записи
+        cur = conn.execute(
+            f"UPDATE {table_name} "
+            f"SET date = ?, time_interval = ?, type = ?, topic = ? "
+            f"WHERE date = ? AND time_interval = ? AND semester = ?",
+            (new_date, new_time, new_type, new_topic,
+             old_date, old_time, semester)
+        )
+        affected = cur.rowcount
+
+        # Отвязываем все пункты плана, привязанные к этим записям
+        placeholders = ','.join('?' for _ in entry_ids)
+        conn.execute(
+            f"UPDATE journal_plan SET used_lesson_id = NULL "
+            f"WHERE group_subject_id = ? AND used_lesson_id IN ({placeholders})",
+            [gsid] + entry_ids
+        )
+
+        # Привязываем новый пункт плана
+        if plan_id:
+            conn.execute(
+                "UPDATE journal_plan SET used_lesson_id = ?, topic = ? "
+                "WHERE id = ? AND group_subject_id = ?",
+                (entry_ids[0], new_topic, plan_id, gsid)
+            )
+
+        conn.commit()
+
+        log_activity(
+            uid, 'edit_lesson_full',
+            f'Изменено занятие: журнал #{gsid}, '
+            f'{old_date} {old_time} → {new_date} {new_time}, тип {new_type}',
+            'journal', gsid,
+        )
+
+        return jsonify({
+            'success': True,
+            'affected': affected,
+            'message': f'Занятие обновлено ({affected} записей)',
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'Ошибка: {e}'}), 500
 
 @journals_bp.route('/journal/<int:gsid>/export')
 @permission_required('create_report')
@@ -803,6 +928,168 @@ def set_semester_grade(gsid):
 
     return jsonify({'success': True})
 
+# ============================================================
+#                 ИЗМЕНЕНИЕ ТЕМЫ СТАРОГО ЗАНЯТИЯ
+# ============================================================
+
+@journals_bp.route('/journal/<int:gsid>/plan-list')
+@permission_required('view_journals')
+def plan_list_json(gsid):
+    """
+    JSON: все пункты плана для этого журнала (включая использованные).
+    Используется для модалки «Изменить тему».
+    """
+    uid = session['user_id']
+
+    resp = _require_journal_access_json(uid, gsid)
+    if resp:
+        return resp
+
+    items = JournalPlan.get_all_for_journal(gsid)
+
+    # Текущая тема занятия — из query string (date + time + semester)
+    date = request.args.get('date', '').strip()
+    time_interval = request.args.get('time_interval', '').strip()
+    semester = request.args.get('semester', type=int)
+
+    current_topic = None
+    if date and time_interval:
+        conn = get_db()
+        table_name = JournalManager.get_table_name(gsid)
+        try:
+            row = conn.execute(
+                f"SELECT topic FROM {table_name} "
+                f"WHERE date = ? AND time_interval = ? AND semester = ? LIMIT 1",
+                (date, time_interval, semester)
+            ).fetchone()
+            if row:
+                current_topic = row['topic']
+        except Exception:
+            pass
+
+    return jsonify({
+        'success': True,
+        'current_topic': current_topic,
+        'items': [
+            {
+                'id': it['id'],
+                'order_number': it['order_number'],
+                'topic': it['topic'],
+                'lesson_type': it['lesson_type'],
+                'used_lesson_id': it['used_lesson_id'],
+                'used_date': it['used_date'],
+                'used_time': it['used_time'],
+            }
+            for it in items
+        ],
+    })
+
+
+@journals_bp.route('/journal/<int:gsid>/update-lesson-topic', methods=['POST'])
+@permission_required('view_journals')
+def update_lesson_topic(gsid):
+    """
+    Меняет тему занятия у всех записей за (date, time_interval, semester).
+    Если передан plan_id — помечает пункт плана использованным,
+    а у остальных записей этой пары, ссылавшихся на другие plan_id,
+    не трогает (у каждой пары один used_lesson_id).
+    """
+    uid = session['user_id']
+
+    resp = _require_journal_access_json(uid, gsid)
+    if resp:
+        return resp
+
+    date = (request.form.get('date') or '').strip()
+    time_interval = (request.form.get('time_interval') or '').strip()
+    semester = request.form.get('semester', type=int)
+    topic = (request.form.get('topic') or '').strip()
+    plan_id = request.form.get('plan_id', type=int)
+
+    if not date or not time_interval:
+        return jsonify({'success': False, 'message': 'Не указаны дата и время'}), 400
+
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+        return jsonify({'success': False, 'message': 'Некорректная дата'}), 400
+
+    if not re.match(r'^\d{4}-\d{4}$', time_interval):
+        return jsonify({'success': False, 'message': 'Некорректное время'}), 400
+
+    if not semester:
+        return jsonify({'success': False, 'message': 'Не указан семестр'}), 400
+
+    if not topic:
+        return jsonify({'success': False, 'message': 'Тема не может быть пустой'}), 400
+
+    if len(topic) > 200:
+        return jsonify({'success': False, 'message': 'Тема слишком длинная (макс. 200)'}), 400
+
+    if has_emoji(topic):
+        return jsonify({'success': False, 'message': 'Эмодзи запрещены'}), 400
+
+    conn = get_db()
+    table_name = JournalManager.get_table_name(gsid)
+
+    try:
+        # Обновляем тему во всех записях этой пары
+        cur = conn.execute(
+            f"UPDATE {table_name} SET topic = ? "
+            f"WHERE date = ? AND time_interval = ? AND semester = ?",
+            (topic, date, time_interval, semester)
+        )
+        affected = cur.rowcount
+
+        if affected == 0:
+            return jsonify({
+                'success': False,
+                'message': 'Записи занятия не найдены',
+            }), 404
+
+        # Обновляем план (если выбран)
+        if plan_id:
+            # Снимаем метку used_lesson_id у других пунктов этого журнала,
+            # которые ссылались на то же занятие (на всякий случай).
+            conn.execute('''
+                UPDATE journal_plan
+                SET used_lesson_id = NULL
+                WHERE group_subject_id = ?
+                  AND used_lesson_id IN (
+                      SELECT id FROM ''' + table_name + '''
+                      WHERE date = ? AND time_interval = ? AND semester = ?
+                  )
+            ''', (gsid, date, time_interval, semester))
+
+            # Достаём id первой записи занятия
+            row = conn.execute(
+                f"SELECT id FROM {table_name} "
+                f"WHERE date = ? AND time_interval = ? AND semester = ? LIMIT 1",
+                (date, time_interval, semester)
+            ).fetchone()
+
+            if row:
+                conn.execute('''
+                    UPDATE journal_plan
+                    SET used_lesson_id = ?, topic = ?
+                    WHERE id = ? AND group_subject_id = ?
+                ''', (row['id'], topic, plan_id, gsid))
+
+        conn.commit()
+
+        log_activity(
+            uid, 'edit_lesson_topic',
+            f'Изменена тема занятия: журнал #{gsid}, '
+            f'{date} {time_interval} → «{topic}» ({affected} записей)',
+            'journal', gsid,
+        )
+
+        return jsonify({
+            'success': True,
+            'affected': affected,
+            'message': f'Тема обновлена ({affected} записей)',
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'Ошибка: {e}'}), 500
 
 # ============================================================
 #                 ТЕМАТИЧЕСКИЙ ПЛАН (КТП)
